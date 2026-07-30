@@ -1,0 +1,47 @@
+name: Upgrading
+description: When having trouble upgrading AngaraDAV or migrating from Baikal
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched [open AngaraDAV issues](https://github.com/offsyanka99/AngaraDAV/issues) for this problem.
+          required: true
+        - label: I have also searched [closed AngaraDAV issues](https://github.com/offsyanka99/AngaraDAV/issues?q=is%3Aissue+is%3Aclosed).
+          required: true
+        - label: I will describe the problem with as much detail as possible.
+          required: true
+  - type: checkboxes
+    id: checklist_upgrading
+    attributes:
+      label: Common problems checklist
+      options:
+        - label: I have installed the release zip, not the source code zip
+          required: true
+        - label: I have moved the whole, untouched `Specific` and `config` folders to the new installation
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version before
+      placeholder: x.y.z
+    validations:
+      required: true
+  - type: input
+    id: version_after
+    attributes:
+      label: AngaraDAV version or image tag after
+      placeholder: x.y.z
+    validations:
+      required: true
+  - type: input
+    id: php_version
+    attributes:
+      label: PHP version
+    validations:
+      required: true
+  - type: textarea
+    id: problems
+    attributes:
+      label: Problem you are having

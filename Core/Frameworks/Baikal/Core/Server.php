@@ -1,0 +1,265 @@
+<?php
+
+#################################################################
+#  Copyright notice
+#
+#  (c) 2013 Jérôme Schneider <mail@jeromeschneider.fr>
+#  All rights reserved
+#
+#  http://sabre.io/baikal
+#
+#  This script is part of the Baïkal Server project. The Baïkal
+#  Server project is free software; you can redistribute it
+#  and/or modify it under the terms of the GNU General Public
+#  License as published by the Free Software Foundation; either
+#  version 2 of the License, or (at your option) any later version.
+#
+#  The GNU General Public License can be found at
+#  http://www.gnu.org/copyleft/gpl.html.
+#
+#  This script is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  This copyright notice MUST APPEAR in all copies of the script!
+#################################################################
+
+namespace Baikal\Core;
+
+use Symfony\Component\Yaml\Yaml;
+
+/**
+ * The Baikal Server.
+ *
+ * This class sets up the underlying Sabre\DAV\Server object.
+ *
+ * @copyright Copyright (C) Jérôme Schneider <mail@jeromeschneider.fr>
+ * @author Evert Pot (http://evertpot.com/)
+ * @license http://sabre.io/license/ GPLv2
+ */
+class Server {
+    /**
+     * Is CalDAV enabled?
+     *
+     * @var bool
+     */
+    protected $enableCalDAV;
+
+    /**
+     * is CardDAV enabled?
+     *
+     * @var bool
+     */
+    protected $enableCardDAV;
+
+    /**
+     * Is generic WebDAV file storage enabled for this endpoint?
+     *
+     * @var bool
+     */
+    protected $enableFiles;
+
+    /**
+     * "Basic" or "Digest".
+     *
+     * @var string
+     */
+    protected $authType;
+
+    /**
+     * HTTP authentication realm.
+     *
+     * @var string
+     */
+    protected $authRealm;
+
+    /**
+     * Reference to Database object.
+     *
+     * @var \PDO
+     */
+    protected $pdo;
+
+    /**
+     * baseUri for the sabre/dav server.
+     *
+     * @var string
+     */
+    protected $baseUri;
+
+    /**
+     * The sabre/dav Server object.
+     *
+     * @var \Sabre\DAV\Server
+     */
+    protected $server;
+
+    /**
+     * Creates the server object.
+     *
+     * @param bool $enableCalDAV
+     * @param bool $enableCardDAV
+     * @param string $authType
+     * @param string $authRealm
+     * @param \PDO $pdo
+     * @param string $baseUri
+     * @param bool $enableFiles
+     */
+    function __construct($enableCalDAV, $enableCardDAV, $authType, $authRealm, \PDO $pdo, $baseUri, $enableFiles = false) {
+        $this->enableCalDAV = $enableCalDAV;
+        $this->enableCardDAV = $enableCardDAV;
+        $this->enableFiles = $enableFiles;
+        $this->authType = $authType;
+        $this->authRealm = $authRealm;
+        $this->pdo = $pdo;
+        $this->baseUri = $baseUri;
+
+        $this->initServer();
+    }
+
+    /**
+     * Starts processing.
+     *
+     * @return void
+     */
+    function start() {
+        $this->server->start();
+    }
+
+    /**
+     * Initializes the server object.
+     *
+     * @return void
+     */
+    protected function initServer() {
+        $config = [];
+        try {
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+        } catch (\Exception $e) {
+            error_log('Error reading baikal.yaml file : ' . $e->getMessage());
+        }
+
+        if ($this->authType === 'Basic') {
+            $authBackend = new \Baikal\Core\PDOBasicAuth($this->pdo, $this->authRealm);
+        } elseif ($this->authType === 'Apache') {
+            $authBackend = new \Sabre\DAV\Auth\Backend\Apache();
+        } else {
+            $authBackend = new \Sabre\DAV\Auth\Backend\PDO($this->pdo);
+            $authBackend->setRealm($this->authRealm);
+        }
+        $principalBackend = new \Sabre\DAVACL\PrincipalBackend\PDO($this->pdo);
+
+        $nodes = [
+            new \Sabre\CalDAV\Principal\Collection($principalBackend),
+        ];
+        $portalMeta = null;
+        if ($this->enableCalDAV) {
+            $portalMeta = new \Baikal\Portal\PortalMeta();
+            $calendarBackend = new \Baikal\Core\ReadOnlyCalendarBackend($this->pdo, $portalMeta);
+            $nodes[] = new \Sabre\CalDAV\CalendarRoot($principalBackend, $calendarBackend);
+        }
+        if ($this->enableCardDAV) {
+            $carddavBackend = new \Sabre\CardDAV\Backend\PDO($this->pdo);
+            $nodes[] = new \Sabre\CardDAV\AddressBookRoot($principalBackend, $carddavBackend);
+        }
+
+        $fileConfig = null;
+        if ($this->enableFiles) {
+            try {
+                $fileConfig = new \Baikal\Core\Files\FileStorageConfig($config);
+                $fileConfig->prepareStorage();
+                \Baikal\Core\Files\SchemaManager::ensure($this->pdo);
+                $homeRepository = new \Baikal\Core\Files\HomeRepository($this->pdo, $fileConfig);
+                $nodes[] = new \Baikal\Core\Files\HomeCollection(
+                    $principalBackend,
+                    $homeRepository,
+                    $fileConfig
+                );
+            } catch (\Throwable $e) {
+                if ($fileConfig !== null) {
+                    $fileConfig->clearActive();
+                }
+                $fileConfig = null;
+                // Keep CalDAV/CardDAV up when file homes fail; log the real cause
+                // so operators can fix path permissions / config without guessing.
+                error_log(
+                    'WebDAV file storage disabled: configuration or storage initialization failed: '
+                    . $e->getMessage()
+                );
+            }
+        }
+
+        $this->server = new \Sabre\DAV\Server($nodes);
+        $this->server->setBaseUri($this->baseUri);
+
+        $this->server->addPlugin(new \Sabre\DAV\Auth\Plugin($authBackend, $this->authRealm));
+        $this->server->addPlugin(new \Sabre\DAVACL\Plugin());
+        $this->server->addPlugin(new \Sabre\DAV\Browser\Plugin());
+
+        $this->server->addPlugin(new \Sabre\DAV\PropertyStorage\Plugin(
+            new \Sabre\DAV\PropertyStorage\Backend\PDO($this->pdo)
+        ));
+
+        if ($fileConfig !== null) {
+            $this->server->addPlugin(new \Sabre\DAV\Locks\Plugin(
+                new \Sabre\DAV\Locks\Backend\PDO($this->pdo)
+            ));
+            $this->server->addPlugin(new \Baikal\Core\Files\IfHeaderPreconditionPlugin());
+            $fileConfig->markActive();
+        }
+
+        // WebDAV-Sync!
+        $this->server->addPlugin(new \Sabre\DAV\Sync\Plugin());
+
+        if ($this->enableCalDAV) {
+            $this->server->addPlugin(new \Sabre\CalDAV\Plugin());
+            $this->server->addPlugin(new \Sabre\CalDAV\ICSExportPlugin());
+            $this->server->addPlugin(new \Sabre\CalDAV\Schedule\Plugin());
+            $this->server->addPlugin(new \Sabre\DAV\Sharing\Plugin());
+            $this->server->addPlugin(new \Sabre\CalDAV\SharingPlugin());
+            // Enforce portal "read-only" on CalDAV clients (PUT/DELETE/…), not only in /api/.
+            $this->server->addPlugin(new \Baikal\Core\Plugins\ReadOnlyPlugin($this->pdo, $portalMeta));
+            if (isset($config['system']["invite_from"]) && $config['system']["invite_from"] !== "") {
+                $this->server->addPlugin(new \Sabre\CalDAV\Schedule\IMipPlugin($config['system']["invite_from"]));
+            }
+        }
+        if ($this->enableCardDAV) {
+            $this->server->addPlugin(new \Sabre\CardDAV\Plugin());
+            $this->server->addPlugin(new \Sabre\CardDAV\VCFExportPlugin());
+        }
+
+        // WebDAV-Push: server-initiated change notifications over Web Push.
+        if (!empty($config['system']['push_enabled'])) {
+            try {
+                $this->server->addPlugin(new \Baikal\Core\Plugins\PushPlugin($this->pdo, $config));
+            } catch (\Throwable $e) {
+                // Push is optional: invalid legacy config or an unavailable
+                // queue must not take down CalDAV/CardDAV request handling.
+                error_log(
+                    'WebDAV-Push disabled: configuration or storage initialization failed: '
+                    . $e->getMessage()
+                );
+            }
+        }
+
+        $this->server->on('exception', [$this, 'exception']);
+    }
+
+    /**
+     * Log only server-side DAV failures.
+     *
+     * Authentication challenges and other 4xx protocol responses remain in
+     * the web-server access log. Sending them to PHP's error log turns normal
+     * Digest negotiation and read-only denials into misleading stack traces.
+     *
+     * @return void
+     */
+    function exception($e) {
+        if ($e instanceof \Sabre\DAV\Exception && $e->getHTTPCode() < 500) {
+            return;
+        }
+
+        error_log($e);
+    }
+}

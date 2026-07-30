@@ -1,0 +1,2 @@
+*.sh text eol=lf
+html/portal/index.html text eol=lf

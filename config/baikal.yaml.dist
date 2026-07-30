@@ -1,0 +1,62 @@
+system:
+    configured_version: '0.7.0'
+    timezone: 'Europe/Paris'
+    card_enabled: true
+    cal_enabled: true
+    # Private per-user WebDAV file homes under /dav.php/files/{username}/.
+    files_enabled: false
+    # Empty uses Specific/files. Env: BAIKAL_FILES_STORAGE_PATH.
+    files_storage_path: ''
+    # Env overrides: BAIKAL_FILES_MAX_UPLOAD_BYTES / BAIKAL_FILES_QUOTA_BYTES.
+    files_max_upload_bytes: 1073741824
+    files_quota_bytes: 10737418240
+    files_quarantine_days: 30
+    tasks_enabled: true
+    notes_enabled: false
+    invite_from: 'noreply@localhost'
+    dav_auth_type: 'Digest'
+    # Set via installer / admin UI (password_hash). Do not commit real hashes.
+    admin_passwordhash: ''
+    failed_access_message: 'user %u authentication failure for AngaraDAV'
+    auth_realm: BaikalDAV
+    base_uri: ''
+    session_max_age_minutes: 15
+    # WebDAV-Push (draft-bitfire-webdav-push): server-initiated CalDAV/CardDAV
+    # change notifications over Web Push (RFC 8030/8291/8292), e.g. for DAVx5.
+    # Requires the minishlink/web-push composer package + openssl PHP extension.
+    push_enabled: false
+    # Canonical externally reachable DAV base URL. Required when Push is enabled;
+    # never inferred from Host/X-Forwarded-* headers.
+    push_external_url: ''
+    # Optional exact endpoint-host allowlist. Empty permits any public HTTPS host.
+    # push_allowed_hosts: ['updates.push.services.mozilla.com', 'fcm.googleapis.com']
+    push_max_subscriptions_per_principal: 20
+    push_max_subscriptions_per_resource: 100
+    push_max_registrations_per_hour: 30
+    push_worker_batch_size: 20
+    push_worker_poll_ms: 2000
+    push_max_delivery_attempts: 5
+    # WebDAV-Push debug logging -> Specific/push_debug.log. Env overrides YAML:
+    #   PUSH_LOG_LEVEL / BAIKAL_PUSH_LOG_LEVEL = off|error|warn|info|debug
+    push_log_level: 'off'
+    # Portal SPA locale helpers (override browser auto-detect). Env also works:
+    #   TIME_FORMAT / BAIKAL_PORTAL_TIME_FORMAT = auto|12h|24h
+    #   BAIKAL_PORTAL_WEEK_START = auto|monday|sunday
+    portal_time_format: 'auto'
+    portal_week_start: 'auto'
+    # Portal debug logging (browser console + Docker/PHP error_log). Env:
+    #   PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL = off|error|warn|info|debug
+    portal_log_level: 'off'
+database:
+    encryption_key: 5d3f0fa0192e3058ea70f1bb20924add
+    backend: 'mysql'
+    sqlite_file: "absolute/path/to/Specific/db/db.sqlite"
+    mysql_host: 'localhost'
+    mysql_dbname: 'baikal'
+    mysql_username: 'baikal'
+    mysql_password: 'baikal'
+    mysql_ca_cert: '/path/to/sqlca.pem'
+    pgsql_host: 'localhost'
+    pgsql_dbname: 'baikal'
+    pgsql_username: 'baikal'
+    pgsql_password: 'baikal'

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Deployment documentation
+    url: https://github.com/offsyanka99/AngaraDAV/blob/master/docs/DEPLOYMENT.md
+    about: Review Docker, TrueNAS, reverse-proxy, backup, Push, and troubleshooting guidance.
+  - name: Upstream Baikal
+    url: https://github.com/sabre-io/Baikal
+    about: Use upstream support only for behavior that also reproduces on unmodified Baikal.

@@ -1,0 +1,37 @@
+# logs
+logs
+
+# Local docker run data (see docs/truenas-scale.compose.yaml)
+.local-run/
+
+# Specific
+config/baikal.yaml
+config/.htaccess
+Specific/INSTALL_DISABLED
+# WebDAV-Push runtime state — the VAPID private key must never be committed
+Specific/push_vapid.json
+Specific/push_debug.log
+Specific/push_debug.log.1
+Specific/push_worker.lock
+
+# Composer stuff
+# composer.lock is committed for reproducible Docker builds
+vendor
+
+# Build
+/build
+# Docker image stamp (generated at image build)
+Core/BuildInfo.php
+
+# Vim
+.*.swp
+
+# Others
+.DS_Store
+
+# IDE
+nbproject
+
+# Tests
+.php-cs-fixer.cache
+.php_cs.cache

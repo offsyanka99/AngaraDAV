@@ -1,0 +1,103 @@
+name: AngaraDAV continuous integration
+on:
+  push:
+    branches:
+      - master
+      - release/*
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  code-analysis:
+    name: Code Analysis (PHP ${{ matrix.php-versions }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-versions: ['8.2', '8.3', '8.4', '8.5', '8.6']
+        cs-fixer: [ true ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup PHP and Install Composer Dependencies
+        uses: ./.github/actions/build
+        with:
+          php-version: ${{ matrix.php-versions }}
+      - name: Calendar timezone dual-format unit test
+        run: php tests/php/CalendarTimeZoneResolveTest.php
+      - name: WebDAV-Push unit test
+        run: php tests/php/PushPluginTest.php
+      - name: WebDAV file-home unit test
+        run: php tests/php/FileHomeStorageTest.php
+      - name: DAV exception logging unit test
+        run: php tests/php/ServerExceptionLoggingTest.php
+      - name: CalDAV read-only discovery unit test
+        run: php tests/php/ReadOnlyPluginTest.php
+      - name: Code Analysis (PHP CS-Fixer)
+        if: matrix.cs-fixer == true
+        run: php vendor/bin/php-cs-fixer fix --dry-run --diff --allow-unsupported-php-version=yes
+      - name: Code Analysis (PHPStan)
+        run: composer phpstan
+
+  tests:
+    name: Tests (PHP ${{ matrix.php-versions }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-versions: ['8.2', '8.3', '8.4', '8.5', '8.6']
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: baikal_test
+          MYSQL_USER: baikal
+          MYSQL_PASSWORD: baikal
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: baikal_test
+          POSTGRES_USER: baikal
+          POSTGRES_PASSWORD: baikal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baikal"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup PHP and Install Composer Dependencies
+        uses: ./.github/actions/build
+        with:
+          php-version: ${{ matrix.php-versions }}
+      - name: Start PHP server
+        run: php -S 0.0.0.0:8000 -t . > php_server.log 2>&1 &
+      - name: Setup Python
+        run: |
+          pip install mechanicalsoup mysql-connector-python psycopg2 --break-system-packages
+      - name: Run tests
+        env:
+          BAIKAL_BASE_URL: http://localhost:8000/html/
+        run: python run_tests.py
+      - name: WebDAV file-home database drivers
+        env:
+          BAIKAL_TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=baikal_test;charset=utf8mb4
+          BAIKAL_TEST_MYSQL_USER: baikal
+          BAIKAL_TEST_MYSQL_PASSWORD: baikal
+          BAIKAL_TEST_PGSQL_DSN: pgsql:host=127.0.0.1;port=5432;dbname=baikal_test
+          BAIKAL_TEST_PGSQL_USER: baikal
+          BAIKAL_TEST_PGSQL_PASSWORD: baikal
+        run: php tests/php/FileSchemaDriverTest.php
+      - name: Print server logs
+        run: cat php_server.log
