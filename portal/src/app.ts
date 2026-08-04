@@ -445,6 +445,7 @@ export function mountApp(root: HTMLElement): void {
     filesRenamePath = null;
     filesDeletePaths = null;
     filesTransfer = null;
+    filesMkdirOpen = false;
     checkedFilePaths = [];
     photoPreview = null;
     photoBase64Pending = null;
@@ -623,6 +624,8 @@ export function mountApp(root: HTMLElement): void {
   let filesDeletePaths: string[] | null = null;
   /** Copy/move destination modal (one or more source paths). */
   let filesTransfer: { op: "copy" | "move"; paths: string[] } | null = null;
+  /** New-folder modal open. */
+  let filesMkdirOpen = false;
   /** Selected entry paths in the current folder (multi-select). */
   let checkedFilePaths: string[] = [];
 
@@ -2995,7 +2998,8 @@ export function mountApp(root: HTMLElement): void {
         importProgress !== null ||
         filesRenamePath !== null ||
         filesDeletePaths !== null ||
-        filesTransfer !== null,
+        filesTransfer !== null ||
+        filesMkdirOpen,
     );
     document.body.classList.toggle("layout-contacts", activeTab === "contacts");
     document.body.classList.toggle("layout-calendars", activeTab === "calendars");
@@ -3280,6 +3284,34 @@ export function mountApp(root: HTMLElement): void {
           })()
         : "";
 
+    const mkdirModal = filesMkdirOpen
+      ? `<div class="cal-modal" id="files-mkdir-modal" role="dialog" aria-modal="true" aria-labelledby="files-mkdir-title">
+          <div class="cal-modal-backdrop" data-action="files-mkdir-close"></div>
+          <div class="cal-modal-card cal-modal-card-sm">
+            <header class="cal-modal-header">
+              <h3 id="files-mkdir-title">New folder</h3>
+              <button type="button" class="info-modal-close" data-action="files-mkdir-close" aria-label="Close">×</button>
+            </header>
+            <form class="stack" data-form="files-mkdir">
+              <div class="cal-modal-body">
+                <p class="muted small" style="margin:0 0 0.75rem">
+                  Create a folder in
+                  <span class="mono">${esc(filesPath === "" ? "Home" : filesPath)}</span>
+                </p>
+                <label>Folder name
+                  <input type="text" name="name" value="" required maxlength="255" autocomplete="off"
+                    placeholder="e.g. Documents" autofocus />
+                </label>
+              </div>
+              <footer class="cal-modal-footer">
+                <button type="button" class="btn btn-ghost" data-action="files-mkdir-close">Cancel</button>
+                <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create</button>
+              </footer>
+            </form>
+          </div>
+        </div>`
+      : "";
+
     const limitsLine = [
       `DAV clients: <span class="mono">${esc(st.davPath)}</span>`,
       `max upload ${esc(formatLimitFromBytes(st.maxUploadBytes))}`,
@@ -3340,6 +3372,7 @@ export function mountApp(root: HTMLElement): void {
       ${renameModal}
       ${deleteModal}
       ${transferModal}
+      ${mkdirModal}
     </div>`;
   }
 
@@ -3950,11 +3983,13 @@ export function mountApp(root: HTMLElement): void {
         if (
           filesRenamePath !== null ||
           filesDeletePaths !== null ||
-          filesTransfer !== null
+          filesTransfer !== null ||
+          filesMkdirOpen
         ) {
           filesRenamePath = null;
           filesDeletePaths = null;
           filesTransfer = null;
+          filesMkdirOpen = false;
           render();
           return;
         }
@@ -3977,6 +4012,17 @@ export function mountApp(root: HTMLElement): void {
       ev.preventDefault();
       void onFilesTransfer(filesTransferForm);
     });
+    const filesMkdirForm = root.querySelector<HTMLFormElement>('[data-form="files-mkdir"]');
+    filesMkdirForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onFilesMkdir(filesMkdirForm);
+    });
+    // Focus new-folder name field when the modal opens
+    if (filesMkdirOpen) {
+      requestAnimationFrame(() => {
+        filesMkdirForm?.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
+      });
+    }
     root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload"]').forEach((input) => {
       input.addEventListener("change", () => {
         void onFilesUpload(input);
@@ -4515,6 +4561,31 @@ export function mountApp(root: HTMLElement): void {
       setFlash("success", `Renamed to “${newName}”`);
     } catch (e) {
       setFlash("error", e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onFilesMkdir(form: HTMLFormElement) {
+    const fd = new FormData(form);
+    const name = String(fd.get("name") ?? "").trim();
+    if (!name) {
+      setFlash("error", "Folder name is required");
+      render();
+      return;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      await api.filesMkdir(filesPath, name);
+      log.event("files.mkdir", { path: filesPath, name });
+      filesMkdirOpen = false;
+      await loadFiles();
+      setFlash("success", `Created folder “${name}”`);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Could not create folder");
     } finally {
       busy = false;
       render();
@@ -5353,6 +5424,7 @@ export function mountApp(root: HTMLElement): void {
       filesRenamePath = null;
       filesDeletePaths = null;
       filesTransfer = null;
+      filesMkdirOpen = false;
       checkedFilePaths = [];
       busy = true;
       clearFlash();
@@ -5450,28 +5522,17 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "files-mkdir") {
-      const name = window.prompt("New folder name");
-      if (name === null) return;
-      const trimmed = name.trim();
-      if (!trimmed) {
-        setFlash("error", "Folder name is required");
-        render();
-        return;
-      }
-      busy = true;
+      filesMkdirOpen = true;
+      filesRenamePath = null;
+      filesDeletePaths = null;
+      filesTransfer = null;
       clearFlash();
       render();
-      try {
-        await api.filesMkdir(filesPath, trimmed);
-        log.event("files.mkdir", { path: filesPath, name: trimmed });
-        await loadFiles();
-        setFlash("success", `Created folder “${trimmed}”`);
-      } catch (e) {
-        setFlash("error", e instanceof Error ? e.message : "Could not create folder");
-      } finally {
-        busy = false;
-        render();
-      }
+      return;
+    }
+    if (action === "files-mkdir-close") {
+      filesMkdirOpen = false;
+      render();
       return;
     }
     if (action === "files-rename-open") {
