@@ -79,6 +79,17 @@ class Framework extends \Flake\Core\Framework {
 
     # Mapping PHP errors to exceptions; needed by SabreDAV
     static function exception_error_handler($errno, $errstr, $errfile, $errline) {
+        // Respect @-suppression.
+        if (!(error_reporting() & $errno)) {
+            return false;
+        }
+        // Notices/deprecations are informational by PHP's own semantics (e.g.
+        // web-push's GMP/BCMath recommendation); don't promote them to fatal
+        // exceptions, only real warnings/errors.
+        static $nonFatal = E_NOTICE | E_USER_NOTICE | E_DEPRECATED | E_USER_DEPRECATED | E_STRICT;
+        if ($errno & $nonFatal) {
+            return false;
+        }
         throw new \ErrorException($errstr, 0, $errno, $errfile, $errline);
     }
 }

@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.1`
+**Version:** `1.0.2`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -49,8 +49,9 @@ Legacy release history
 | `0.11.1-fork.5` | Secure WebDAV-Push, persistent worker queue, VAPID/Web Push, encrypted subscriptions |
 | `1.0.0` | **First independent AngaraDAV release.** SQLite/PostgreSQL only (MySQL removed), `main` default branch, WebDAV auth rate limiting, admin CSP hardening |
 | `1.0.1` | Fixed WebDAV-Push registration returning 401 with no `WWW-Authenticate` challenge when DAVACL disables auto-login, blocking client push subscriptions |
+| `1.0.2` | Added `gmp` PHP extension and stopped promoting PHP notices/deprecations to fatal exceptions, fixing WebDAV-Push delivery failing on servers without GMP/BCMath |
 
-Image tags: `latest`, `1.0.1`, `sha-…`.
+Image tags: `latest`, `1.0.2`, `sha-…`.
 
 Quick start (Docker)
 --------------------
