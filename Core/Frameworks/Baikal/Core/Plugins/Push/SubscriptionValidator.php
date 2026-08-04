@@ -100,9 +100,18 @@ class SubscriptionValidator {
                 return null;
             }
         }
+        // Prefer IPv4: many hosts have broken/absent outbound IPv6 routing, and
+        // a lexical string sort would otherwise pick an IPv6 literal first
+        // (e.g. "2001:..." < "216.239...") with no Happy-Eyeballs fallback once
+        // CURLOPT_RESOLVE pins the connection to it.
+        $v4 = array_values(array_filter($addresses, static function ($a) {
+            return filter_var($a, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+        }));
+        sort($v4, SORT_STRING);
         sort($addresses, SORT_STRING);
+        $chosen = $v4[0] ?? $addresses[0];
 
-        return ['host' => $host, 'address' => $addresses[0]];
+        return ['host' => $host, 'address' => $chosen];
     }
 
     /**
