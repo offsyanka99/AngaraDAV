@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.9`
+**Version:** `1.0.10`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -23,7 +23,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
-  - **Files** tab: browse/upload/download/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
+  - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
 - `/dav.php/` kept as classic browser and combined CalDAV/CardDAV/WebDAV endpoint
@@ -58,8 +58,9 @@ Legacy release history
 | `1.0.7` | Admin **Maximum WebDAV file size** field now entered in MB instead of raw bytes (storage/env var `BAIKAL_FILES_MAX_UPLOAD_BYTES` unchanged, still bytes); documented that it is independent of the nginx/PHP upload ceilings |
 | `1.0.8` | Unified the Maximum WebDAV file size setting on a single MB standard end to end: `baikal.yaml`'s `files_max_upload_mb` and `BAIKAL_FILES_MAX_UPLOAD_MB` now store MB directly (previously bytes), matching the admin UI; the old byte-based key/env var still work as a one-time upgrade fallback |
 | `1.0.9` | Extended the MB standard to the WebDAV per-user quota setting: `files_quota_mb` / `BAIKAL_FILES_QUOTA_MB` replace the byte-based `files_quota_bytes` / `BAIKAL_FILES_QUOTA_BYTES` (old key/env var still work as a one-time upgrade fallback; `0` still means unlimited) |
+| `1.0.10` | Files tab: bulk delete modal, copy/move destination modals, header select alignment, remove Clear selection; show max upload/quota in MB from app settings |
 
-Image tags: `latest`, `1.0.9`, `sha-…`.
+Image tags: `latest`, `1.0.10`, `sha-…`.
 
 Quick start (Docker)
 --------------------

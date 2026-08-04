@@ -30,7 +30,7 @@ type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 const TAB_STORAGE_KEY = "angaradav-portal-tab";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "1.0.6";
+const APP_VERSION_FALLBACK = "1.0.10";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {
@@ -187,7 +187,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Files",
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
-      "Upload, download, create folders, copy, rename, and delete. Use checkboxes to multi-select items for bulk copy or delete.",
+      "Upload, download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
       "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
     ],
   },
@@ -443,7 +443,8 @@ export function mountApp(root: HTMLElement): void {
     filesEntries = [];
     filesLoading = false;
     filesRenamePath = null;
-    filesDeletePath = null;
+    filesDeletePaths = null;
+    filesTransfer = null;
     checkedFilePaths = [];
     photoPreview = null;
     photoBase64Pending = null;
@@ -618,7 +619,10 @@ export function mountApp(root: HTMLElement): void {
   let filesEntries: FileEntry[] = [];
   let filesLoading = false;
   let filesRenamePath: string | null = null;
-  let filesDeletePath: string | null = null;
+  /** One or more paths pending delete confirmation (UI modal). */
+  let filesDeletePaths: string[] | null = null;
+  /** Copy/move destination modal (one or more source paths). */
+  let filesTransfer: { op: "copy" | "move"; paths: string[] } | null = null;
   /** Selected entry paths in the current folder (multi-select). */
   let checkedFilePaths: string[] = [];
 
@@ -2990,7 +2994,8 @@ export function mountApp(root: HTMLElement): void {
         abModalOpen ||
         importProgress !== null ||
         filesRenamePath !== null ||
-        filesDeletePath !== null,
+        filesDeletePaths !== null ||
+        filesTransfer !== null,
     );
     document.body.classList.toggle("layout-contacts", activeTab === "contacts");
     document.body.classList.toggle("layout-calendars", activeTab === "calendars");
@@ -3025,6 +3030,22 @@ export function mountApp(root: HTMLElement): void {
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  /**
+   * Format app limits that are configured in MB (BAIKAL_FILES_MAX_UPLOAD_MB /
+   * BAIKAL_FILES_QUOTA_MB). Prefer whole-MB labels so the UI matches env/YAML.
+   */
+  function formatLimitFromBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes < 0) return "—";
+    if (bytes === 0) return "unlimited";
+    const mb = Math.round(bytes / (1024 * 1024));
+    if (mb <= 0) return formatBytes(bytes);
+    if (mb >= 1024 && mb % 1024 === 0) {
+      const gb = mb / 1024;
+      return gb === 1 ? "1 GB" : `${gb} GB`;
+    }
+    return `${mb} MB`;
   }
 
   function formatMtime(ts: number): string {
@@ -3077,20 +3098,13 @@ export function mountApp(root: HTMLElement): void {
       filesEntries.length > 0 && filesEntries.every((e) => checkedFilePaths.includes(e.path));
     const someChecked = nChecked > 0;
     const bulkBar =
-      filesEntries.length > 0
+      nChecked > 0
         ? `<div class="bulk-bar files-bulk-bar" role="toolbar" aria-label="Selected files">
-            <label class="bulk-select-all">
-              <input type="checkbox" data-action="files-select-all"
-                ${allChecked ? "checked" : ""}
-                ${someChecked && !allChecked ? "data-indeterminate=1" : ""}
-                ${busy ? "disabled" : ""}
-                aria-label="Select all in this folder" />
-              <span>${nChecked > 0 ? `${nChecked} selected` : "Select"}</span>
-            </label>
+            <span class="muted small">${nChecked} selected</span>
             <div class="bulk-bar-actions">
-              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-copy" ${busy || nChecked === 0 ? "disabled" : ""}>Copy</button>
-              <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${busy || nChecked === 0 ? "disabled" : ""}>Delete</button>
-              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-clear" ${busy || nChecked === 0 ? "disabled" : ""}>Clear selection</button>
+              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-copy" ${busy ? "disabled" : ""}>Copy</button>
+              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-move" ${busy ? "disabled" : ""}>Move</button>
+              <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${busy ? "disabled" : ""}>Delete</button>
             </div>
           </div>`
         : "";
@@ -3125,6 +3139,7 @@ export function mountApp(root: HTMLElement): void {
                       : ""
                   }
                   <button type="button" class="btn btn-ghost btn-small" data-action="files-copy" data-path="${esc(e.path)}" ${busy ? "disabled" : ""}>Copy</button>
+                  <button type="button" class="btn btn-ghost btn-small" data-action="files-move" data-path="${esc(e.path)}" ${busy ? "disabled" : ""}>Move</button>
                   <button type="button" class="btn btn-ghost btn-small" data-action="files-rename-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Rename</button>
                   <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="files-delete-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Delete</button>
                 </td>
@@ -3162,39 +3177,122 @@ export function mountApp(root: HTMLElement): void {
         : "";
 
     const deleteModal =
-      filesDeletePath !== null
+      filesDeletePaths !== null && filesDeletePaths.length > 0
         ? (() => {
-            const entry = filesEntries.find((x) => x.path === filesDeletePath);
-            const label = entry?.name ?? filesDeletePath;
-            const kind = entry?.type === "dir" ? "folder" : "file";
+            const paths = filesDeletePaths;
+            const multi = paths.length > 1;
+            const first = filesEntries.find((x) => x.path === paths[0]);
+            const title = multi
+              ? `Delete ${paths.length} items`
+              : `Delete ${first?.type === "dir" ? "folder" : "file"}`;
+            const body = multi
+              ? `<p style="margin:0 0 0.75rem">Delete <strong>${paths.length}</strong> selected items? Folders are removed with their contents. This cannot be undone.</p>
+                 <ul class="files-delete-list muted small">
+                   ${paths
+                     .slice(0, 12)
+                     .map((p) => {
+                       const e = filesEntries.find((x) => x.path === p);
+                       return `<li><span class="mono">${esc(e?.name ?? p)}</span></li>`;
+                     })
+                     .join("")}
+                   ${paths.length > 12 ? `<li>…and ${paths.length - 12} more</li>` : ""}
+                 </ul>`
+              : `<p style="margin:0">Delete <strong>${esc(first?.name ?? paths[0])}</strong>?${
+                  first?.type === "dir"
+                    ? " This removes the folder and everything inside it."
+                    : ""
+                }</p>`;
             return `<div class="cal-modal" id="files-delete-modal" role="dialog" aria-modal="true" aria-labelledby="files-delete-title">
               <div class="cal-modal-backdrop" data-action="files-delete-close"></div>
               <div class="cal-modal-card cal-modal-card-sm">
                 <header class="cal-modal-header">
-                  <h3 id="files-delete-title">Delete ${esc(kind)}</h3>
+                  <h3 id="files-delete-title">${esc(title)}</h3>
                   <button type="button" class="info-modal-close" data-action="files-delete-close" aria-label="Close">×</button>
                 </header>
                 <div class="cal-modal-body">
-                  <p style="margin:0">Delete <strong>${esc(label)}</strong>?${
-                    entry?.type === "dir"
-                      ? " This removes the folder and everything inside it."
-                      : ""
-                  }</p>
+                  ${body}
                 </div>
                 <footer class="cal-modal-footer">
                   <button type="button" class="btn btn-ghost" data-action="files-delete-close">Cancel</button>
-                  <button type="button" class="btn btn-danger" data-action="files-delete-confirm" data-path="${esc(filesDeletePath)}" ${busy ? "disabled" : ""}>Delete</button>
+                  <button type="button" class="btn btn-danger" data-action="files-delete-confirm" ${busy ? "disabled" : ""}>Delete</button>
                 </footer>
               </div>
             </div>`;
           })()
         : "";
 
+    const transferModal =
+      filesTransfer !== null && filesTransfer.paths.length > 0
+        ? (() => {
+            const op = filesTransfer.op;
+            const paths = filesTransfer.paths;
+            const multi = paths.length > 1;
+            const first = filesEntries.find((x) => x.path === paths[0]);
+            const defaultName = first?.name ?? basenamePath(paths[0]);
+            const title = multi
+              ? `${op === "copy" ? "Copy" : "Move"} ${paths.length} items`
+              : `${op === "copy" ? "Copy" : "Move"} ${first?.type === "dir" ? "folder" : "file"}`;
+            const defaultDest = filesPath;
+            return `<div class="cal-modal" id="files-transfer-modal" role="dialog" aria-modal="true" aria-labelledby="files-transfer-title">
+              <div class="cal-modal-backdrop" data-action="files-transfer-close"></div>
+              <div class="cal-modal-card cal-modal-card-sm">
+                <header class="cal-modal-header">
+                  <h3 id="files-transfer-title">${esc(title)}</h3>
+                  <button type="button" class="info-modal-close" data-action="files-transfer-close" aria-label="Close">×</button>
+                </header>
+                <form class="stack" data-form="files-transfer">
+                  <div class="cal-modal-body">
+                    ${
+                      multi
+                        ? `<p class="muted small" style="margin:0 0 0.75rem">${paths.length} items will be ${op === "copy" ? "copied" : "moved"} into the destination folder (original names kept).</p>`
+                        : `<p class="muted small" style="margin:0 0 0.75rem"><span class="mono">${esc(defaultName)}</span></p>`
+                    }
+                    <label>Destination folder
+                      <input type="text" name="toPath" value="${esc(defaultDest)}" maxlength="1024"
+                        placeholder="Leave empty for Home (root)" autocomplete="off"
+                        aria-describedby="files-transfer-dest-hint" />
+                    </label>
+                    <p id="files-transfer-dest-hint" class="muted small" style="margin:0.35rem 0 0">
+                      Path relative to your file home. Examples: empty = Home, <span class="mono">docs</span>, <span class="mono">archive/2026</span>
+                    </p>
+                    ${
+                      !multi
+                        ? `<label style="margin-top:0.85rem">New name <span class="muted">(optional)</span>
+                            <input type="text" name="newName" value="${esc(defaultName)}" maxlength="255" autocomplete="off" />
+                          </label>
+                          <p class="muted small" style="margin:0.35rem 0 0">
+                            ${
+                              op === "copy"
+                                ? "Leave as-is to keep the name (a “ (copy)” suffix is added if it already exists in the destination)."
+                                : "Leave as-is to keep the current name."
+                            }
+                          </p>`
+                        : ""
+                    }
+                  </div>
+                  <footer class="cal-modal-footer">
+                    <button type="button" class="btn btn-ghost" data-action="files-transfer-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>${op === "copy" ? "Copy" : "Move"}</button>
+                  </footer>
+                </form>
+              </div>
+            </div>`;
+          })()
+        : "";
+
+    const limitsLine = [
+      `DAV clients: <span class="mono">${esc(st.davPath)}</span>`,
+      `max upload ${esc(formatLimitFromBytes(st.maxUploadBytes))}`,
+      st.quotaBytes > 0
+        ? `quota ${esc(formatLimitFromBytes(st.quotaBytes))}`
+        : "quota unlimited",
+    ].join(" · ");
+
     return `<div class="portal-grid portal-grid-files">
       <section class="card files-panel">
         <div class="files-head">
           ${infoTitle("Files", "files", "h1")}
-          <div class="files-quota muted small" title="Storage usage">
+          <div class="files-quota muted small" title="Storage usage (application quota)">
             <div class="files-quota-bar" role="progressbar" aria-valuenow="${quotaPct}" aria-valuemin="0" aria-valuemax="100">
               <div class="files-quota-fill" style="width:${quotaPct}%"></div>
             </div>
@@ -3202,8 +3300,7 @@ export function mountApp(root: HTMLElement): void {
           </div>
         </div>
         <p class="muted small" style="margin:0.5rem 0 0">
-          DAV clients: <span class="mono">${esc(st.davPath)}</span>
-          · max upload ${formatBytes(st.maxUploadBytes)}
+          ${limitsLine}
         </p>
         <div class="files-toolbar">
           ${filesBreadcrumb(filesPath)}
@@ -3221,7 +3318,13 @@ export function mountApp(root: HTMLElement): void {
           <table class="files-table">
             <thead>
               <tr>
-                <th class="files-col-check" aria-label="Select"></th>
+                <th class="files-col-check">
+                  <input type="checkbox" data-action="files-select-all"
+                    ${allChecked ? "checked" : ""}
+                    ${someChecked && !allChecked ? "data-indeterminate=1" : ""}
+                    ${busy || filesEntries.length === 0 ? "disabled" : ""}
+                    aria-label="Select all in this folder" />
+                </th>
                 <th class="files-col-name">Name</th>
                 <th class="files-col-size">Size</th>
                 <th class="files-col-mtime hide-sm">Modified</th>
@@ -3236,7 +3339,13 @@ export function mountApp(root: HTMLElement): void {
       </section>
       ${renameModal}
       ${deleteModal}
+      ${transferModal}
     </div>`;
+  }
+
+  function basenamePath(path: string): string {
+    const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
+    return parts[parts.length - 1] || path;
   }
 
   /** Admin-only Administration section (opened from the user menu). */
@@ -3838,9 +3947,14 @@ export function mountApp(root: HTMLElement): void {
           render();
           return;
         }
-        if (filesRenamePath !== null || filesDeletePath !== null) {
+        if (
+          filesRenamePath !== null ||
+          filesDeletePaths !== null ||
+          filesTransfer !== null
+        ) {
           filesRenamePath = null;
-          filesDeletePath = null;
+          filesDeletePaths = null;
+          filesTransfer = null;
           render();
           return;
         }
@@ -3857,6 +3971,11 @@ export function mountApp(root: HTMLElement): void {
     filesRenameForm?.addEventListener("submit", (ev) => {
       ev.preventDefault();
       void onFilesRename(filesRenameForm);
+    });
+    const filesTransferForm = root.querySelector<HTMLFormElement>('[data-form="files-transfer"]');
+    filesTransferForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onFilesTransfer(filesTransferForm);
     });
     root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload"]').forEach((input) => {
       input.addEventListener("change", () => {
@@ -4396,6 +4515,64 @@ export function mountApp(root: HTMLElement): void {
       setFlash("success", `Renamed to “${newName}”`);
     } catch (e) {
       setFlash("error", e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onFilesTransfer(form: HTMLFormElement) {
+    if (!filesTransfer || filesTransfer.paths.length === 0) return;
+    const fd = new FormData(form);
+    const toPath = String(fd.get("toPath") ?? "").trim().replace(/^\/+|\/+$/g, "");
+    const newNameRaw = String(fd.get("newName") ?? "").trim();
+    const op = filesTransfer.op;
+    const paths = [...filesTransfer.paths];
+    const multi = paths.length > 1;
+    busy = true;
+    clearFlash();
+    render();
+    let ok = 0;
+    const errors: string[] = [];
+    try {
+      for (const path of paths) {
+        try {
+          if (op === "copy") {
+            // Omit newName when unchanged so the server can append " (copy)"
+            // if the destination already has that name.
+            const sourceBase = basenamePath(path);
+            const copyName =
+              multi || !newNameRaw || newNameRaw === sourceBase ? undefined : newNameRaw;
+            const res = await api.filesCopy(path, {
+              to: toPath,
+              newName: copyName,
+            });
+            log.event("files.copy", { path, to: res.entry.path });
+          } else {
+            const sourceBase = basenamePath(path);
+            const moveName =
+              multi || !newNameRaw || newNameRaw === sourceBase ? undefined : newNameRaw;
+            await api.filesMove(path, toPath, moveName);
+            log.event("files.move", { path, to: toPath });
+          }
+          ok += 1;
+        } catch (e) {
+          errors.push(`${basenamePath(path)}: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+      filesTransfer = null;
+      checkedFilePaths = [];
+      await loadFiles();
+      const verb = op === "copy" ? "Copied" : "Moved";
+      if (ok > 0 && errors.length === 0) {
+        setFlash("success", ok === 1 ? `${verb} 1 item` : `${verb} ${ok} items`);
+      } else if (ok > 0) {
+        setFlash("info", `${verb} ${ok}; ${errors.length} failed. ${errors[0]}`);
+      } else {
+        setFlash("error", errors[0] || `${op === "copy" ? "Copy" : "Move"} failed`);
+      }
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Operation failed");
     } finally {
       busy = false;
       render();
@@ -5174,7 +5351,8 @@ export function mountApp(root: HTMLElement): void {
       const path = t.dataset.path ?? "";
       filesPath = path;
       filesRenamePath = null;
-      filesDeletePath = null;
+      filesDeletePaths = null;
+      filesTransfer = null;
       checkedFilePaths = [];
       busy = true;
       clearFlash();
@@ -5209,90 +5387,51 @@ export function mountApp(root: HTMLElement): void {
       render();
       return;
     }
-    if (action === "files-bulk-clear") {
-      checkedFilePaths = [];
-      render();
-      return;
-    }
     if (action === "files-copy") {
       const path = t.dataset.path ?? "";
       if (!path) return;
-      busy = true;
-      clearFlash();
+      filesTransfer = { op: "copy", paths: [path] };
+      filesRenamePath = null;
+      filesDeletePaths = null;
       render();
-      try {
-        const res = await api.filesCopy(path);
-        log.event("files.copy", { path, to: res.entry.path });
-        await loadFiles();
-        setFlash("success", `Copied as “${res.entry.name}”`);
-      } catch (e) {
-        setFlash("error", e instanceof Error ? e.message : "Copy failed");
-      } finally {
-        busy = false;
-        render();
-      }
+      return;
+    }
+    if (action === "files-move") {
+      const path = t.dataset.path ?? "";
+      if (!path) return;
+      filesTransfer = { op: "move", paths: [path] };
+      filesRenamePath = null;
+      filesDeletePaths = null;
+      render();
       return;
     }
     if (action === "files-bulk-copy") {
       if (checkedFilePaths.length === 0) return;
-      const paths = [...checkedFilePaths];
-      busy = true;
-      clearFlash();
+      filesTransfer = { op: "copy", paths: [...checkedFilePaths] };
+      filesRenamePath = null;
+      filesDeletePaths = null;
       render();
-      try {
-        const res = await api.filesBulk("copy", paths);
-        log.event("files.bulk-copy", { ok: res.ok, failed: res.failed });
-        checkedFilePaths = [];
-        await loadFiles();
-        if (res.failed === 0) {
-          setFlash("success", res.ok === 1 ? "Copied 1 item" : `Copied ${res.ok} items`);
-        } else if (res.ok > 0) {
-          setFlash("info", `Copied ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`);
-        } else {
-          setFlash("error", res.errors[0] || "Copy failed");
-        }
-      } catch (e) {
-        setFlash("error", e instanceof Error ? e.message : "Bulk copy failed");
-      } finally {
-        busy = false;
-        render();
-      }
+      return;
+    }
+    if (action === "files-bulk-move") {
+      if (checkedFilePaths.length === 0) return;
+      filesTransfer = { op: "move", paths: [...checkedFilePaths] };
+      filesRenamePath = null;
+      filesDeletePaths = null;
+      render();
+      return;
+    }
+    if (action === "files-transfer-close") {
+      filesTransfer = null;
+      render();
       return;
     }
     if (action === "files-bulk-delete") {
       if (checkedFilePaths.length === 0) return;
-      const n = checkedFilePaths.length;
-      if (
-        !confirm(
-          n === 1
-            ? "Delete the selected item? This cannot be undone."
-            : `Delete ${n} selected items? This cannot be undone.`,
-        )
-      ) {
-        return;
-      }
-      const paths = [...checkedFilePaths];
-      busy = true;
-      clearFlash();
+      filesDeletePaths = [...checkedFilePaths];
+      filesRenamePath = null;
+      filesTransfer = null;
       render();
-      try {
-        const res = await api.filesBulk("delete", paths);
-        log.event("files.bulk-delete", { ok: res.ok, failed: res.failed });
-        checkedFilePaths = [];
-        await loadFiles();
-        if (res.failed === 0) {
-          setFlash("success", res.ok === 1 ? "Deleted 1 item" : `Deleted ${res.ok} items`);
-        } else if (res.ok > 0) {
-          setFlash("info", `Deleted ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`);
-        } else {
-          setFlash("error", res.errors[0] || "Delete failed");
-        }
-      } catch (e) {
-        setFlash("error", e instanceof Error ? e.message : "Bulk delete failed");
-      } finally {
-        busy = false;
-        render();
-      }
       return;
     }
     if (action === "files-refresh") {
@@ -5337,7 +5476,8 @@ export function mountApp(root: HTMLElement): void {
     }
     if (action === "files-rename-open") {
       filesRenamePath = t.dataset.path ?? null;
-      filesDeletePath = null;
+      filesDeletePaths = null;
+      filesTransfer = null;
       render();
       return;
     }
@@ -5347,28 +5487,43 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "files-delete-open") {
-      filesDeletePath = t.dataset.path ?? null;
+      const path = t.dataset.path ?? "";
+      filesDeletePaths = path ? [path] : null;
       filesRenamePath = null;
+      filesTransfer = null;
       render();
       return;
     }
     if (action === "files-delete-close") {
-      filesDeletePath = null;
+      filesDeletePaths = null;
       render();
       return;
     }
     if (action === "files-delete-confirm") {
-      const path = t.dataset.path ?? filesDeletePath;
-      if (!path) return;
+      const paths = filesDeletePaths ? [...filesDeletePaths] : [];
+      if (paths.length === 0) return;
       busy = true;
       clearFlash();
       render();
       try {
-        await api.filesDelete(path);
-        log.event("files.delete", { path });
-        filesDeletePath = null;
+        if (paths.length === 1) {
+          await api.filesDelete(paths[0]);
+          log.event("files.delete", { path: paths[0] });
+          setFlash("success", "Deleted");
+        } else {
+          const res = await api.filesBulk("delete", paths);
+          log.event("files.bulk-delete", { ok: res.ok, failed: res.failed });
+          if (res.failed === 0) {
+            setFlash("success", res.ok === 1 ? "Deleted 1 item" : `Deleted ${res.ok} items`);
+          } else if (res.ok > 0) {
+            setFlash("info", `Deleted ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`);
+          } else {
+            setFlash("error", res.errors[0] || "Delete failed");
+          }
+        }
+        filesDeletePaths = null;
+        checkedFilePaths = [];
         await loadFiles();
-        setFlash("success", "Deleted");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Delete failed");
       } finally {

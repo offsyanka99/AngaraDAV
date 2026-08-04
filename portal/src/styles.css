@@ -413,12 +413,26 @@ body.layout-files .files-table-wrap {
 
 .files-col-check {
   width: 2.25rem;
-  text-align: center;
+  text-align: left;
   vertical-align: middle;
+  padding-left: 0.65rem;
 }
 
 .files-col-check input {
   cursor: pointer;
+  margin: 0;
+  display: block;
+}
+
+.files-table thead th.files-col-check {
+  text-align: left;
+}
+
+.files-delete-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  max-height: 12rem;
+  overflow: auto;
 }
 
 .files-row.is-checked {
