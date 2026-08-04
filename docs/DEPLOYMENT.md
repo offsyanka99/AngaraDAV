@@ -16,7 +16,10 @@ Multi-arch: `linux/amd64`, `linux/arm64`.
 
 ## TrueNAS SCALE
 
-See [`truenas-scale.compose.yaml`](truenas-scale.compose.yaml).
+See [`truenas-scale.compose.yaml`](truenas-scale.compose.yaml) for the SQLite variant, or
+[`truenas-scale-postgres.compose.yaml`](truenas-scale-postgres.compose.yaml) to bundle a
+PostgreSQL 18 container instead. AngaraDAV supports only **SQLite** and **PostgreSQL**
+backends — MySQL is not supported.
 
 1. Create dataset dirs and `chown -R 101:101` (nginx UID in the image).
 2. Install via Custom App YAML. Prefer **`image: …:latest`** (or a pinned tag) — pull only; do not use the `build:` block on the NAS.
@@ -510,7 +513,7 @@ Only one worker should run against a given `Specific/` directory; a mode-`0600` 
 
 #### Upgrade and backup
 
-- Existing installations do not need manual SQL: enabling Push idempotently creates the two Push tables for SQLite, MySQL, or PostgreSQL.
+- Existing installations do not need manual SQL: enabling Push idempotently creates the two Push tables for SQLite or PostgreSQL.
 - Run `composer install` after updating a source installation, then restart the supervised worker. Docker users should recreate the container from the updated image; the packaged entrypoint starts the worker automatically.
 - Back up **both** `config/baikal.yaml` and **all** of `Specific/`. The database `encryption_key` decrypts subscription endpoints/key material; `Specific/push_vapid.json` is the stable VAPID server identity.
 - Do not rotate or replace either key casually. Losing `database.encryption_key` makes existing subscription records unusable. Losing the VAPID key requires clients to create new restricted subscriptions.
@@ -573,7 +576,7 @@ The first independent AngaraDAV release will replace the inherited fork-version 
 
 - Experimental WebDAV-Push service discovery and subscription management for CalDAV/CardDAV clients such as DAVx⁵
 - Encrypted `aes128gcm` Web Push delivery with a stable VAPID identity
-- Persistent, deduplicating SQLite/MySQL/PostgreSQL queue with bounded retries and a supervised unprivileged Docker worker
+- Persistent, deduplicating SQLite/PostgreSQL queue with bounded retries and a supervised unprivileged Docker worker
 - DAV ACL enforcement, opaque registration tokens, registration quotas, strict input/key validation, and caller-scoped `Push-Dont-Notify`
 - SSRF protection: public HTTPS port 443 only, private/reserved IP rejection, delivery-time DNS revalidation and cURL connection pinning, disabled redirects/proxies, optional exact host allowlist
 - Subscription endpoints and key material encrypted at rest with AES-256-GCM; rotating sanitized mode-`0600` diagnostics

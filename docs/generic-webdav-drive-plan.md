@@ -130,7 +130,7 @@ Minimum fields:
 | `created_at` | Creation timestamp |
 | `quarantined_at` | Deletion/quarantine timestamp |
 
-Provision the table idempotently for SQLite, MySQL, and PostgreSQL and include
+Provision the table idempotently for SQLite and PostgreSQL and include
 it in fresh-install schemas.
 
 When an administrator deletes a user:
@@ -296,7 +296,7 @@ interrupted.
 - [ ] Add `tests/php/FileHomeStorageTest.php` for paths, atomic writes, quota,
       ETags, lifecycle, and schema behavior.
 - [ ] Add `tests/webdav_files.py` for HTTP method and two-user ACL coverage.
-- [ ] Run the tests against SQLite, MySQL, and PostgreSQL.
+- [ ] Run the tests against SQLite and PostgreSQL.
 - [ ] Add concurrent PUT, overwrite, disk-full, and interrupted-upload tests.
 - [ ] Test conditional headers, range downloads, `COPY` overwrite semantics,
       and `MOVE` across directories.

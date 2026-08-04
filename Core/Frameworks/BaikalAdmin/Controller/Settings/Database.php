@@ -74,7 +74,6 @@ class Database extends \Flake\Core\Controller {
 
     function morphologyHook(\Formal\Form $oForm, \Formal\Form\Morphology $oMorpho) {
         if ($oForm->submitted()) {
-            $bMySQL = ($oForm->postValue("backend") == 'mysql');
             $bPgSQL = ($oForm->postValue("backend") == 'pgsql');
         } else {
             try {
@@ -83,28 +82,11 @@ class Database extends \Flake\Core\Controller {
                 error_log('Error reading baikal.yaml file : ' . $e->getMessage());
             }
 
-            # Config key 'mysql' kept for backwards compatibility
-            if (key_exists('mysql', $config['database'])) {
-                $bMySQL = $config['database']['mysql'];
-                $bPgSQL = false;
-
-                $this->oModel->set('backend', $bMySQL ? 'mysql' : 'sqlite');
-            } else {
-                $bMySQL = $config['database']['backend'] == 'mysql';
-                $bPgSQL = $config['database']['backend'] == 'pgsql';
-            }
+            $bPgSQL = $config['database']['backend'] == 'pgsql';
         }
 
-        if ($bMySQL === true || $bPgSQL === true) {
+        if ($bPgSQL === true) {
             $oMorpho->remove("sqlite_file");
-        }
-
-        if (!$bMySQL) {
-            $oMorpho->remove("mysql_host");
-            $oMorpho->remove("mysql_dbname");
-            $oMorpho->remove("mysql_username");
-            $oMorpho->remove("mysql_password");
-            $oMorpho->remove("mysql_ca_cert");
         }
 
         if (!$bPgSQL) {
@@ -119,30 +101,22 @@ class Database extends \Flake\Core\Controller {
         if ($oForm->refreshed()) {
             return true;
         }
-        if ($oForm->modelInstance()->get("backend") == 'mysql' || $oForm->modelInstance()->get("backend") == 'pgsql') {
-            $dbBackendName = $oForm->modelInstance()->get("backend") == 'pgsql' ? 'PostgreSQL' : 'MySQL';
-            $dbBackendPrefix = $oForm->modelInstance()->get("backend");
+        if ($oForm->modelInstance()->get("backend") == 'pgsql') {
+            $dbBackendName = 'PostgreSQL';
+            $dbBackendPrefix = 'pgsql';
 
-            # We have to check the MySQL or PostgreSQL connection
+            # We have to check the PostgreSQL connection
             $sHost = $oForm->modelInstance()->get("{$dbBackendPrefix}_host");
             $sDbName = $oForm->modelInstance()->get("{$dbBackendPrefix}_dbname");
             $sUsername = $oForm->modelInstance()->get("{$dbBackendPrefix}_username");
             $sPassword = $oForm->modelInstance()->get("{$dbBackendPrefix}_password");
-            $sCaCert = $oForm->modelInstance()->get("{$dbBackendPrefix}_ca_cert");
 
             try {
-                $oDB = (($oForm->modelInstance()->get("backend")) == 'pgsql'
-                ) ? new \Flake\Core\Database\Pgsql(
+                $oDB = new \Flake\Core\Database\Pgsql(
                     $sHost,
                     $sDbName,
                     $sUsername,
                     $sPassword
-                ) : new \Flake\Core\Database\Mysql(
-                    $sHost,
-                    $sDbName,
-                    $sUsername,
-                    $sPassword,
-                    $sCaCert
                 );
             } catch (\Exception $e) {
                 $sMessage = "<strong>{$dbBackendName} error:</strong> " . $e->getMessage();
@@ -151,7 +125,6 @@ class Database extends \Flake\Core\Controller {
                 $oForm->declareError($oMorpho->element("{$dbBackendPrefix}_dbname"));
                 $oForm->declareError($oMorpho->element("{$dbBackendPrefix}_username"));
                 $oForm->declareError($oMorpho->element("{$dbBackendPrefix}_password"));
-                $oForm->declareError($oMorpho->element("{$dbBackendPrefix}_ca_cert"));
 
                 return;
             }

@@ -277,11 +277,7 @@ class Framework extends \Flake\Core\Framework {
         if (defined("BAIKAL_CONTEXT_INSTALL") && (!isset($config['system']['configured_version']) || $config['system']['configured_version'] === BAIKAL_VERSION)) {
             return true;
         }
-        # Config key 'mysql' kept for backwards compatibility
-        $legacyMysql = key_exists('mysql', $config['database']) && $config['database']['mysql'] === true;
-        if ($legacyMysql || (key_exists('backend', $config['database']) && $config['database']['backend'] === 'mysql')) {
-            self::initDbMysql($config);
-        } elseif (key_exists('backend', $config['database']) && $config['database']['backend'] === 'pgsql') {
+        if (key_exists('backend', $config['database']) && $config['database']['backend'] === 'pgsql') {
             self::initDbPgsql($config);
         } else {
             self::initDbSqlite($config);
@@ -311,41 +307,6 @@ class Framework extends \Flake\Core\Framework {
         }
 
         return false;
-    }
-
-    protected static function initDbMysql(array $config) {
-        if (!$config['database']['mysql_host']) {
-            exit("<h3>The constant PROJECT_DB_MYSQL_HOST, containing the MySQL host name, is not set.<br />You should set it in config/baikal.yaml</h3>");
-        }
-
-        if (!$config['database']['mysql_dbname']) {
-            exit("<h3>The constant PROJECT_DB_MYSQL_DBNAME, containing the MySQL database name, is not set.<br />You should set it in config/baikal.yaml</h3>");
-        }
-
-        if (!$config['database']['mysql_username']) {
-            exit("<h3>The constant PROJECT_DB_MYSQL_USERNAME, containing the MySQL database username, is not set.<br />You should set it in config/baikal.yaml</h3>");
-        }
-
-        if (!$config['database']['mysql_password']) {
-            exit("<h3>The constant PROJECT_DB_MYSQL_PASSWORD, containing the MySQL database password, is not set.<br />You should set it in config/baikal.yaml</h3>");
-        }
-
-        try {
-            $GLOBALS["DB"] = new \Flake\Core\Database\Mysql(
-                $config['database']['mysql_host'],
-                $config['database']['mysql_dbname'],
-                $config['database']['mysql_username'],
-                $config['database']['mysql_password'],
-                key_exists('mysql_ca_cert', $config['database']) ? $config['database']['mysql_ca_cert'] : ''
-            );
-
-            # We now setup the connection to use UTF8
-            $GLOBALS["DB"]->query("SET NAMES UTF8");
-        } catch (\Exception $e) {
-            exit("<h3>Ba&iuml;kal was not able to establish a connection to the configured MySQL database (as configured in config/baikal.yaml).</h3>");
-        }
-
-        return true;
     }
 
     protected static function initDbPgsql(array $config) {

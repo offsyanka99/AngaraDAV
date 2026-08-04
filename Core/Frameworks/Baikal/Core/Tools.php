@@ -43,10 +43,10 @@ class Tools {
             exit('AngaraDAV Fatal Error: PDO is unavailable. It\'s required by AngaraDAV.');
         }
 
-        # Asserting PDO::SQLite or PDO::MySQL
+        # Asserting PDO::SQLite or PDO::pgsql
         $aPDODrivers = \PDO::getAvailableDrivers();
-        if (!in_array('sqlite', $aPDODrivers, true) && !in_array('mysql', $aPDODrivers, true) && !in_array('pgsql', $aPDODrivers, true)) {
-            exit('<strong>AngaraDAV Fatal Error</strong>: None of <strong>PDO::sqlite</strong>, <strong>PDO::mysql</strong> or <strong>PDO::pgsql</strong> are available. At least one is required by AngaraDAV.');
+        if (!in_array('sqlite', $aPDODrivers, true) && !in_array('pgsql', $aPDODrivers, true)) {
+            exit('<strong>AngaraDAV Fatal Error</strong>: None of <strong>PDO::sqlite</strong> or <strong>PDO::pgsql</strong> are available. At least one is required by AngaraDAV.');
         }
 
         # Asserting XMLReader is available

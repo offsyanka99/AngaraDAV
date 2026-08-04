@@ -32,11 +32,6 @@ class Database extends \Baikal\Model\Config {
     protected $aData = [
         "sqlite_file"    => PROJECT_PATH_SPECIFIC . "db/db.sqlite",
         "backend"        => "",
-        "mysql_host"     => "",
-        "mysql_dbname"   => "",
-        "mysql_username" => "",
-        "mysql_password" => "",
-        "mysql_ca_cert"  => "",
         "encryption_key" => "",
         "pgsql_host"     => "",
         "pgsql_dbname"   => "",
@@ -55,7 +50,7 @@ class Database extends \Baikal\Model\Config {
             "prop"       => "backend",
             "label"      => "Database Backend",
             "validation" => "required",
-            "options"    => ['sqlite', 'mysql', 'pgsql'],
+            "options"    => ['sqlite', 'pgsql'],
             "refreshonchange" => true,
         ]));
 
@@ -65,33 +60,6 @@ class Database extends \Baikal\Model\Config {
             "validation" => "required",
             "inputclass" => "input-xxlarge",
             "help"       => "The absolute server path to the SQLite file",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"  => "mysql_host",
-            "label" => "MySQL host",
-            "help"  => "Host ip or name, including ':portnumber' if port is not the default one (3306)",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"  => "mysql_dbname",
-            "label" => "MySQL database name",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"  => "mysql_username",
-            "label" => "MySQL username",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Password([
-            "prop"  => "mysql_password",
-            "label" => "MySQL password",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"  => "mysql_ca_cert",
-            "label" => "MySQL CA Certificate",
-            "help"  => "Optional. Leave blank to ignore",
         ]));
 
         $oMorpho->add(new \Formal\Element\Text([

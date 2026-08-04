@@ -39,11 +39,6 @@ class Database extends \Flake\Core\Controller {
             require_once PROJECT_PATH_SPECIFIC . "config.system.php";
             $this->oModel->set('sqlite_file', PROJECT_SQLITE_FILE);
             $this->oModel->set('backend', PROJECT_DB_BACKEND);
-            $this->oModel->set('mysql_host', PROJECT_DB_MYSQL_HOST);
-            $this->oModel->set('mysql_dbname', PROJECT_DB_MYSQL_DBNAME);
-            $this->oModel->set('mysql_username', PROJECT_DB_MYSQL_USERNAME);
-            $this->oModel->set('mysql_password', PROJECT_DB_MYSQL_PASSWORD);
-            $this->oModel->set('mysql_ca_cert', PROJECT_DB_MYSQL_CA_CERT);
             $this->oModel->set('pgsql_host', PROJECT_DB_PGSQL_HOST);
             $this->oModel->set('pgsql_dbname', PROJECT_DB_PGSQL_DBNAME);
             $this->oModel->set('pgsql_username', PROJECT_DB_PGSQL_USERNAME);
@@ -162,59 +157,6 @@ class Database extends \Flake\Core\Controller {
         }
     }
 
-    function validateMySQLConnection($oForm, $oMorpho) {
-        if ($oForm->refreshed()) {
-            return true;
-        }
-
-        $sHost = $oMorpho->element("mysql_host")->value();
-        $sDbname = $oMorpho->element("mysql_dbname")->value();
-        $sUsername = $oMorpho->element("mysql_username")->value();
-        $sPassword = $oMorpho->element("mysql_password")->value();
-        $sCaCert = $oMorpho->element("mysql_ca_cert")->value();
-
-        try {
-            $oDb = new \Flake\Core\Database\Mysql(
-                $sHost,
-                $sDbname,
-                $sUsername,
-                $sPassword,
-                $sCaCert
-            );
-
-            if (($aMissingTables = \Baikal\Core\Tools::isDBStructurallyComplete($oDb)) !== true) {
-                # Checking if all tables are missing
-                $aRequiredTables = \Baikal\Core\Tools::getRequiredTablesList();
-                if (count($aRequiredTables) !== count($aMissingTables)) {
-                    $sMessage = "<br /><p><strong>Database is not structurally complete.</strong></p>";
-                    $sMessage .= "<p>Missing tables are: <strong>" . implode("</strong>, <strong>", $aMissingTables) . "</strong></p>";
-                    $sMessage .= "<p>You will find the SQL definition of AngaraDAV tables in this file: <strong>Core/Resources/Db/MySQL/db.sql</strong></p>";
-                    $sMessage .= "<br /><p>Nothing has been saved. <strong>Please add these tables before continuing AngaraDAV initialization.</strong></p>";
-
-                    $oForm->declareError(
-                        $oMorpho->element("backend"),
-                        $sMessage
-                    );
-                } else {
-                    # All tables are missing
-                    # We add these tables ourselves to the database, to initialize Baïkal
-                    $sSqlDefinition = file_get_contents(PROJECT_PATH_CORERESOURCES . "Db/MySQL/db.sql");
-                    $oDb->query($sSqlDefinition);
-                }
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            $oForm->declareError($oMorpho->element("backend"),
-                "AngaraDAV was not able to establish a connection to the configured MySQL database.<br />MySQL says: " . $e->getMessage());
-            $oForm->declareError($oMorpho->element("mysql_host"));
-            $oForm->declareError($oMorpho->element("mysql_dbname"));
-            $oForm->declareError($oMorpho->element("mysql_username"));
-            $oForm->declareError($oMorpho->element("mysql_password"));
-            $oForm->declareError($oMorpho->element("mysql_ca_cert"));
-        }
-    }
-
     function validatePgSQLConnection($oForm, $oMorpho) {
         if ($oForm->refreshed()) {
             return true;
@@ -282,8 +224,6 @@ class Database extends \Flake\Core\Controller {
     public function validateSQLConnection($oForm, $oMorpho) {
         if ($oMorpho->element("backend")->value() == 'sqlite') {
             $this->validateSQLiteConnection($oForm, $oMorpho);
-        } elseif ($oMorpho->element("backend")->value() == 'mysql') {
-            $this->validateMySQLConnection($oForm, $oMorpho);
         } elseif ($oMorpho->element("backend")->value() == 'pgsql') {
             $this->validatePgSQLConnection($oForm, $oMorpho);
         }
@@ -299,14 +239,6 @@ class Database extends \Flake\Core\Controller {
 
         if ($backend != 'sqlite') {
             $oMorpho->remove("sqlite_file");
-        }
-
-        if ($backend != 'mysql') {
-            $oMorpho->remove("mysql_host");
-            $oMorpho->remove("mysql_dbname");
-            $oMorpho->remove("mysql_username");
-            $oMorpho->remove("mysql_password");
-            $oMorpho->remove("mysql_ca_cert");
         }
 
         if ($backend != 'pgsql') {

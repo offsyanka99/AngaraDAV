@@ -8,9 +8,7 @@ namespace Baikal\Core\Files;
 class SchemaManager {
     public static function ensure(\PDO $pdo): void {
         $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'mysql') {
-            self::mysql($pdo);
-        } elseif ($driver === 'pgsql') {
+        if ($driver === 'pgsql') {
             self::pgsql($pdo);
         } elseif ($driver === 'sqlite') {
             self::sqlite($pdo);
@@ -42,25 +40,6 @@ CREATE TABLE IF NOT EXISTS file_homes (
 );
 CREATE INDEX IF NOT EXISTS file_homes_principal ON file_homes (principaluri);
 CREATE INDEX IF NOT EXISTS file_homes_status ON file_homes (status);
-SQL
-        );
-    }
-
-    private static function mysql(\PDO $pdo): void {
-        $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS file_homes (
-    id INTEGER UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    user_id INTEGER UNSIGNED NULL,
-    principaluri VARBINARY(255) NOT NULL,
-    storage_id VARBINARY(32) NOT NULL,
-    status VARBINARY(16) NOT NULL,
-    created_at INT(11) UNSIGNED NOT NULL,
-    quarantined_at INT(11) UNSIGNED NULL,
-    UNIQUE (user_id),
-    UNIQUE (storage_id),
-    INDEX file_homes_principal (principaluri),
-    INDEX file_homes_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 SQL
         );
     }

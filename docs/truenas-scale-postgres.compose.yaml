@@ -1,0 +1,180 @@
+# AngaraDAV - TrueNAS SCALE custom app (PostgreSQL 18 backend)
+# Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
+#
+# Use: Apps → Discover apps → Custom App / Install via YAML
+#      (Electric Eel / 24.10+ Docker-based SCALE)
+#
+# This variant bundles a PostgreSQL 18 container instead of using the built-in
+# SQLite database. See docs/truenas-scale.compose.yaml for the plain SQLite
+# variant. AngaraDAV supports only SQLite and PostgreSQL backends — MySQL is
+# not supported.
+#
+# Before deploy:
+# 1. Datasets + dirs:
+#      mkdir -p /mnt/tank/apps/angaradav/config /mnt/tank/apps/angaradav/Specific
+#      mkdir -p /mnt/tank/apps/angaradav/pgdata
+# 2. Ownership:
+#      chown -R 101:101 /mnt/tank/apps/angaradav/config /mnt/tank/apps/angaradav/Specific
+#      chown -R 999:999  /mnt/tank/apps/angaradav/pgdata   # postgres image runs as uid/gid 999
+#    Then set BAIKAL_SKIP_CHOWN=1 below so startup does not re-chown mounts.
+# 3. Edit volumes host paths, host port, and Postgres password if needed.
+# 4. Prefer HTTPS via TrueNAS reverse proxy / Caddy / Traefik in production.
+#
+# CRITICAL — persistence (settings / DB survive restart only if these are
+# real Host Path binds, not anonymous Docker volumes):
+#   config/   → baikal.yaml (all Admin system settings + admin password hash)
+#   Specific/ → INSTALL_DISABLED, portal meta, file homes, push keys (no SQLite DB here)
+#   pgdata/   → the PostgreSQL 18 data directory (the actual calendar/contact DB)
+# After first install, on the NAS host you MUST see:
+#   ls /mnt/tank/apps/angaradav/config/baikal.yaml
+#   ls /mnt/tank/apps/angaradav/Specific/INSTALL_DISABLED
+#   ls /mnt/tank/apps/angaradav/pgdata/PG_VERSION
+# If those files only exist inside the container, TrueNAS did not apply the
+# host path mounts — fix the Custom App storage section and re-deploy.
+# Check: curl -sS http://NAS-IP:31088/health.php | jq .
+#
+# Installer: when the setup wizard asks for a database backend, choose
+# PostgreSQL and use:
+#   Host:     postgres          (the service name below, resolved on the compose network)
+#   Database: angaradav
+#   Username: angaradav
+#   Password: matches POSTGRES_PASSWORD below
+#
+# After deploy:
+# 1. Open http://NAS-IP:31088  → complete installer (admin password; select PostgreSQL)
+# 2. Admin:  http://NAS-IP:31088/admin/
+# 3. Portal: http://NAS-IP:31088/portal/   ← calendars + contacts (DAV user login)
+# 4. DAV:    http://NAS-IP:31088/dav.php/  ← clients + classic browser
+# 5. Health: http://NAS-IP:31088/health.php
+# 6. Info:   http://NAS-IP:31088/info.php
+#
+# Backup regularly (all three mounts):
+#   config/   → baikal.yaml (admin hash, auth, feature flags)
+#   Specific/ → INSTALL_DISABLED, rate-limit file, portal_meta.json, private
+#               WebDAV file homes/quarantine, WebDAV-Push VAPID identity,
+#               queue lock, and sanitized diagnostic logs
+#   pgdata/   → full PostgreSQL data directory (calendars, contacts, users);
+#               prefer `pg_dump` for portable logical backups over raw file copies
+#
+# Auth notes:
+#   Digest auth stores MD5 A1 hashes for DAV users (protocol design).
+#   Prefer Basic + HTTPS when exposing outside LAN.
+#   Admin password uses password_hash(); legacy SHA-256 upgrades on login.
+#
+# Optional env (same as the SQLite variant; see docs/DEPLOYMENT.md for the
+# full list): BAIKAL_LOCK_INSTALL, BAIKAL_ALLOW_REINSTALL, PORTAL_LOG_LEVEL,
+# TIME_FORMAT, BAIKAL_PORTAL_WEEK_START, BAIKAL_PUSH_EXTERNAL_URL,
+# PUSH_LOG_LEVEL, BAIKAL_FILES_STORAGE_PATH, BAIKAL_FILES_MAX_UPLOAD_BYTES,
+# BAIKAL_FILES_QUOTA_BYTES, BAIKAL_DAV_MAX_BODY_SIZE.
+#
+# Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
+#       docs/DEPLOYMENT.md
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: angaradav-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: angaradav
+      POSTGRES_USER: angaradav
+      # CHANGE this before first deploy.
+      POSTGRES_PASSWORD: "change-me-strong-password"
+
+    volumes:
+      - type: bind
+        source: /mnt/tank/apps/angaradav/pgdata
+        target: /var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U angaradav -d angaradav"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  angaradav:
+    image: ghcr.io/offsyanka99/angaradav:latest
+    # Or pin a tested commit:
+    # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
+
+    container_name: angaradav
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          # 1G recommended for large .ics/.vcf imports (512M often OOMs mid-parse)
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+    ports:
+      - "31088:80"
+
+    environment:
+      TZ: "America/Toronto"
+      TIME_FORMAT: "24h"                 # or 12h
+      BAIKAL_PORTAL_WEEK_START: "monday" # or sunday
+      # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
+      # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
+      # Required only after enabling WebDAV-Push in baikal.yaml/admin:
+      # BAIKAL_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
+      # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only
+      # Generic WebDAV files are disabled by default. Enable in Admin settings.
+      # BAIKAL_FILES_STORAGE_PATH: "/var/lib/baikal-files"
+      # BAIKAL_FILES_MAX_UPLOAD_BYTES: "1073741824"
+      # BAIKAL_FILES_QUOTA_BYTES: "10737418240"
+      # BAIKAL_DAV_MAX_BODY_SIZE: "1G"
+      # Skip entrypoint chown (recommended on TrueNAS after host chown 101:101):
+      BAIKAL_SKIP_CHOWN: "1"
+      # After first successful install, recommended for internet-facing hosts:
+      # BAIKAL_LOCK_INSTALL: "1"
+
+    volumes:
+      # CHANGE to your TrueNAS dataset paths — back these up.
+      # These MUST be Host Path (bind) mounts, not anonymous/ix-volumes.
+      - type: bind
+        source: /mnt/tank/apps/angaradav/config
+        target: /var/www/baikal/config
+      - type: bind
+        source: /mnt/tank/apps/angaradav/Specific
+        target: /var/www/baikal/Specific
+      # Optional separate dataset when BAIKAL_FILES_STORAGE_PATH is set above:
+      # - type: bind
+      #   source: /mnt/tank/apps/angaradav/files
+      #   target: /var/lib/baikal-files
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "-o",
+          "/dev/null",
+          "http://127.0.0.1/health.php",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

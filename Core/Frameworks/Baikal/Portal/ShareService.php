@@ -1401,7 +1401,7 @@ class ShareService {
                     INNER JOIN users u ON p.uri = 'principals/' || u.username
                     ORDER BY lower(coalesce(nullif(p.displayname, ''), u.username)), p.uri";
         } else {
-            // MySQL / PostgreSQL
+            // PostgreSQL
             $sql = "SELECT p.uri, p.displayname, p.email
                     FROM principals p
                     INNER JOIN users u ON p.uri = CONCAT('principals/', u.username)

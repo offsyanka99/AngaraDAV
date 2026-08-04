@@ -69,7 +69,6 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
          php8.2-fpm \
          php8.2-gd \
          php8.2-mbstring \
-         php8.2-mysql \
          php8.2-pgsql \
          php8.2-sqlite3 \
          php8.2-xml \

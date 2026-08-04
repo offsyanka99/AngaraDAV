@@ -29,17 +29,8 @@ class QueueStorage {
         array $suppressedIds
     ): void {
         $driver = (string) $this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        $mysqlLock = null;
         $sqliteTransaction = false;
-        if ($driver === 'mysql') {
-            $mysqlLock = 'baikal-push-' . hash('sha256', $resourceUri);
-            $lock = $this->pdo->prepare('SELECT GET_LOCK(?, 5)');
-            $lock->execute([$mysqlLock]);
-            if ((int) $lock->fetchColumn() !== 1) {
-                throw new \RuntimeException('Timed out acquiring WebDAV-Push queue lock');
-            }
-            $this->pdo->beginTransaction();
-        } elseif ($driver === 'sqlite') {
+        if ($driver === 'sqlite') {
             $this->pdo->exec('BEGIN IMMEDIATE TRANSACTION');
             // PDO did not consistently report SQL-started transactions before
             // PHP 8.4, so finalize this transaction with SQL as well.
@@ -102,11 +93,6 @@ class QueueStorage {
                 $this->pdo->rollBack();
             }
             throw $e;
-        } finally {
-            if ($mysqlLock !== null) {
-                $unlock = $this->pdo->prepare('SELECT RELEASE_LOCK(?)');
-                $unlock->execute([$mysqlLock]);
-            }
         }
     }
 

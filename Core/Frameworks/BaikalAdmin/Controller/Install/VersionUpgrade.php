@@ -65,6 +65,11 @@ class VersionUpgrade extends \Flake\Core\Controller {
 HTML;
 
         try {
+            $isLegacyMysql = !empty($config['database']['mysql']);
+            $isMysqlBackend = ($config['database']['backend'] ?? '') === 'mysql';
+            if ($isLegacyMysql || $isMysqlBackend) {
+                throw new \Exception('MySQL is no longer supported. Migrate your data to PostgreSQL or SQLite (see docs/DEPLOYMENT.md) before upgrading AngaraDAV.');
+            }
             $bSuccess = $this->upgrade($config['database'], $config['system']['configured_version'], BAIKAL_VERSION);
         } catch (\Exception $e) {
             $bSuccess = false;

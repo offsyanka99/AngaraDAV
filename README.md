@@ -177,7 +177,7 @@ Changelog
 - WebDAV-Push service discovery, subscription registration/removal, content/property update notifications, Web Push encryption, and VAPID support
 - Persistent deduplicating Push queue with bounded retries and a supervised unprivileged Docker worker
 - Push hardening: DAV ACL checks, public-HTTPS endpoint validation with DNS pinning, request/key validation, quotas, opaque registration tokens, encrypted subscription secrets, and sanitized rotating logs
-- Automatic `push_subscriptions` / `push_queue` provisioning for existing SQLite, MySQL, and PostgreSQL installations
+- Automatic `push_subscriptions` / `push_queue` provisioning for existing SQLite and PostgreSQL installations
 
 ### 0.11.1-fork.4
 

@@ -49,13 +49,8 @@ system:
     portal_log_level: 'off'
 database:
     encryption_key: 5d3f0fa0192e3058ea70f1bb20924add
-    backend: 'mysql'
+    backend: 'pgsql'
     sqlite_file: "absolute/path/to/Specific/db/db.sqlite"
-    mysql_host: 'localhost'
-    mysql_dbname: 'baikal'
-    mysql_username: 'baikal'
-    mysql_password: 'baikal'
-    mysql_ca_cert: '/path/to/sqlca.pem'
     pgsql_host: 'localhost'
     pgsql_dbname: 'baikal'
     pgsql_username: 'baikal'

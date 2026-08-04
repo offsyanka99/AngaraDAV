@@ -1,5 +1,5 @@
 # AngaraDAV - TrueNAS SCALE custom app
-# Docs: https://github.com/offsyanka99/AngaraDAV/tree/master/docs
+# Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
 #
 # Use: Apps → Discover apps → Custom App / Install via YAML
 #      (Electric Eel / 24.10+ Docker-based SCALE)
@@ -90,19 +90,19 @@
 #   BAIKAL_FILES_QUOTA_BYTES=10737418240
 #   BAIKAL_DAV_MAX_BODY_SIZE=1G — nginx PUT request ceiling
 #
-# Docs: https://github.com/offsyanka99/AngaraDAV/tree/master/docs
+# Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
 #       docs/DEPLOYMENT.md · upstream https://sabre.io/baikal/
 
 services:
   angaradav:
-    # --- Track the current AngaraDAV master image -------------------------
+    # --- Track the current AngaraDAV main image -------------------------
     image: ghcr.io/offsyanka99/angaradav:latest
     # Or pin a tested commit:
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------
     # build:
-    #   context: https://github.com/offsyanka99/AngaraDAV.git#master
+    #   context: https://github.com/offsyanka99/AngaraDAV.git#main
     # image: offsyanka99/angaradav:local
     # pull_policy: build
 

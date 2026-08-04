@@ -104,28 +104,6 @@ def install_sqlite(browser: mechanicalsoup.StatefulBrowser):
     assert_dashboard(browser)
 
 
-def install_mysql(browser: mechanicalsoup.StatefulBrowser):
-    setup_admin_password(browser)
-
-    page = browser.get_current_page()
-    assert "angaradav database setup" in page.text.lower()
-    browser.select_form("form")
-    browser["data[backend]"] = "mysql"
-    browser.submit_selected()
-
-    page = browser.get_current_page()
-    assert "mysql host" in page.text.lower()
-    browser.select_form("form")
-    browser["data[mysql_host]"] = "127.0.0.1"
-    browser["data[mysql_dbname]"] = "baikal_test"
-    browser["data[mysql_username]"] = "baikal"
-    browser["data[mysql_password]"] = "baikal"
-    browser.submit_selected()
-
-    assert_installed(browser)
-    assert_dashboard(browser)
-
-
 def install_pgsql(browser: mechanicalsoup.StatefulBrowser):
     setup_admin_password(browser)
 

@@ -3,7 +3,7 @@
 /**
  * Cross-database checks for generic WebDAV file-home schema provisioning.
  *
- * Set BAIKAL_TEST_MYSQL_DSN and/or BAIKAL_TEST_PGSQL_DSN to run a driver.
+ * Set BAIKAL_TEST_PGSQL_DSN to run the driver.
  */
 
 declare(strict_types=1);
@@ -138,16 +138,6 @@ function test_driver(string $label, string $dsn, string $username, string $passw
     }
 }
 
-$mysqlDsn = getenv('BAIKAL_TEST_MYSQL_DSN');
-if ($mysqlDsn !== false && $mysqlDsn !== '') {
-    test_driver(
-        'MySQL',
-        $mysqlDsn,
-        getenv('BAIKAL_TEST_MYSQL_USER') ?: 'baikal',
-        getenv('BAIKAL_TEST_MYSQL_PASSWORD') ?: 'baikal'
-    );
-}
-
 $pgsqlDsn = getenv('BAIKAL_TEST_PGSQL_DSN');
 if ($pgsqlDsn !== false && $pgsqlDsn !== '') {
     test_driver(
@@ -159,7 +149,7 @@ if ($pgsqlDsn !== false && $pgsqlDsn !== '') {
 }
 
 if ($executed === 0) {
-    echo "SKIP No MySQL/PostgreSQL file-schema DSN configured.\n";
+    echo "SKIP No PostgreSQL file-schema DSN configured.\n";
     exit(0);
 }
 
