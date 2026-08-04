@@ -110,11 +110,7 @@ abstract class Config extends \Flake\Core\Model\NoDb {
             throw new \RuntimeException('Config directory does not exist: ' . $dir);
         }
         if (!is_writable($dir)) {
-            throw new \RuntimeException(
-                'Config directory is not writable by the PHP process (uid '
-                . (function_exists('posix_geteuid') ? (string) posix_geteuid() : '?')
-                . '). On Docker/TrueNAS, chown the host mount to 101:101: ' . $dir
-            );
+            throw new \RuntimeException('Config directory is not writable by the PHP process (uid ' . (function_exists('posix_geteuid') ? (string) posix_geteuid() : '?') . '). On Docker/TrueNAS, chown the host mount to 101:101: ' . $dir);
         }
 
         $path = $dir . 'baikal.yaml';
@@ -133,9 +129,7 @@ abstract class Config extends \Flake\Core\Model\NoDb {
 
         if (!@rename($tmp, $path)) {
             @unlink($tmp);
-            throw new \RuntimeException(
-                'Unable to replace config file (check mount permissions): ' . $path
-            );
+            throw new \RuntimeException('Unable to replace config file (check mount permissions): ' . $path);
         }
         @chmod($path, 0600);
 
@@ -147,11 +141,7 @@ abstract class Config extends \Flake\Core\Model\NoDb {
         try {
             Yaml::parseFile($path);
         } catch (\Throwable $e) {
-            throw new \RuntimeException(
-                'Config write produced unreadable YAML: ' . $e->getMessage(),
-                0,
-                $e
-            );
+            throw new \RuntimeException('Config write produced unreadable YAML: ' . $e->getMessage(), 0, $e);
         }
     }
 

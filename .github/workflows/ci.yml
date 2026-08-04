@@ -26,6 +26,10 @@ jobs:
           php-version: ${{ matrix.php-versions }}
       - name: Calendar timezone dual-format unit test
         run: php tests/php/CalendarTimeZoneResolveTest.php
+      - name: Calendar item service unit test
+        run: php tests/php/CalendarItemServiceTest.php
+      - name: Contact service unit test
+        run: php tests/php/ContactServiceTest.php
       - name: WebDAV-Push unit test
         run: php tests/php/PushPluginTest.php
       - name: WebDAV file-home unit test

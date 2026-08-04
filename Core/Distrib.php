@@ -25,7 +25,7 @@
 #  This copyright notice MUST APPEAR in all copies of the script!
 #################################################################
 
-/**
+/*
  * Product compatibility line (bump when documenting a release).
  * Full BAIKAL_VERSION appends +git.<sha> when a build SHA is available.
  */
