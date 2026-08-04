@@ -426,7 +426,8 @@ system:
 - Default limits are 20 subscriptions per principal, 100 per resource, and 30 new registrations per principal/hour. Tune the `system.push_max_*` settings conservatively.
 - A server VAPID key pair is generated once in **`Specific/push_vapid.json`** with mode `0600`. Unsafe or malformed key files make Push fail closed instead of silently rotating keys.
 - Subscriber endpoint/key material is encrypted in the database with authenticated AES-256-GCM using `database.encryption_key`; endpoint deduplication uses a keyed blind index.
-- Debug tracing (`PUSH_LOG_LEVEL` / `system.push_log_level` = `debug`) goes to **`Specific/push_debug.log`**, not nginx/docker error streams. The log is mode `0600`, rotated at 5 MiB, and strips secrets and URL paths. Keep it `off` in production.
+- Debug tracing (`PUSH_LOG_LEVEL` / `system.push_log_level` = `debug`, or `info` for less noise) goes to **`Specific/push_debug.log`**, not nginx/docker error streams. The log is mode `0600`, rotated at 5 MiB, and strips secrets and URL paths. Keep it `off` in production.
+- At `info` level, enqueued notifications log a `source` (`dav` for CalDAV/CardDAV clients such as a phone or desktop app, `portal` for `/portal/` writes) and, for `dav`, the client's `User-Agent` as `client`, so you can tell what actually triggered a given change.
 
 #### Local network example
 

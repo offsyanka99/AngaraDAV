@@ -88,8 +88,16 @@ class ChangeNotifier {
                 $syncToken,
                 []
             );
+            self::logger()->info('content notification enqueued', [
+                'resource' => $resourceUri,
+                'source'   => 'portal',
+            ]);
         } catch (\Throwable $e) {
-            error_log('WebDAV-Push portal enqueue failed: ' . $e->getMessage());
+            self::logger()->error('portal enqueue failed', [
+                'resource' => $resourceUri,
+                'source'   => 'portal',
+                'error'    => $e->getMessage(),
+            ]);
         }
     }
 
@@ -105,6 +113,24 @@ class ChangeNotifier {
         $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
 
         return !empty($sys['push_enabled']);
+    }
+
+    /**
+     * Same dedicated log file as PushPlugin (never PHP error_log(); see PushLogger).
+     */
+    private static function logger(): PushLogger {
+        $level = null;
+        if (defined('PROJECT_PATH_CONFIG')) {
+            try {
+                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+                $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
+                $level = isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : null;
+            } catch (\Throwable $e) {
+                $level = null;
+            }
+        }
+
+        return new PushLogger($level);
     }
 
     private static function calendarSyncToken(\PDO $pdo, int $calendarId): ?string {

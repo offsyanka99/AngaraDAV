@@ -434,6 +434,11 @@ class PushPlugin extends ServerPlugin {
             $this->syncTokenFor($collection),
             $this->suppressedIds($collection, $dontNotify)
         );
+        $this->logger->info('content notification enqueued', [
+            'resource' => $collection,
+            'source'   => 'dav',
+            'client'   => $this->clientSource(),
+        ]);
     }
 
     /**
@@ -449,6 +454,26 @@ class PushPlugin extends ServerPlugin {
             null,
             $this->suppressedIds($resource, $dontNotify)
         );
+        $this->logger->info('property notification enqueued', [
+            'resource' => $resource,
+            'source'   => 'dav',
+            'client'   => $this->clientSource(),
+        ]);
+    }
+
+    /**
+     * Best-effort identification of who triggered a DAV-side change (phone/desktop
+     * CalDAV-CardDAV client), taken from the request User-Agent. Portal-originated
+     * changes never reach this class; see \Baikal\Core\Plugins\Push\ChangeNotifier.
+     */
+    protected function clientSource(): string {
+        if (!isset($this->server->httpRequest)) {
+            return 'unknown';
+        }
+        $ua = (string) $this->server->httpRequest->getHeader('User-Agent');
+        $ua = trim($ua);
+
+        return $ua === '' ? 'unknown' : substr($ua, 0, 120);
     }
 
     // --- Helpers -----------------------------------------------------------
