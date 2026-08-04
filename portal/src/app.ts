@@ -14,6 +14,8 @@ import {
   type DirectoryUser,
   type HolidayCountry,
   type ImportResult,
+  type FileEntry,
+  type FilesStatus,
   type ItemCalendarOption,
   type NoteItem,
   type PortalUi,
@@ -23,11 +25,54 @@ import {
 } from "./api";
 import { log, setLogLevel } from "./log";
 
-type TabId = "calendars" | "contacts" | "tasks" | "notes";
+type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
+
+const TAB_STORAGE_KEY = "angaradav-portal-tab";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "0.11.1-fork.5";
+const APP_VERSION_FALLBACK = "1.0.5";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
+
+function parseTabId(raw: string | null | undefined): TabId | null {
+  if (
+    raw === "calendars" ||
+    raw === "contacts" ||
+    raw === "tasks" ||
+    raw === "notes" ||
+    raw === "files" ||
+    raw === "admin"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+/** Restore tab after F5: prefer URL hash, then sessionStorage. */
+function readStoredTab(): TabId {
+  const hash = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "").split(/[?&]/)[0];
+  const fromHash = parseTabId(hash);
+  if (fromHash) return fromHash;
+  try {
+    const fromStore = parseTabId(sessionStorage.getItem(TAB_STORAGE_KEY));
+    if (fromStore) return fromStore;
+  } catch {
+    /* private mode / disabled storage */
+  }
+  return "calendars";
+}
+
+function persistTab(tab: TabId): void {
+  try {
+    sessionStorage.setItem(TAB_STORAGE_KEY, tab);
+  } catch {
+    /* ignore */
+  }
+  if (typeof history === "undefined" || typeof location === "undefined") return;
+  const desired = `#${tab}`;
+  if (location.hash !== desired) {
+    history.replaceState(null, "", `${location.pathname}${location.search}${desired}`);
+  }
+}
 
 type Flash = { type: "error" | "success" | "info"; message: string } | null;
 
@@ -138,6 +183,14 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
       "Click a column header to sort. Pick a writable calendar when creating a note.",
     ],
   },
+  files: {
+    title: "Files",
+    paragraphs: [
+      "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
+      "Upload, download, create folders, rename, and delete. Quotas and size limits are configured by the administrator.",
+      "This feature must be enabled under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
+    ],
+  },
   "address-books": {
     title: "Address books",
     paragraphs: [
@@ -160,6 +213,13 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
       "Export downloads a multi-vCard .vcf file of every contact in the address book.",
       "Import accepts standard .vcf files (Thunderbird, Apple Contacts, Google). Same UID updates an existing card; new UIDs create cards.",
       "Large imports show a progress dialog with elapsed time — keep the tab open until the result appears.",
+    ],
+  },
+  administration: {
+    title: "Administration",
+    paragraphs: [
+      "Server administration for AngaraDAV. Open the classic Web Admin for users, system settings, and database configuration.",
+      "The Admin UI uses the separate admin password (not your DAV user password), unless you already have an admin session.",
     ],
   },
 };
@@ -195,7 +255,10 @@ function infoModalHtml(): string {
 export function mountApp(root: HTMLElement): void {
   let user: PortalUser | null = null;
   let flash: Flash = null;
-  let activeTab: TabId = "calendars";
+  let activeTab: TabId = readStoredTab();
+  /** User-menu dropdown (header name) open state */
+  let userMenuOpen = false;
+  let userMenuDocClick: ((ev: MouseEvent) => void) | null = null;
   let calendars: Calendar[] = [];
   let directory: DirectoryUser[] = [];
   let holidayCountries: HolidayCountry[] = [];
@@ -375,10 +438,126 @@ export function mountApp(root: HTMLElement): void {
     creatingTask = false;
     creatingNote = false;
     checkedTaskKeys = [];
+    filesStatus = null;
+    filesPath = "";
+    filesEntries = [];
+    filesLoading = false;
+    filesRenamePath = null;
+    filesDeletePath = null;
     photoPreview = null;
     photoBase64Pending = null;
     removePhotoPending = false;
     busy = false;
+    userMenuOpen = false;
+    unbindUserMenuOutside();
+  }
+
+  function userIsAdmin(): boolean {
+    return !!(user?.isAdmin || user?.role === "Admin");
+  }
+
+  function unbindUserMenuOutside(): void {
+    if (userMenuDocClick) {
+      document.removeEventListener("click", userMenuDocClick, true);
+      userMenuDocClick = null;
+    }
+  }
+
+  function bindUserMenuOutside(): void {
+    unbindUserMenuOutside();
+    userMenuDocClick = (ev: MouseEvent) => {
+      const t = ev.target as HTMLElement | null;
+      if (t?.closest?.(".user-menu")) return;
+      userMenuOpen = false;
+      unbindUserMenuOutside();
+      render();
+    };
+    // Defer so the toggle click that opened the menu does not immediately close it
+    const handler = userMenuDocClick;
+    setTimeout(() => {
+      if (userMenuOpen && userMenuDocClick === handler) {
+        document.addEventListener("click", handler, true);
+      }
+    }, 0);
+  }
+
+  /** Clamp tab if Administration is restored for a non-admin user. */
+  function normalizeActiveTab(): void {
+    if (activeTab === "admin" && !userIsAdmin()) {
+      activeTab = "calendars";
+      persistTab(activeTab);
+    }
+  }
+
+  async function activateTab(tab: TabId, opts: { clearFlash?: boolean } = {}): Promise<void> {
+    if (tab === "admin" && !userIsAdmin()) {
+      tab = "calendars";
+    }
+    activeTab = tab;
+    userMenuOpen = false;
+    persistTab(tab);
+    log.event("tab", { tab });
+    if (tab !== "calendars") {
+      calModalOpen = false;
+      deleteConfirmId = null;
+    }
+    if (tab !== "contacts") {
+      deleteAbConfirmId = null;
+    }
+    if (opts.clearFlash !== false) clearFlash();
+    busy = true;
+    render();
+    try {
+      if (tab === "contacts" && selectedAbId !== null) {
+        await loadContacts(selectedAbId);
+      } else if (tab === "calendars") {
+        await loadMonthEvents();
+      } else if (tab === "tasks") {
+        await loadTasks();
+      } else if (tab === "notes") {
+        await loadNotes();
+      } else if (tab === "files") {
+        await loadFiles();
+      }
+    } catch (e) {
+      log.warn("tab load failed", e instanceof Error ? e.message : e);
+      setFlash("error", e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function loadFiles(): Promise<void> {
+    filesLoading = true;
+    try {
+      log.debug("loadFiles", { path: filesPath });
+      const [status, list] = await Promise.all([
+        api.filesStatus(),
+        api.filesList(filesPath).catch((e) => {
+          // If disabled/not ready, status still loads; list may 503
+          if (e instanceof ApiError && (e.status === 503 || e.status === 404)) {
+            return { path: filesPath, entries: [] as FileEntry[] };
+          }
+          throw e;
+        }),
+      ]);
+      filesStatus = status;
+      if (status.ready) {
+        filesPath = list.path;
+        filesEntries = list.entries;
+      } else {
+        filesEntries = [];
+      }
+      log.event("loadFiles", {
+        path: filesPath,
+        count: filesEntries.length,
+        enabled: status.enabled,
+        ready: status.ready,
+      });
+    } finally {
+      filesLoading = false;
+    }
   }
 
   /**
@@ -429,6 +608,14 @@ export function mountApp(root: HTMLElement): void {
   /** Multi-select keys (instanceId|uri) for bulk actions on Tasks */
   let checkedTaskKeys: string[] = [];
 
+  // Files (private WebDAV home)
+  let filesStatus: FilesStatus | null = null;
+  let filesPath = "";
+  let filesEntries: FileEntry[] = [];
+  let filesLoading = false;
+  let filesRenamePath: string | null = null;
+  let filesDeletePath: string | null = null;
+
   function setFlash(type: Flash extends null ? never : NonNullable<Flash>["type"], message: string) {
     if (suppressErrorFlashAfterExpiry && type === "error") {
       return;
@@ -477,6 +664,8 @@ export function mountApp(root: HTMLElement): void {
       }
       log.event("bootstrap.session", { username: user?.username ?? null });
       bumpSessionIdleTimer();
+      normalizeActiveTab();
+      persistTab(activeTab);
       await loadHome();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
@@ -555,6 +744,15 @@ export function mountApp(root: HTMLElement): void {
     }
     if (selectedAbId !== null && activeTab === "contacts") {
       await loadContacts(selectedAbId);
+    }
+    if (activeTab === "tasks") {
+      await loadTasks();
+    }
+    if (activeTab === "notes") {
+      await loadNotes();
+    }
+    if (activeTab === "files") {
+      await loadFiles();
     }
   }
 
@@ -1629,12 +1827,33 @@ export function mountApp(root: HTMLElement): void {
     const brand = `
       <span class="brand-mark" aria-hidden="true">A</span>
       <span>AngaraDAV User Portal</span>`;
+    const displayName = user ? esc(user.displayname || user.username) : "";
+    const adminMenuItem = userIsAdmin()
+      ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">
+              Administration
+            </button>`
+      : "";
+    const userMenu = user
+      ? `<div class="user-menu${userMenuOpen ? " is-open" : ""}">
+            <button type="button" class="user-menu-trigger" data-action="user-menu-toggle"
+              aria-haspopup="menu" aria-expanded="${userMenuOpen ? "true" : "false"}"
+              title="${displayName}">
+              <span class="user-menu-name">${displayName}</span>
+              <span class="user-menu-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="user-menu-dropdown" role="menu" ${userMenuOpen ? "" : "hidden"}>
+              ${adminMenuItem}
+              <button type="button" class="user-menu-item user-menu-item-danger" role="menuitem" data-action="logout">
+                Log out
+              </button>
+            </div>
+          </div>`
+      : "";
     const nav = user
       ? `<nav class="topnav">
           <a class="brand" href="/portal/">${brand}</a>
           <div class="topnav-right">
-            <span class="muted">${esc(user.displayname || user.username)}</span>
-            <button type="button" class="btn btn-ghost" data-action="logout">Log out</button>
+            ${userMenu}
           </div>
         </nav>`
       : `<nav class="topnav">
@@ -2691,10 +2910,16 @@ export function mountApp(root: HTMLElement): void {
           ? "my-contacts"
           : activeTab === "tasks"
             ? "tasks"
-            : "notes";
+            : activeTab === "notes"
+              ? "notes"
+              : activeTab === "files"
+                ? "files"
+                : "administration";
 
     const tasksTab = renderTasksTab();
     const notesTab = renderNotesTab();
+    const filesTab = renderFilesTab();
+    const adminTab = renderAdminSection();
     const mainTab =
       activeTab === "calendars"
         ? calendarsTab
@@ -2702,10 +2927,15 @@ export function mountApp(root: HTMLElement): void {
           ? contactsTab
           : activeTab === "tasks"
             ? tasksTab
-            : notesTab;
+            : activeTab === "notes"
+              ? notesTab
+              : activeTab === "files"
+                ? filesTab
+                : adminTab;
 
-    root.innerHTML = shell(`
-      <header class="page-header">
+    const showMainTabs = activeTab !== "admin";
+    const tabsHeader = showMainTabs
+      ? `<header class="page-header">
         <div class="tabs" role="tablist" aria-label="Portal sections">
           <button type="button" role="tab" class="tab-btn${activeTab === "calendars" ? " is-active" : ""}"
             data-action="tab" data-tab="calendars" aria-selected="${activeTab === "calendars"}">
@@ -2723,11 +2953,23 @@ export function mountApp(root: HTMLElement): void {
             data-action="tab" data-tab="notes" aria-selected="${activeTab === "notes"}">
             Notes
           </button>
+          <button type="button" role="tab" class="tab-btn${activeTab === "files" ? " is-active" : ""}"
+            data-action="tab" data-tab="files" aria-selected="${activeTab === "files"}">
+            Files
+          </button>
           <button type="button" class="info-btn tab-info" data-action="info"
             data-info="${tabInfoKey}"
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
         </div>
-      </header>
+      </header>`
+      : `<header class="page-header page-header-admin">
+        ${infoTitle("Administration", "administration", "h1")}
+        <button type="button" class="btn btn-ghost btn-small" data-action="tab" data-tab="calendars"
+          title="Back to portal">← Portal</button>
+      </header>`;
+
+    root.innerHTML = shell(`
+      ${tabsHeader}
 
       ${mainTab}
     `);
@@ -2740,7 +2982,9 @@ export function mountApp(root: HTMLElement): void {
         eventModalOpen ||
         contactModalOpen ||
         abModalOpen ||
-        importProgress !== null,
+        importProgress !== null ||
+        filesRenamePath !== null ||
+        filesDeletePath !== null,
     );
     document.body.classList.toggle("layout-contacts", activeTab === "contacts");
     document.body.classList.toggle("layout-calendars", activeTab === "calendars");
@@ -2748,6 +2992,231 @@ export function mountApp(root: HTMLElement): void {
       "layout-tasks",
       activeTab === "tasks" || activeTab === "notes",
     );
+    document.body.classList.toggle("layout-files", activeTab === "files");
+    document.body.classList.toggle("layout-admin", activeTab === "admin");
+  }
+
+  function filesBreadcrumb(path: string): string {
+    const parts = path ? path.split("/").filter(Boolean) : [];
+    let acc = "";
+    const crumbs = [
+      `<button type="button" class="files-crumb" data-action="files-nav" data-path="" ${busy ? "disabled" : ""}>Home</button>`,
+    ];
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part;
+      const p = acc;
+      crumbs.push(`<span class="files-crumb-sep" aria-hidden="true">/</span>`);
+      crumbs.push(
+        `<button type="button" class="files-crumb" data-action="files-nav" data-path="${esc(p)}" ${busy ? "disabled" : ""}>${esc(part)}</button>`,
+      );
+    }
+    return `<nav class="files-breadcrumb" aria-label="Folder path">${crumbs.join("")}</nav>`;
+  }
+
+  function formatBytes(n: number): string {
+    if (!Number.isFinite(n) || n < 0) return "—";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  function formatMtime(ts: number): string {
+    if (!ts) return "—";
+    try {
+      return new Date(ts * 1000).toLocaleString();
+    } catch {
+      return "—";
+    }
+  }
+
+  function renderFilesTab(): string {
+    const st = filesStatus;
+    if (!st) {
+      return `<div class="card"><p class="muted">${filesLoading || busy ? "Loading…" : "Unable to load file storage status."}</p></div>`;
+    }
+    if (!st.enabled) {
+      return `<div class="portal-grid portal-grid-files">
+        <section class="card">
+          ${infoTitle("Files", "files", "h1")}
+          <p class="muted" style="margin-top:0.75rem">
+            WebDAV file storage is <strong>disabled</strong> on this server.
+            An administrator can enable it under <strong>Admin → AngaraDAV Settings → Enable WebDAV file storage</strong>.
+          </p>
+          <p class="muted small">When enabled, desktop clients use <span class="mono">/dav.php/files/{username}/</span> with your DAV credentials.</p>
+        </section>
+      </div>`;
+    }
+    if (!st.ready) {
+      return `<div class="portal-grid portal-grid-files">
+        <section class="card">
+          ${infoTitle("Files", "files", "h1")}
+          <p class="flash flash-error" style="margin-top:0.75rem">${esc(st.error || "File storage is not available.")}</p>
+          <p class="muted small">DAV path: <span class="mono">${esc(st.davPath)}</span></p>
+        </section>
+      </div>`;
+    }
+
+    const quotaLabel =
+      st.quotaBytes > 0
+        ? `${formatBytes(st.usedBytes)} used · ${formatBytes(st.availableBytes)} free of ${formatBytes(st.quotaBytes)}`
+        : `${formatBytes(st.usedBytes)} used · ${formatBytes(st.availableBytes)} free (no app quota)`;
+    const quotaPct =
+      st.quotaBytes > 0
+        ? Math.min(100, Math.round((100 * st.usedBytes) / st.quotaBytes))
+        : 0;
+
+    const rows =
+      filesEntries.length === 0
+        ? `<tr><td colspan="4" class="muted">This folder is empty.</td></tr>`
+        : filesEntries
+            .map((e) => {
+              const icon = e.type === "dir" ? "📁" : "📄";
+              const nameCell =
+                e.type === "dir"
+                  ? `<button type="button" class="files-name-btn" data-action="files-nav" data-path="${esc(e.path)}" ${busy ? "disabled" : ""}>
+                      <span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}
+                    </button>`
+                  : `<span class="files-name"><span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}</span>`;
+              const size = e.type === "dir" ? "—" : formatBytes(e.size);
+              return `<tr class="files-row" data-path="${esc(e.path)}" data-type="${e.type}">
+                <td class="files-col-name">${nameCell}</td>
+                <td class="files-col-size mono">${size}</td>
+                <td class="files-col-mtime hide-sm">${esc(formatMtime(e.mtime))}</td>
+                <td class="files-col-actions">
+                  ${
+                    e.type === "file"
+                      ? `<a class="btn btn-ghost btn-small" href="${esc(api.filesDownloadUrl(e.path))}" download="${esc(e.name)}" data-action="files-download">Download</a>`
+                      : ""
+                  }
+                  <button type="button" class="btn btn-ghost btn-small" data-action="files-rename-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Rename</button>
+                  <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="files-delete-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Delete</button>
+                </td>
+              </tr>`;
+            })
+            .join("");
+
+    const renameModal =
+      filesRenamePath !== null
+        ? (() => {
+            const entry = filesEntries.find((x) => x.path === filesRenamePath);
+            const current = entry?.name ?? "";
+            return `<div class="cal-modal" id="files-rename-modal" role="dialog" aria-modal="true" aria-labelledby="files-rename-title">
+              <div class="cal-modal-backdrop" data-action="files-rename-close"></div>
+              <div class="cal-modal-card" style="max-width:28rem">
+                <header class="cal-modal-header">
+                  <h3 id="files-rename-title">Rename</h3>
+                  <button type="button" class="info-modal-close" data-action="files-rename-close" aria-label="Close">×</button>
+                </header>
+                <form class="stack" data-form="files-rename">
+                  <input type="hidden" name="path" value="${esc(filesRenamePath)}" />
+                  <label>New name
+                    <input type="text" name="newName" value="${esc(current)}" required maxlength="255" autocomplete="off" />
+                  </label>
+                  <div class="row-actions">
+                    <button type="button" class="btn btn-ghost" data-action="files-rename-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Rename</button>
+                  </div>
+                </form>
+              </div>
+            </div>`;
+          })()
+        : "";
+
+    const deleteModal =
+      filesDeletePath !== null
+        ? (() => {
+            const entry = filesEntries.find((x) => x.path === filesDeletePath);
+            const label = entry?.name ?? filesDeletePath;
+            const kind = entry?.type === "dir" ? "folder" : "file";
+            return `<div class="cal-modal" id="files-delete-modal" role="dialog" aria-modal="true" aria-labelledby="files-delete-title">
+              <div class="cal-modal-backdrop" data-action="files-delete-close"></div>
+              <div class="cal-modal-card" style="max-width:28rem">
+                <header class="cal-modal-header">
+                  <h3 id="files-delete-title">Delete ${esc(kind)}</h3>
+                  <button type="button" class="info-modal-close" data-action="files-delete-close" aria-label="Close">×</button>
+                </header>
+                <p>Delete <strong>${esc(label)}</strong>?${entry?.type === "dir" ? " This removes the folder and everything inside it." : ""}</p>
+                <div class="row-actions" style="margin-top:1rem">
+                  <button type="button" class="btn btn-ghost" data-action="files-delete-close">Cancel</button>
+                  <button type="button" class="btn btn-danger" data-action="files-delete-confirm" data-path="${esc(filesDeletePath)}" ${busy ? "disabled" : ""}>Delete</button>
+                </div>
+              </div>
+            </div>`;
+          })()
+        : "";
+
+    return `<div class="portal-grid portal-grid-files">
+      <section class="card files-panel">
+        <div class="files-head">
+          ${infoTitle("Files", "files", "h1")}
+          <div class="files-quota muted small" title="Storage usage">
+            <div class="files-quota-bar" role="progressbar" aria-valuenow="${quotaPct}" aria-valuemin="0" aria-valuemax="100">
+              <div class="files-quota-fill" style="width:${quotaPct}%"></div>
+            </div>
+            <span>${esc(quotaLabel)}</span>
+          </div>
+        </div>
+        <p class="muted small" style="margin:0.5rem 0 0">
+          DAV clients: <span class="mono">${esc(st.davPath)}</span>
+          · max upload ${formatBytes(st.maxUploadBytes)}
+        </p>
+        <div class="files-toolbar">
+          ${filesBreadcrumb(filesPath)}
+          <div class="files-toolbar-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${busy || filesLoading ? "disabled" : ""}>Refresh</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${busy ? "disabled" : ""}>New folder</button>
+            <label class="btn btn-primary btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""}>
+              Upload
+              <input type="file" data-action="files-upload" ${busy ? "disabled" : ""} multiple hidden />
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap files-table-wrap">
+          <table class="files-table">
+            <thead>
+              <tr>
+                <th class="files-col-name">Name</th>
+                <th class="files-col-size">Size</th>
+                <th class="files-col-mtime hide-sm">Modified</th>
+                <th class="files-col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filesLoading && filesEntries.length === 0 ? `<tr><td colspan="4" class="muted">Loading…</td></tr>` : rows}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      ${renameModal}
+      ${deleteModal}
+    </div>`;
+  }
+
+  /** Admin-only Administration section (opened from the user menu). */
+  function renderAdminSection(): string {
+    if (!userIsAdmin()) {
+      return `<div class="card"><p class="muted">You do not have permission to view Administration.</p></div>`;
+    }
+    return `<div class="portal-grid portal-grid-admin">
+      <section class="card admin-section">
+        ${infoTitle("Server administration", "administration")}
+        <p class="muted">
+          Manage DAV users, calendars, address books, and system settings in the classic Web Admin.
+          That UI uses the separate <strong>admin</strong> password (not your DAV credentials), unless you already have an admin session open.
+        </p>
+        <div class="admin-link-grid">
+          <a class="btn btn-primary" href="/admin/">Open Admin Dashboard</a>
+          <a class="btn btn-ghost" href="/admin/?/users">Users and resources</a>
+          <a class="btn btn-ghost" href="/admin/?/settings/standard">System Settings</a>
+          <a class="btn btn-ghost" href="/admin/?/settings/database">Database settings</a>
+        </div>
+        <p class="muted small" style="margin-top:1.25rem">
+          Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
+          with role <span class="badge badge-admin">Admin</span>.
+        </p>
+      </section>
+    </div>`;
   }
 
   /** Flatten tasks as a tree (subtasks under parent via RELATED-TO parentUid). */
@@ -3267,6 +3736,11 @@ export function mountApp(root: HTMLElement): void {
         void onAction(ev);
       });
     });
+    // Close user menu when clicking outside (single listener per open cycle)
+    unbindUserMenuOutside();
+    if (userMenuOpen) {
+      bindUserMenuOutside();
+    }
     // Keyboard activation for contacts table rows, calendar list rows, month day cells
     root
       .querySelectorAll<HTMLElement>(
@@ -3312,6 +3786,18 @@ export function mountApp(root: HTMLElement): void {
           return;
         }
         if (importProgress) return; // block Escape while import is running
+        if (userMenuOpen) {
+          userMenuOpen = false;
+          unbindUserMenuOutside();
+          render();
+          return;
+        }
+        if (filesRenamePath !== null || filesDeletePath !== null) {
+          filesRenamePath = null;
+          filesDeletePath = null;
+          render();
+          return;
+        }
         closeInfoModal();
       });
       escapeBound = true;
@@ -3320,6 +3806,16 @@ export function mountApp(root: HTMLElement): void {
     loginForm?.addEventListener("submit", (ev) => {
       ev.preventDefault();
       void onLogin(loginForm);
+    });
+    const filesRenameForm = root.querySelector<HTMLFormElement>('[data-form="files-rename"]');
+    filesRenameForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onFilesRename(filesRenameForm);
+    });
+    root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        void onFilesUpload(input);
+      });
     });
     const shareForm = root.querySelector<HTMLFormElement>('[data-form="share"]');
     shareForm?.addEventListener("submit", (ev) => {
@@ -3817,11 +4313,75 @@ export function mountApp(root: HTMLElement): void {
       applyPortalUi(res.ui);
       log.event("login.ok", { username: user?.username ?? username });
       bumpSessionIdleTimer();
+      normalizeActiveTab();
+      persistTab(activeTab);
       await loadHome();
       setFlash("success", "Signed in");
     } catch (e) {
       log.warn("login.failed", e instanceof Error ? e.message : e);
       setFlash("error", e instanceof Error ? e.message : "Login failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onFilesRename(form: HTMLFormElement) {
+    const fd = new FormData(form);
+    const path = String(fd.get("path") ?? "");
+    const newName = String(fd.get("newName") ?? "").trim();
+    if (!path || !newName) {
+      setFlash("error", "Name is required");
+      render();
+      return;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      await api.filesRename(path, newName);
+      log.event("files.rename", { path, newName });
+      filesRenamePath = null;
+      await loadFiles();
+      setFlash("success", `Renamed to “${newName}”`);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onFilesUpload(input: HTMLInputElement) {
+    const list = input.files;
+    if (!list || list.length === 0) return;
+    const files = Array.from(list);
+    input.value = "";
+    busy = true;
+    clearFlash();
+    render();
+    let ok = 0;
+    const errors: string[] = [];
+    try {
+      for (const file of files) {
+        try {
+          await api.filesUpload(filesPath, file, { replace: true });
+          log.event("files.upload", { path: filesPath, name: file.name, size: file.size });
+          ok += 1;
+        } catch (e) {
+          errors.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+      await loadFiles();
+      if (ok > 0 && errors.length === 0) {
+        setFlash("success", ok === 1 ? "Uploaded 1 file" : `Uploaded ${ok} files`);
+      } else if (ok > 0) {
+        setFlash("info", `Uploaded ${ok}; ${errors.length} failed. ${errors[0]}`);
+      } else {
+        setFlash("error", errors[0] || "Upload failed");
+      }
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Upload failed");
     } finally {
       busy = false;
       render();
@@ -4539,39 +5099,130 @@ export function mountApp(root: HTMLElement): void {
       render();
       return;
     }
-    if (action === "tab") {
-      const tab = t.dataset.tab as TabId | undefined;
-      if (tab === "calendars" || tab === "contacts" || tab === "tasks" || tab === "notes") {
-        activeTab = tab;
-        log.event("tab", { tab });
-        if (tab !== "calendars") {
-          calModalOpen = false;
-          deleteConfirmId = null;
-        }
-        if (tab !== "contacts") {
-          deleteAbConfirmId = null;
-        }
-        clearFlash();
-        busy = true;
+    if (action === "user-menu-toggle") {
+      ev.stopPropagation();
+      userMenuOpen = !userMenuOpen;
+      render();
+      return;
+    }
+    if (action === "user-menu-close") {
+      if (userMenuOpen) {
+        userMenuOpen = false;
         render();
-        try {
-          if (tab === "contacts" && selectedAbId !== null) {
-            await loadContacts(selectedAbId);
-          } else if (tab === "calendars") {
-            await loadMonthEvents();
-          } else if (tab === "tasks") {
-            await loadTasks();
-          } else if (tab === "notes") {
-            await loadNotes();
-          }
-        } catch (e) {
-          log.warn("tab load failed", e instanceof Error ? e.message : e);
-          setFlash("error", e instanceof Error ? e.message : "Failed to load");
-        } finally {
-          busy = false;
-          render();
-        }
       }
+      return;
+    }
+    if (action === "tab") {
+      const tab = parseTabId(t.dataset.tab);
+      if (tab) {
+        await activateTab(tab);
+      }
+      return;
+    }
+    // --- Files tab ---
+    if (action === "files-nav") {
+      const path = t.dataset.path ?? "";
+      filesPath = path;
+      filesRenamePath = null;
+      filesDeletePath = null;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadFiles();
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Failed to open folder");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-refresh") {
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadFiles();
+        setFlash("success", "Refreshed");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-mkdir") {
+      const name = window.prompt("New folder name");
+      if (name === null) return;
+      const trimmed = name.trim();
+      if (!trimmed) {
+        setFlash("error", "Folder name is required");
+        render();
+        return;
+      }
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await api.filesMkdir(filesPath, trimmed);
+        log.event("files.mkdir", { path: filesPath, name: trimmed });
+        await loadFiles();
+        setFlash("success", `Created folder “${trimmed}”`);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Could not create folder");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-rename-open") {
+      filesRenamePath = t.dataset.path ?? null;
+      filesDeletePath = null;
+      render();
+      return;
+    }
+    if (action === "files-rename-close") {
+      filesRenamePath = null;
+      render();
+      return;
+    }
+    if (action === "files-delete-open") {
+      filesDeletePath = t.dataset.path ?? null;
+      filesRenamePath = null;
+      render();
+      return;
+    }
+    if (action === "files-delete-close") {
+      filesDeletePath = null;
+      render();
+      return;
+    }
+    if (action === "files-delete-confirm") {
+      const path = t.dataset.path ?? filesDeletePath;
+      if (!path) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await api.filesDelete(path);
+        log.event("files.delete", { path });
+        filesDeletePath = null;
+        await loadFiles();
+        setFlash("success", "Deleted");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-download") {
+      // Let the browser follow the download link; still count as activity
+      log.event("files.download", { path: t.getAttribute("href") ?? "" });
       return;
     }
     if (action === "sort-task" || action === "sort-note") {

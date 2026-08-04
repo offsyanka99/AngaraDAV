@@ -6,6 +6,10 @@ export type PortalUser = {
   email: string;
   principal: string;
   csrfToken?: string;
+  /** True when the DAV user has the portal Admin role. */
+  isAdmin?: boolean;
+  /** Role label from the API (e.g. "Admin" | "User"). */
+  role?: string;
 };
 
 export type Calendar = {
@@ -257,6 +261,27 @@ export type NoteWriteBody = {
   summary?: string;
   description?: string;
   dtstart?: string | null;
+};
+
+/** Portal Files tab — private WebDAV home status */
+export type FilesStatus = {
+  enabled: boolean;
+  ready: boolean;
+  error: string | null;
+  davPath: string;
+  maxUploadBytes: number;
+  quotaBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+};
+
+export type FileEntry = {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+  size: number;
+  mtime: number;
+  etag?: string | null;
 };
 
 class ApiError extends Error {
@@ -889,6 +914,100 @@ export const api = {
   deleteNote: (instanceId: number, uri: string) =>
     request<{ ok: boolean }>(`/notes/${instanceId}/${encUri(uri)}`, {
       method: "DELETE",
+    }),
+
+  // --- Private WebDAV files (portal Files tab) ---
+  filesStatus: () => request<FilesStatus>("/files"),
+  filesList: (path = "") => {
+    const p = new URLSearchParams();
+    if (path) p.set("path", path);
+    const qs = p.toString() ? `?${p}` : "";
+    return request<{ path: string; entries: FileEntry[] }>(`/files/entries${qs}`);
+  },
+  filesMkdir: (path: string, name: string) =>
+    request<{ entry: FileEntry }>("/files/mkdir", {
+      method: "POST",
+      body: JSON.stringify({ path, name }),
+    }),
+  filesUpload: async (
+    path: string,
+    file: File,
+    opts: { replace?: boolean } = {},
+  ): Promise<{ entry: FileEntry }> => {
+    const p = new URLSearchParams();
+    if (path) p.set("path", path);
+    p.set("name", file.name);
+    if (opts.replace) p.set("replace", "1");
+    const headers = new Headers();
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+    const body = new FormData();
+    body.append("file", file, file.name);
+    if (path) body.append("path", path);
+    const t0 =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    log.debug(`api → POST /files/upload path=${path || "/"} name=${file.name} size=${file.size}`);
+    const res = await fetch(`/api/files/upload?${p}`, {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      body,
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { error: text };
+      }
+    }
+    const ms = Math.round(
+      (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0,
+    );
+    if (!res.ok) {
+      let msg = `Upload failed (${res.status})`;
+      if (
+        data &&
+        typeof data === "object" &&
+        data !== null &&
+        "error" in data &&
+        typeof (data as { error: unknown }).error === "string"
+      ) {
+        msg = (data as { error: string }).error;
+      }
+      if (res.status === 401) {
+        log.debug(`api ← POST /files/upload 401 (${ms}ms)`, msg);
+        notifyUnauthorized("/files/upload", msg);
+      } else if (res.status >= 500) {
+        log.error(`api ← POST /files/upload ${res.status} (${ms}ms)`, msg);
+      } else {
+        log.warn(`api ← POST /files/upload ${res.status} (${ms}ms)`, msg);
+      }
+      throw new ApiError(msg, res.status);
+    }
+    log.info(`api ← POST /files/upload 200 (${ms}ms)`);
+    notifySessionActivity("/files/upload");
+    return data as { entry: FileEntry };
+  },
+  filesDownloadUrl: (path: string) => {
+    const p = new URLSearchParams();
+    p.set("path", path);
+    return `/api/files/download?${p}`;
+  },
+  filesDelete: (path: string) =>
+    request<{ ok: boolean }>("/files/entry", {
+      method: "DELETE",
+      body: JSON.stringify({ path }),
+    }),
+  filesRename: (path: string, newName: string) =>
+    request<{ entry: { path: string; name: string } }>("/files/rename", {
+      method: "POST",
+      body: JSON.stringify({ path, newName }),
+    }),
+  filesMove: (from: string, to: string, newName?: string) =>
+    request<{ entry: { path: string; name: string } }>("/files/move", {
+      method: "POST",
+      body: JSON.stringify({ from, to, newName }),
     }),
 };
 

@@ -34,6 +34,8 @@ jobs:
         run: php tests/php/PushPluginTest.php
       - name: WebDAV file-home unit test
         run: php tests/php/FileHomeStorageTest.php
+      - name: Portal FileService unit test
+        run: php tests/php/FileServiceTest.php
       - name: DAV exception logging unit test
         run: php tests/php/ServerExceptionLoggingTest.php
       - name: CalDAV read-only discovery unit test

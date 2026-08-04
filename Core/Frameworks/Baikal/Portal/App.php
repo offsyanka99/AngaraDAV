@@ -20,6 +20,9 @@ class App {
     /** @var CalendarItemService */
     private $items;
 
+    /** @var FileService */
+    private $files;
+
     /** @var array<string, mixed> */
     private $config;
 
@@ -43,6 +46,70 @@ class App {
         $this->shares = new ShareService($pdo);
         $this->contacts = new ContactService($pdo);
         $this->items = new CalendarItemService($pdo);
+        $this->files = new FileService($pdo, $config);
+    }
+
+    /**
+     * Attach portal Admin role flags to a user profile array.
+     *
+     * @param array<string, mixed> $profile
+     *
+     * @return array<string, mixed>
+     */
+    private function enrichProfile(array $profile): array {
+        $username = (string) ($profile['username'] ?? '');
+        $isAdmin = $username !== '' && $this->portalUserIsAdmin($username);
+        $profile['isAdmin'] = $isAdmin;
+        $profile['role'] = $isAdmin ? 'Admin' : 'User';
+
+        return $profile;
+    }
+
+    /**
+     * Whether a DAV username has the portal Admin role.
+     *
+     * Config (YAML): system.portal_admin_users as list or comma-separated string.
+     * Env override: PORTAL_ADMIN_USERS / BAIKAL_PORTAL_ADMIN_USERS (comma-separated).
+     * If neither is set, a DAV user named "admin" is treated as Admin.
+     */
+    private function portalUserIsAdmin(string $username): bool {
+        $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
+        $raw = getenv('PORTAL_ADMIN_USERS');
+        if ($raw === false || $raw === '') {
+            $raw = getenv('BAIKAL_PORTAL_ADMIN_USERS');
+        }
+        if ($raw === false || $raw === '') {
+            $raw = $sys['portal_admin_users'] ?? null;
+        }
+
+        $users = [];
+        if (is_array($raw)) {
+            foreach ($raw as $u) {
+                if (is_string($u) || is_numeric($u)) {
+                    $users[] = (string) $u;
+                }
+            }
+        } elseif (is_string($raw) && trim($raw) !== '') {
+            $parts = preg_split('/[\s,]+/', $raw) ?: [];
+            foreach ($parts as $u) {
+                if ($u !== '') {
+                    $users[] = $u;
+                }
+            }
+        }
+
+        if ($users === []) {
+            // Zero-config default: DAV user named "admin" has the Admin role
+            return strcasecmp($username, 'admin') === 0;
+        }
+
+        foreach ($users as $u) {
+            if ($u !== '' && strcasecmp($u, $username) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -174,6 +241,34 @@ class App {
         $this->portalServerLog($method . ' ' . $path, 'debug');
 
         try {
+            // Binary download for portal Files tab (stream from disk)
+            if ($method === 'GET' && $path === '/files/download') {
+                $username = $this->auth->requireUser();
+                $filePath = isset($_GET['path']) ? (string) $_GET['path'] : '';
+                $meta = $this->files->openDownload($username, $filePath);
+                $this->streamFileDownload(
+                    $meta['absolutePath'],
+                    $meta['name'],
+                    $meta['contentType'],
+                    $meta['size'],
+                    $meta['etag']
+                );
+                $this->portalServerLog(
+                    sprintf(
+                        '%s %s → 200 files download path=%s size=%d user=%s (%dms)',
+                        $method,
+                        $path,
+                        $meta['path'],
+                        $meta['size'],
+                        $username,
+                        (int) ((microtime(true) - $t0) * 1000)
+                    ),
+                    'info'
+                );
+
+                return;
+            }
+
             // Binary/download responses (ICS / VCF export)
             if ($method === 'GET' && preg_match('#^/calendars/(\d+)/export$#', $path, $m)) {
                 $username = $this->auth->requireUser();
@@ -308,6 +403,7 @@ class App {
                 (string) ($body['username'] ?? ''),
                 (string) ($body['password'] ?? '')
             );
+            $user = $this->enrichProfile($user);
             $this->portalServerLog('login ok user=' . (string) ($user['username'] ?? ''), 'info');
 
             return [
@@ -340,7 +436,7 @@ class App {
 
         if ($method === 'GET' && ($path === '/me' || $path === '')) {
             $username = $this->auth->requireUser();
-            $profile = $this->auth->profile($username);
+            $profile = $this->enrichProfile($this->auth->profile($username));
             $profile['csrfToken'] = $this->auth->csrfToken();
 
             return [
@@ -570,6 +666,12 @@ class App {
             }
         }
 
+        // --- Private WebDAV files (portal Files tab) ---
+        $fileRoutes = $this->dispatchFileRoutes($method, $path, $username);
+        if ($fileRoutes !== null) {
+            return $fileRoutes;
+        }
+
         // --- Tasks (VTODO) / Notes (VJOURNAL) ---
         $itemRoutes = $this->dispatchItemRoutes($method, $path, $username);
         if ($itemRoutes !== null) {
@@ -577,6 +679,225 @@ class App {
         }
 
         throw new ApiException('Not found', 404);
+    }
+
+    /**
+     * Portal Files API — same storage as /dav.php/files/{username}/.
+     *
+     * @return array<string, mixed>|list<mixed>|null
+     */
+    private function dispatchFileRoutes(string $method, string $path, string $username) {
+        if ($method === 'GET' && $path === '/files') {
+            $status = $this->files->status($username);
+            $this->portalServerLog(
+                'files status enabled=' . ($status['enabled'] ? '1' : '0')
+                . ' ready=' . ($status['ready'] ? '1' : '0')
+                . ' user=' . $username,
+                'debug'
+            );
+
+            return $status;
+        }
+
+        if ($method === 'GET' && $path === '/files/entries') {
+            $dir = isset($_GET['path']) ? (string) $_GET['path'] : '';
+            $list = $this->files->listEntries($username, $dir);
+            $this->portalServerLog(
+                sprintf(
+                    'files list path=%s count=%d user=%s',
+                    $list['path'] === '' ? '/' : $list['path'],
+                    count($list['entries']),
+                    $username
+                ),
+                'debug'
+            );
+
+            return $list;
+        }
+
+        if ($method === 'POST' && $path === '/files/mkdir') {
+            $body = $this->jsonBody();
+            $created = $this->files->createDirectory(
+                $username,
+                (string) ($body['path'] ?? ''),
+                (string) ($body['name'] ?? '')
+            );
+            $this->portalServerLog(
+                'files mkdir path=' . $created['path'] . ' user=' . $username,
+                'info'
+            );
+
+            return ['entry' => $created];
+        }
+
+        if ($method === 'POST' && $path === '/files/upload') {
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(600);
+            }
+            // Large uploads: release session lock so other portal tabs stay responsive
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+            // Parent folder + name always from query/multipart — never JSON (raw body is file bytes)
+            $parent = isset($_GET['path']) ? (string) $_GET['path'] : '';
+            $name = isset($_GET['name']) ? (string) $_GET['name'] : '';
+            $replace = isset($_GET['replace']) && (string) $_GET['replace'] !== '0' && (string) $_GET['replace'] !== '';
+            $data = null;
+
+            if (!empty($_FILES['file']) && is_array($_FILES['file'])) {
+                $file = $_FILES['file'];
+                $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+                if ($err !== UPLOAD_ERR_OK) {
+                    throw new ApiException($this->uploadErrorMessage($err), 400);
+                }
+                $tmp = (string) ($file['tmp_name'] ?? '');
+                if ($tmp === '' || !is_uploaded_file($tmp)) {
+                    throw new ApiException('Invalid upload', 400);
+                }
+                if ($name === '') {
+                    $name = (string) ($file['name'] ?? 'upload.bin');
+                }
+                // multipart path field optional override
+                if ($parent === '' && isset($_POST['path'])) {
+                    $parent = (string) $_POST['path'];
+                }
+                $data = fopen($tmp, 'rb');
+                if ($data === false) {
+                    throw new ApiException('Unable to read uploaded file', 500);
+                }
+            } else {
+                // Raw body upload (tests / API clients): path + name in query
+                if ($name === '') {
+                    $name = (string) ($_SERVER['HTTP_X_FILE_NAME'] ?? '');
+                }
+                if ($name === '') {
+                    throw new ApiException('Missing file name (query name= or multipart file)', 400);
+                }
+                $data = $this->rawRequestBody();
+            }
+
+            try {
+                $written = $this->files->writeFile($username, $parent, $name, $data, $replace);
+            } finally {
+                if (is_resource($data)) {
+                    fclose($data);
+                }
+            }
+            $this->portalServerLog(
+                sprintf(
+                    'files upload path=%s size=%d user=%s',
+                    $written['path'],
+                    $written['size'],
+                    $username
+                ),
+                'info'
+            );
+
+            return ['entry' => $written];
+        }
+
+        if ($method === 'DELETE' && $path === '/files/entry') {
+            $body = $this->jsonBody();
+            $entryPath = (string) ($body['path'] ?? ($_GET['path'] ?? ''));
+            $this->files->delete($username, $entryPath);
+            $this->portalServerLog(
+                'files delete path=' . $entryPath . ' user=' . $username,
+                'info'
+            );
+
+            return ['ok' => true];
+        }
+
+        if ($method === 'POST' && $path === '/files/rename') {
+            $body = $this->jsonBody();
+            $renamed = $this->files->rename(
+                $username,
+                (string) ($body['path'] ?? ''),
+                (string) ($body['newName'] ?? $body['name'] ?? '')
+            );
+            $this->portalServerLog(
+                'files rename to=' . $renamed['path'] . ' user=' . $username,
+                'info'
+            );
+
+            return ['entry' => $renamed];
+        }
+
+        if ($method === 'POST' && $path === '/files/move') {
+            $body = $this->jsonBody();
+            $moved = $this->files->move(
+                $username,
+                (string) ($body['from'] ?? $body['path'] ?? ''),
+                (string) ($body['to'] ?? $body['toPath'] ?? ''),
+                isset($body['newName']) ? (string) $body['newName'] : null
+            );
+            $this->portalServerLog(
+                'files move to=' . $moved['path'] . ' user=' . $username,
+                'info'
+            );
+
+            return ['entry' => $moved];
+        }
+
+        return null;
+    }
+
+    private function uploadErrorMessage(int $code): string {
+        switch ($code) {
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'Uploaded file exceeds the server size limit';
+            case UPLOAD_ERR_PARTIAL:
+                return 'Upload was incomplete';
+            case UPLOAD_ERR_NO_FILE:
+                return 'No file was uploaded';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'Server missing temporary upload directory';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'Server failed to write the upload';
+            default:
+                return 'Upload failed (error ' . $code . ')';
+        }
+    }
+
+    /**
+     * Stream a file from disk for the portal Files download endpoint.
+     */
+    private function streamFileDownload(
+        string $absolutePath,
+        string $filename,
+        string $contentType,
+        int $size,
+        string $etag
+    ): void {
+        $this->responseSent = true;
+        $safe = preg_replace('/[^a-zA-Z0-9._ -]+/', '-', $filename) ?: 'download';
+        $safe = trim($safe, '.- ') ?: 'download';
+        // Release session so long downloads do not block other portal tabs
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        http_response_code(200);
+        header('Content-Type: ' . $contentType);
+        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        header('ETag: ' . $etag);
+        if ($size >= 0) {
+            header('Content-Length: ' . (string) $size);
+        }
+        $fp = fopen($absolutePath, 'rb');
+        if ($fp === false) {
+            throw new ApiException('Unable to read file', 500);
+        }
+        try {
+            fpassthru($fp);
+        } finally {
+            fclose($fp);
+        }
     }
 
     /**

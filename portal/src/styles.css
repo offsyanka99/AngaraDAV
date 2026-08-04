@@ -95,6 +95,394 @@ a:hover {
   gap: 0.75rem;
 }
 
+/* User menu (display name → dropdown) */
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: min(16rem, 52vw);
+  padding: 0.4rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.user-menu-trigger:hover,
+.user-menu.is-open .user-menu-trigger {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.user-menu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-caret {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  opacity: 0.8;
+  transition: transform 0.12s ease;
+}
+
+.user-menu.is-open .user-menu-caret {
+  transform: rotate(180deg);
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  min-width: 11.5rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.user-menu-dropdown[hidden] {
+  display: none;
+}
+
+.user-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.user-menu-item:hover {
+  background: var(--surface-2);
+}
+
+.user-menu-item.is-active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.user-menu-item-danger {
+  color: #fca5a5;
+}
+
+.user-menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.page-header-admin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-section .admin-link-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.portal-grid-admin {
+  display: grid;
+  gap: 1rem;
+}
+
+/* Files tab panel chrome (grid width override lives next to .portal-grid below) */
+.files-panel {
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Match Contacts/Tasks: fill main column down to the fixed footer */
+body.layout-files {
+  overflow: hidden;
+  height: 100dvh;
+}
+
+body.layout-files #app {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.layout-files main.container {
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 3.25rem;
+}
+
+body.layout-files .portal-grid-files {
+  height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+body.layout-files .files-panel > .files-head,
+body.layout-files .files-panel > .muted,
+body.layout-files .files-panel > .files-toolbar {
+  flex-shrink: 0;
+}
+
+body.layout-files .files-table-wrap {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  max-height: none;
+  margin-top: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  body.layout-files {
+    overflow: auto;
+    height: auto;
+  }
+  body.layout-files #app {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  body.layout-files main.container {
+    overflow: visible;
+  }
+  body.layout-files .portal-grid-files {
+    height: auto;
+    overflow: visible;
+  }
+  body.layout-files .files-table-wrap {
+    max-height: min(55vh, 28rem);
+  }
+}
+
+.files-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.files-quota {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+
+.files-quota-bar {
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.files-quota-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.files-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.files-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.35rem;
+  min-width: 0;
+}
+
+.files-crumb {
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.15rem 0.25rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.files-crumb:hover:not(:disabled) {
+  background: var(--surface-2);
+  text-decoration: underline;
+}
+
+.files-crumb:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.files-crumb-sep {
+  color: var(--muted);
+  user-select: none;
+}
+
+.files-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.files-upload-btn {
+  cursor: pointer;
+  margin: 0;
+}
+
+.files-upload-btn[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.files-table-wrap {
+  margin-top: 0.25rem;
+  max-height: min(60vh, 40rem);
+  overflow: auto;
+  width: 100%;
+}
+
+.files-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  table-layout: auto;
+}
+
+.files-table th,
+.files-table td {
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.files-table th {
+  color: var(--muted);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.files-col-name {
+  width: 40%;
+}
+
+.files-col-size {
+  width: 6.5rem;
+  white-space: nowrap;
+}
+
+.files-col-mtime {
+  width: 11rem;
+  white-space: nowrap;
+}
+
+.files-col-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.files-col-actions .btn {
+  margin-left: 0.25rem;
+}
+
+.files-name-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.files-name-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.files-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.files-icon {
+  flex-shrink: 0;
+}
+
+.btn-danger-text {
+  color: #fca5a5 !important;
+}
+
+.btn-danger-text:hover:not(:disabled) {
+  color: #fecaca !important;
+}
+
+@media (max-width: 720px) {
+  .hide-sm {
+    display: none;
+  }
+  .files-col-name {
+    width: auto;
+  }
+  .files-quota {
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
 .container {
   /* Admin layout max width */
   width: min(1700px, 100% - 2rem);
@@ -821,6 +1209,20 @@ pre {
   grid-template-columns: minmax(280px, 408px) 1fr;
   gap: 1.25rem;
   align-items: start;
+}
+
+/*
+ * Files tab: single full-width column.
+ * MUST come after .portal-grid — that rule uses two columns (sidebar ~408px + main),
+ * and a lone child would only get the narrow first track.
+ * Overall page width is still main.container: min(1700px, 100% - 2rem).
+ */
+.portal-grid.portal-grid-files {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
 }
 
 /* Calendar tab: list + month view — fill remaining viewport down to footer */

@@ -47,6 +47,10 @@ system:
     # Portal debug logging (browser console + Docker/PHP error_log). Env:
     #   PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL = off|error|warn|info|debug
     portal_log_level: 'off'
+    # DAV usernames with the portal Admin role (Administration section in /portal).
+    # Env: PORTAL_ADMIN_USERS / BAIKAL_PORTAL_ADMIN_USERS (comma-separated).
+    # When empty/unset, a DAV user named "admin" is treated as Admin.
+    # portal_admin_users: []
 database:
     encryption_key: 5d3f0fa0192e3058ea70f1bb20924add
     backend: 'pgsql'

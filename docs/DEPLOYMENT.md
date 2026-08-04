@@ -98,12 +98,13 @@ Entrypoint also logs mount warnings at container start (`25-check-baikal-persist
 
 | Path | Purpose |
 |------|---------|
-| `/portal/` | **User portal** (calendars + contacts; DAV user login) |
+| `/portal/` | **User portal** (calendars, contacts, tasks, notes, files; DAV user login) |
 | `/api/` | Portal JSON API (session cookie; same origin as SPA) |
 | `/health.php` | Liveness JSON (`status`, `version` with `+git.<sha>`, `git`, install lock, mount hints) |
 | `/info.php` | Public feature flags (no secrets); same `version` / `git` fields |
 | `/dav.php/` | Combined CalDAV + CardDAV + generic WebDAV + classic browser UI |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
+| `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload/download/rename/delete) |
 | `/cal.php/` | CalDAV only |
 | `/card.php/` | CardDAV only |
 | `/admin/` | Web admin |
@@ -327,6 +328,11 @@ https://baikal.example/dav.php/files/USERNAME/
 Use that user's DAV credentials, not the admin account. Use HTTPS for Basic or
 Digest authentication. `/cal.php/` remains CalDAV-only and `/card.php/`
 remains CardDAV-only; generic files are exposed only through `/dav.php/`.
+
+The **User portal** (`/portal/`) includes a **Files** tab that uses the same
+private home (session cookie + CSRF). Portal file operations are logged to
+`Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
+is `info` or `debug` (list/upload/download/mkdir/rename/delete).
 
 #### Storage and limits
 

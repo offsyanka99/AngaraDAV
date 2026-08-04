@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.4`
+**Version:** `1.0.5`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -23,6 +23,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
+  - **Files** tab: browse/upload/download/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
 - `/dav.php/` kept as classic browser and combined CalDAV/CardDAV/WebDAV endpoint
@@ -52,8 +53,9 @@ Legacy release history
 | `1.0.2` | Added `gmp` PHP extension and stopped promoting PHP notices/deprecations to fatal exceptions, fixing WebDAV-Push delivery failing on servers without GMP/BCMath |
 | `1.0.3` | Log the underlying failure reason when a push delivery gets no HTTP response (`status: null`), to diagnose connection/DNS/TLS failures to the push service |
 | `1.0.4` | Fixed push delivery pinning to an unreachable IPv6 address on hosts with broken/absent IPv6 routing (`connectionPin()` now prefers IPv4) |
+| `1.0.5` | Portal **Files** tab for private WebDAV homes (browse/upload/download/rename/delete), tab persistence, user menu + Admin role Administration section |
 
-Image tags: `latest`, `1.0.4`, `sha-…`.
+Image tags: `latest`, `1.0.5`, `sha-…`.
 
 Quick start (Docker)
 --------------------
@@ -79,7 +81,7 @@ Endpoints
 
 | Path | Use |
 |------|-----|
-| `/portal/` | **User portal** — calendars, contacts, tasks, notes |
+| `/portal/` | **User portal** — calendars, contacts, tasks, notes, files |
 | `/dav.php/` | CalDAV + CardDAV (clients + classic WebDAV browser) |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
 | `/admin/` | Web admin |
@@ -95,6 +97,7 @@ User portal
 3. **Calendar:** owned list, month view, create/edit events (repeat rules), Edit modal (details, share, import/export `.ics`).
 4. **Contacts:** address books, contact search/CRUD, photos, birthday/special dates, custom fields, import/export `.vcf`.
 5. **Tasks** / **Notes:** manage `VTODO` / `VJOURNAL` on your calendars.
+6. **Files:** browse your private WebDAV file home (when **Enable WebDAV file storage** is on). Desktop clients still use `/dav.php/files/{username}/`.
 
 ![User portal — Calendar](docs/images/portal-my-calendars.jpg)
 

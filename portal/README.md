@@ -1,10 +1,10 @@
 # AngaraDAV user portal
 
-**Version:** `1.0.0`
+**Version:** `1.0.5`
 
-TypeScript SPA for calendars and contacts. Styled like the bookmarks-sync
-admin UI (dark surface cards, sticky topnav, primary blue actions, footer pinned
-to the viewport bottom).
+TypeScript SPA for calendars, contacts, tasks, notes, and private WebDAV files.
+Styled like the bookmarks-sync admin UI (dark surface cards, sticky topnav,
+primary blue actions, footer pinned to the viewport bottom).
 
 ## Tabs
 
@@ -14,6 +14,7 @@ to the viewport bottom).
 | **Contacts** | Address books (create/rename/delete with confirm), contact table/search, per-contact CRUD, multi email/phone, photos, birthday/special dates, Unicode custom fields, book + single-contact `.vcf` export; large `.vcf` import progress modal |
 | **Tasks** | CalDAV `VTODO` list (sortable), subtasks via `RELATED-TO;RELTYPE=PARENT`, multi-select bulk status/due/%, create/edit/delete on writable calendars |
 | **Notes** | CalDAV `VJOURNAL` list (sortable), create/edit/delete on writable calendars |
+| **Files** | Private WebDAV home (when `files_enabled`): browse, upload, download, new folder, rename, delete; quota bar; same data as `/dav.php/files/{username}/` |
 
 Section help lives under **(i)** info modals. Optional time format / week start / log level from `/api/ui` or `/api/me` (`ui`).
 
@@ -82,6 +83,14 @@ Docker image runs this build in a multi-stage `node` stage automatically.
 | GET | `/api/addressbooks/{id}/contacts/{uri}/export` | session → single-contact `.vcf` |
 | GET | `/api/addressbooks/{id}/contacts/{uri}/photo` | session → JPEG |
 | GET | `/api/holidays/countries` | session |
+| GET | `/api/files` | session — file storage status + quota (`enabled`, `ready`, `davPath`, bytes) |
+| GET | `/api/files/entries` | session `?path=` list folder (default home root) |
+| POST | `/api/files/mkdir` | session body `{path, name}` |
+| POST | `/api/files/upload` | session multipart `file` (+ query `path`, `name?`, `replace?`) or raw body |
+| GET | `/api/files/download` | session `?path=` file download stream |
+| DELETE | `/api/files/entry` | session body `{path}` |
+| POST | `/api/files/rename` | session body `{path, newName}` |
+| POST | `/api/files/move` | session body `{from, to, newName?}` |
 
 Contact write body (create/update): `firstname`, `lastname`, `fullname`, `org`, `title`, `emails[]`, `phones[{type,value}]`, `address{street,city,region,postal,country}`, `url`, `note`, `birthday?`, `specialDate?`, `specialDateLabel?`, `custom[{label,value}]` (stored as vCard `X-*` properties), `photoBase64?`, `removePhoto?`.  
 Updates merge into the existing vCard so unknown standard properties (e.g. `CATEGORIES`) are preserved. Editable custom fields are plain-text `X-*` properties.

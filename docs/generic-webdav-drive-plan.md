@@ -1,6 +1,6 @@
 # Generic WebDAV file storage implementation plan
 
-**Status:** Initial private-drive scope implemented; Sync, Push, and sharing remain follow-up milestones.
+**Status:** Initial private-drive scope implemented; portal Files tab added in 1.0.5. Sync, Push, and sharing remain follow-up milestones.
 
 ## Implementation result
 
@@ -8,6 +8,11 @@ The owner-only filesystem-backed release scope is implemented behind the
 `files_enabled` feature flag. Automated coverage includes atomic writes,
 quotas, path/symlink handling, account quarantine and username reuse, a
 two-user authenticated HTTP workflow, and all 104 WebDAV Litmus 0.13 tests.
+
+As of **1.0.5**, the user portal exposes a **Files** tab backed by
+`Baikal\Portal\FileService` and `/api/files/*` (same physical homes as
+`/dav.php/files/{username}/`): list, mkdir, upload, download, rename, move,
+delete, and quota status.
 
 The follow-up milestones in this document remain intentionally unimplemented:
 RFC 6578 file Sync, WebDAV-Push for files, mutable sharing ACLs, public links,
