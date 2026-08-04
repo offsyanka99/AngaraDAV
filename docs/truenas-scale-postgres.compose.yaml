@@ -65,7 +65,7 @@
 # full list): BAIKAL_LOCK_INSTALL, BAIKAL_ALLOW_REINSTALL, PORTAL_LOG_LEVEL,
 # TIME_FORMAT, BAIKAL_PORTAL_WEEK_START, BAIKAL_PUSH_EXTERNAL_URL,
 # PUSH_LOG_LEVEL, BAIKAL_FILES_STORAGE_PATH, BAIKAL_FILES_MAX_UPLOAD_MB,
-# BAIKAL_FILES_QUOTA_BYTES, BAIKAL_DAV_MAX_BODY_SIZE.
+# BAIKAL_FILES_QUOTA_MB, BAIKAL_DAV_MAX_BODY_SIZE.
 #
 # Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
 #       docs/DEPLOYMENT.md
@@ -140,7 +140,7 @@ services:
       # uploaded files are lost on every container recreate.
       # BAIKAL_FILES_STORAGE_PATH: "/var/lib/baikal-files"
       # BAIKAL_FILES_MAX_UPLOAD_MB: "1024"
-      # BAIKAL_FILES_QUOTA_BYTES: "10737418240"
+      # BAIKAL_FILES_QUOTA_MB: "10240"
       # BAIKAL_DAV_MAX_BODY_SIZE: "1G"
       # Skip entrypoint chown (recommended on TrueNAS after host chown 101:101):
       BAIKAL_SKIP_CHOWN: "1"

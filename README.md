@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.8`
+**Version:** `1.0.9`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -57,8 +57,9 @@ Legacy release history
 | `1.0.6` | Files tab: copy + multi-select bulk actions, full-width layout, upload create fix; CI apt install hardening for PHP 8.5 runners |
 | `1.0.7` | Admin **Maximum WebDAV file size** field now entered in MB instead of raw bytes (storage/env var `BAIKAL_FILES_MAX_UPLOAD_BYTES` unchanged, still bytes); documented that it is independent of the nginx/PHP upload ceilings |
 | `1.0.8` | Unified the Maximum WebDAV file size setting on a single MB standard end to end: `baikal.yaml`'s `files_max_upload_mb` and `BAIKAL_FILES_MAX_UPLOAD_MB` now store MB directly (previously bytes), matching the admin UI; the old byte-based key/env var still work as a one-time upgrade fallback |
+| `1.0.9` | Extended the MB standard to the WebDAV per-user quota setting: `files_quota_mb` / `BAIKAL_FILES_QUOTA_MB` replace the byte-based `files_quota_bytes` / `BAIKAL_FILES_QUOTA_BYTES` (old key/env var still work as a one-time upgrade fallback; `0` still means unlimited) |
 
-Image tags: `latest`, `1.0.8`, `sha-…`.
+Image tags: `latest`, `1.0.9`, `sha-…`.
 
 Quick start (Docker)
 --------------------

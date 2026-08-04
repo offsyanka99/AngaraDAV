@@ -39,7 +39,7 @@ class Standard extends \Baikal\Model\Config {
         "files_enabled"            => false,
         "files_storage_path"       => "",
         "files_max_upload_mb"      => 1024,
-        "files_quota_bytes"        => 10737418240,
+        "files_quota_mb"           => 10240,
         "files_quarantine_days"    => 30,
         "tasks_enabled"            => true,
         "notes_enabled"            => false,
@@ -119,8 +119,8 @@ class Standard extends \Baikal\Model\Config {
         ]));
 
         $oMorpho->add(new \Formal\Element\Text([
-            "prop"       => "files_quota_bytes",
-            "label"      => "WebDAV quota per user (bytes)",
+            "prop"       => "files_quota_mb",
+            "label"      => "WebDAV quota per user (MB)",
             "validation" => "required",
             "help"       => "Use 0 for unlimited application quota. Filesystem quotas are still recommended.",
         ]));
@@ -218,6 +218,13 @@ class Standard extends \Baikal\Model\Config {
     function set($sProp, $sValue) {
         if ($sProp === "files_max_upload_mb") {
             parent::set($sProp, max(1, min(1048576, (int) $sValue)));
+
+            return $this;
+        }
+
+        if ($sProp === "files_quota_mb") {
+            // 0 is meaningful ("unlimited"); do not force a minimum of 1 like upload size.
+            parent::set($sProp, max(0, min(1073741824, (int) $sValue)));
 
             return $this;
         }

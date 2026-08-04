@@ -76,7 +76,7 @@ $config = [
         'files_enabled'          => true,
         'files_storage_path'     => $temporaryRoot,
         'files_max_upload_mb'    => 1,
-        'files_quota_bytes'      => 10 * 1024 * 1024,
+        'files_quota_mb'         => 10,
         'files_quarantine_days'  => 30,
     ],
 ];

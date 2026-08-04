@@ -219,7 +219,7 @@ system:
   files_enabled: false
   files_storage_path: ''
   files_max_upload_mb: 1024
-  files_quota_bytes: 10737418240
+  files_quota_mb: 10240
   files_quarantine_days: 30
 ```
 
@@ -230,7 +230,7 @@ Environment overrides:
 
 - `BAIKAL_FILES_STORAGE_PATH`
 - `BAIKAL_FILES_MAX_UPLOAD_MB`
-- `BAIKAL_FILES_QUOTA_BYTES`
+- `BAIKAL_FILES_QUOTA_MB`
 
 Validate numeric values with conservative lower and upper bounds. Environment
 configuration overrides YAML consistently with the existing deployment model.

@@ -268,7 +268,7 @@ allowed to modify that calendar.
 | Enable CardDAV / CalDAV | Protocol roots and plugins |
 | Enable WebDAV file storage | Owner-only private file homes under `/dav.php/files/` |
 | WebDAV file storage path | Absolute path outside the web root; empty uses `Specific/files` |
-| WebDAV maximum file size / quota | Per-file upload ceiling in **MB** (`files_max_upload_mb` / `BAIKAL_FILES_MAX_UPLOAD_MB`) and per-user application quota in bytes (`files_quota_bytes` / `BAIKAL_FILES_QUOTA_BYTES`) |
+| WebDAV maximum file size / quota | Per-file upload ceiling in **MB** (`files_max_upload_mb` / `BAIKAL_FILES_MAX_UPLOAD_MB`) and per-user application quota, also in **MB** (`files_quota_mb` / `BAIKAL_FILES_QUOTA_MB`); `0` quota means unlimited |
 | Deleted user file retention | Days before quarantined homes become eligible for purge |
 | Enable Tasks (VTODO) | Default calendars + UI checkbox for todos |
 | Enable Notes (VJOURNAL) | Default calendars + UI checkbox for notes |
@@ -285,7 +285,7 @@ allowed to modify that calendar.
 | `BAIKAL_SKIP_CHOWN` | `1` | Skip entrypoint chown of `config/` + `Specific/` (use after host `chown 101:101`; recommended on TrueNAS) |
 | `BAIKAL_FILES_STORAGE_PATH` | absolute container path | Override `system.files_storage_path`; mount it persistently and make it writable by UID 101 |
 | `BAIKAL_FILES_MAX_UPLOAD_MB` | `1024` | Maximum completed file size (in MB) enforced while streaming PUT/COPY bodies |
-| `BAIKAL_FILES_QUOTA_BYTES` | `10737418240` | Per-user application quota; `0` disables the application quota |
+| `BAIKAL_FILES_QUOTA_MB` | `10240` | Per-user application quota, in MB; `0` disables the application quota |
 | `BAIKAL_DAV_MAX_BODY_SIZE` | `1G` | Nginx request-body ceiling; nginx size syntax such as `512M` or `2G` |
 | `TIME_FORMAT` / `BAIKAL_PORTAL_TIME_FORMAT` | `auto` (default), `12h`, `24h` | Portal time display |
 | `BAIKAL_PORTAL_WEEK_START` | `auto` (default), `monday`, `sunday` | Portal calendar week start |
@@ -293,7 +293,7 @@ allowed to modify that calendar.
 | `PUSH_LOG_LEVEL` / `BAIKAL_PUSH_LOG_LEVEL` | `off` (default), `error`, `warn`, `info`, `debug` | WebDAV-Push debug: `Specific/push_debug.log` |
 | `BAIKAL_PUSH_EXTERNAL_URL` | e.g. `https://dav.example.com/dav.php/` | Canonical client-reachable HTTPS DAV base URL for Push registration URLs |
 
-YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_mb`, `files_quota_bytes`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `push_external_url`, and `push_log_level`. **Env overrides YAML.** (`TZ` is the one exception: it only seeds the installer's initial `timezone` default and is not read again afterward.)
+YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `push_external_url`, and `push_log_level`. **Env overrides YAML.** (`TZ` is the one exception: it only seeds the installer's initial `timezone` default and is not read again afterward.)
 
 Leave `PORTAL_LOG_LEVEL` at `off` in production; use `debug` only while troubleshooting (verbose UI/API lines; no passwords). Request traces go to **`Specific/portal_debug.log`**, not nginx/docker error streams.
 
@@ -316,7 +316,7 @@ system:
   # Empty uses /var/www/baikal/Specific/files.
   files_storage_path: ''
   files_max_upload_mb: 1024        # 1024 MB per file
-  files_quota_bytes: 10737418240   # 10 GiB per user; 0 = unlimited
+  files_quota_mb: 10240            # 10240 MB (10 GiB) per user; 0 = unlimited
   files_quarantine_days: 30
 ```
 
@@ -359,7 +359,7 @@ services:
     environment:
       BAIKAL_FILES_STORAGE_PATH: /var/lib/baikal-files
       BAIKAL_FILES_MAX_UPLOAD_MB: "2048"
-      BAIKAL_FILES_QUOTA_BYTES: "21474836480"
+      BAIKAL_FILES_QUOTA_MB: "20480"
       BAIKAL_DAV_MAX_BODY_SIZE: 2G
     volumes:
       - /mnt/tank/apps/baikal/files:/var/lib/baikal-files

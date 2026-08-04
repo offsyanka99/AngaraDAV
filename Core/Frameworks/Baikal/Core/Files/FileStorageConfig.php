@@ -40,15 +40,8 @@ class FileStorageConfig {
         }
         $this->storagePath = self::normalizeAbsolutePath($configuredPath);
 
-        $this->maxUploadBytes = self::resolveMaxUploadMb($system) * 1048576;
-        $this->quotaBytes = self::configuredInteger(
-            $system,
-            'files_quota_bytes',
-            'BAIKAL_FILES_QUOTA_BYTES',
-            10737418240,
-            0,
-            PHP_INT_MAX
-        );
+        $this->maxUploadBytes = self::resolveMaxUploadBytes($system);
+        $this->quotaBytes = self::resolveQuotaBytes($system);
         $this->quarantineDays = self::configuredInteger(
             $system,
             'files_quarantine_days',
@@ -216,28 +209,50 @@ class FileStorageConfig {
     }
 
     /**
-     * Maximum upload size, in MB. Single source of truth is
-     * files_max_upload_mb / BAIKAL_FILES_MAX_UPLOAD_MB. Falls back to a
-     * pre-1.0.7 byte-based files_max_upload_bytes / BAIKAL_FILES_MAX_UPLOAD_BYTES
-     * value (converted once) only when the MB-based setting is absent, so
-     * existing installs keep their configured limit until re-saved.
+     * Maximum upload size, in bytes. Single source of truth is
+     * files_max_upload_mb / BAIKAL_FILES_MAX_UPLOAD_MB (stored in MB). Falls
+     * back to a pre-1.0.7 byte-based files_max_upload_bytes /
+     * BAIKAL_FILES_MAX_UPLOAD_BYTES value, used as-is with no MB rounding,
+     * only when the MB-based setting is absent, so existing installs keep
+     * their exact configured limit until re-saved.
      */
-    private static function resolveMaxUploadMb(array $system): int {
+    private static function resolveMaxUploadBytes(array $system): int {
         $hasMbSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_MB') !== null
             || array_key_exists('files_max_upload_mb', $system);
         if ($hasMbSetting) {
-            return self::configuredInteger($system, 'files_max_upload_mb', 'BAIKAL_FILES_MAX_UPLOAD_MB', 1024, 1, 1048576);
+            return self::configuredInteger($system, 'files_max_upload_mb', 'BAIKAL_FILES_MAX_UPLOAD_MB', 1024, 1, 1048576) * 1048576;
         }
 
         $hasLegacyBytesSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_BYTES') !== null
             || array_key_exists('files_max_upload_bytes', $system);
         if ($hasLegacyBytesSetting) {
-            $legacyBytes = self::configuredInteger($system, 'files_max_upload_bytes', 'BAIKAL_FILES_MAX_UPLOAD_BYTES', 1073741824, 1048576, PHP_INT_MAX);
-
-            return max(1, min(1048576, (int) round($legacyBytes / 1048576)));
+            return self::configuredInteger($system, 'files_max_upload_bytes', 'BAIKAL_FILES_MAX_UPLOAD_BYTES', 1073741824, 1048576, PHP_INT_MAX);
         }
 
-        return 1024;
+        return 1024 * 1048576;
+    }
+
+    /**
+     * Per-user application quota, in bytes (0 = unlimited). Single source of
+     * truth is files_quota_mb / BAIKAL_FILES_QUOTA_MB (stored in MB). Falls
+     * back to a pre-1.0.9 byte-based files_quota_bytes / BAIKAL_FILES_QUOTA_BYTES
+     * value, used as-is with no MB rounding, only when the MB-based setting
+     * is absent.
+     */
+    private static function resolveQuotaBytes(array $system): int {
+        $hasMbSetting = self::environmentValue('BAIKAL_FILES_QUOTA_MB') !== null
+            || array_key_exists('files_quota_mb', $system);
+        if ($hasMbSetting) {
+            return self::configuredInteger($system, 'files_quota_mb', 'BAIKAL_FILES_QUOTA_MB', 10240, 0, 1073741824) * 1048576;
+        }
+
+        $hasLegacyBytesSetting = self::environmentValue('BAIKAL_FILES_QUOTA_BYTES') !== null
+            || array_key_exists('files_quota_bytes', $system);
+        if ($hasLegacyBytesSetting) {
+            return self::configuredInteger($system, 'files_quota_bytes', 'BAIKAL_FILES_QUOTA_BYTES', 10737418240, 0, PHP_INT_MAX);
+        }
+
+        return 10240 * 1048576;
     }
 
     private static function configuredInteger(

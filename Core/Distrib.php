@@ -29,7 +29,7 @@
  * Product compatibility line (bump when documenting a release).
  * Full BAIKAL_VERSION appends +git.<sha> when a build SHA is available.
  */
-define('BAIKAL_VERSION_BASE', '1.0.8');
+define('BAIKAL_VERSION_BASE', '1.0.9');
 
 // Optional image build stamp written by Dockerfile (Core/BuildInfo.php).
 if (is_readable(__DIR__ . '/BuildInfo.php')) {
