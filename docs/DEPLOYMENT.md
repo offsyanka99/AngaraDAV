@@ -296,6 +296,13 @@ YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files
 
 Leave `PORTAL_LOG_LEVEL` at `off` in production; use `debug` only while troubleshooting (verbose UI/API lines; no passwords). Request traces go to **`Specific/portal_debug.log`**, not nginx/docker error streams.
 
+### Common deployment mistakes
+
+- **Setting `BAIKAL_FILES_STORAGE_PATH` without mounting it.** The env var only tells AngaraDAV *where inside the container* to store WebDAV files — it does not create persistence. If that path isn't also bind-mounted (e.g. add `- type: bind, source: /mnt/tank/apps/angaradav/files, target: /var/lib/baikal-files`) and `chown`'d to UID 101 like the other two mounts, every file uploaded there is lost the next time the container is recreated.
+- **`BAIKAL_FILES_STORAGE_PATH` / `BAIKAL_PUSH_EXTERNAL_URL` don't enable their features by themselves.** They only configure the path/URL to use *once* the corresponding feature is turned on in Admin → AngaraDAV Settings (**Enable WebDAV file storage**, **Enable WebDAV-Push**). Setting the env var alone does nothing until that admin checkbox is also checked.
+- **Debug log files are not visible in Dozzle, `docker logs`, or any other stdout/stderr-based log viewer.** `Specific/portal_debug.log` and `Specific/push_debug.log` are deliberately written to files, not stdout/stderr, specifically so routine activity doesn't flood the container's general log stream (see the Portal/Push logging notes above). To read them: `docker exec <container> tail -f /var/www/baikal/Specific/push_debug.log`, or `tail -f` the equivalent path on the host's bind-mounted `Specific/` dataset.
+- **Forgetting to turn `PORTAL_LOG_LEVEL`/`PUSH_LOG_LEVEL` back to `off`** after troubleshooting — both are meant to be temporary.
+
 ### Generic WebDAV file storage
 
 Enable private mounted-drive storage with **Admin -> AngaraDAV Settings -> Enable

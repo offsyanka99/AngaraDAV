@@ -135,6 +135,9 @@ services:
       # BAIKAL_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only
       # Generic WebDAV files are disabled by default. Enable in Admin settings.
+      # WARNING: if you uncomment this, you MUST also add a matching bind mount
+      # below (see "Optional separate dataset" in the volumes: section) or
+      # uploaded files are lost on every container recreate.
       # BAIKAL_FILES_STORAGE_PATH: "/var/lib/baikal-files"
       # BAIKAL_FILES_MAX_UPLOAD_BYTES: "1073741824"
       # BAIKAL_FILES_QUOTA_BYTES: "10737418240"
