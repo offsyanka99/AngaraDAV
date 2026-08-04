@@ -155,6 +155,7 @@ class Notifier {
                     $this->logger->warn('push delivery failed', [
                         'endpoint' => $this->redactEndpoint($endpoint),
                         'status'   => $report->getResponse()?->getStatusCode(),
+                        'reason'   => $report->getReason(),
                     ]);
                 }
             }
