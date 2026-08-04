@@ -123,6 +123,9 @@ services:
       - "31088:80"
 
     environment:
+      # Also seeds the installer's default Server Time zone (Admin -> AngaraDAV
+      # Settings) when baikal.yaml has no timezone yet. One-time default only;
+      # change it in Admin afterward if you need to override it.
       TZ: "America/Toronto"
       TIME_FORMAT: "24h"                 # or 12h
       BAIKAL_PORTAL_WEEK_START: "monday" # or sunday

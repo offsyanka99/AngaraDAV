@@ -275,7 +275,7 @@ allowed to modify that calendar.
 
 | Env | Values / default | Effect |
 |-----|------------------|--------|
-| `TZ` | e.g. `America/Toronto` | Container timezone (logs, PHP defaults) |
+| `TZ` | e.g. `America/Toronto` | Container timezone (logs, PHP defaults). Also seeds the installer's default **Server Time zone** (`system.timezone`) when no `baikal.yaml` value exists yet — one-time default, not a live override; change it in Admin -> AngaraDAV Settings afterward if needed |
 | `BAIKAL_LOCK_INSTALL` | `1` | Force installer lock even if `INSTALL_DISABLED` is missing |
 | `BAIKAL_ALLOW_REINSTALL` | `1` | Allow re-opening the installer when lock env is set |
 | `BAIKAL_SKIP_CHOWN` | `1` | Skip entrypoint chown of `config/` + `Specific/` (use after host `chown 101:101`; recommended on TrueNAS) |
@@ -289,7 +289,7 @@ allowed to modify that calendar.
 | `PUSH_LOG_LEVEL` / `BAIKAL_PUSH_LOG_LEVEL` | `off` (default), `error`, `warn`, `info`, `debug` | WebDAV-Push debug: `Specific/push_debug.log` |
 | `BAIKAL_PUSH_EXTERNAL_URL` | e.g. `https://dav.example.com/dav.php/` | Canonical client-reachable HTTPS DAV base URL for Push registration URLs |
 
-YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_bytes`, `files_quota_bytes`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `push_external_url`, and `push_log_level`. **Env overrides YAML.**
+YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_bytes`, `files_quota_bytes`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `push_external_url`, and `push_log_level`. **Env overrides YAML.** (`TZ` is the one exception: it only seeds the installer's initial `timezone` default and is not read again afterward.)
 
 Leave `PORTAL_LOG_LEVEL` at `off` in production; use `debug` only while troubleshooting (verbose UI/API lines; no passwords). Request traces go to **`Specific/portal_debug.log`**, not nginx/docker error streams.
 
