@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `0.11.1-fork.5`
+**Version:** `1.0.0`
 
 TypeScript SPA for calendars and contacts. Styled like the bookmarks-sync
 admin UI (dark surface cards, sticky topnav, primary blue actions, footer pinned

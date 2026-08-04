@@ -1,6 +1,6 @@
 # AngaraDAV deployment guide
 
-**Compatibility version:** `0.11.1-fork.5` (derived from Baïkal 0.11.1)
+**Compatibility version:** `1.0.0` (derived from Baïkal 0.11.1)
 
 AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file server for Docker and TrueNAS SCALE. It is derived from [Baïkal](https://sabre.io/baikal/) and powered by SabreDAV.
 
@@ -568,9 +568,18 @@ if a new sabre/dav release changes those files.
 ## Upstream
 
 Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-io/Baikal) **0.11.1**.  
-The first independent AngaraDAV release will replace the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
+AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 1.0.0
+
+- First independent AngaraDAV release (previously versioned as `0.11.1-fork.*`)
+- Supported database backends: **SQLite** and **PostgreSQL**. MySQL support has been removed
+- New `docs/truenas-scale-postgres.compose.yaml` for deploying with a bundled PostgreSQL 18 container
+- `main` is now the default Git branch (`master` removed)
+- WebDAV Basic/Digest auth (`/dav.php/`, `/cal.php/`, `/card.php/`) now has IP-based rate limiting, matching the admin and portal logins; digest comparison uses constant-time `hash_equals()`
+- Admin panel CSP hardened with explicit `object-src 'none'; frame-src 'none'`
 
 ### 0.11.1-fork.5
 
