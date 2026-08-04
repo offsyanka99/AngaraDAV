@@ -215,7 +215,7 @@ class PushPlugin extends ServerPlugin {
         if ($parsed === null) {
             return true;
         }
-        $this->handleRegister($response, $parsed);
+        $this->handleRegister($request, $response, $parsed);
 
         return false;
     }
@@ -255,7 +255,7 @@ class PushPlugin extends ServerPlugin {
     /**
      * @param array<string, mixed> $parsed
      */
-    protected function handleRegister(ResponseInterface $response, array $parsed): void {
+    protected function handleRegister(RequestInterface $request, ResponseInterface $response, array $parsed): void {
         $path = trim($this->server->getRequestUri(), '/');
         $cap = $this->capability($path);
         if ($cap === null) {
@@ -299,6 +299,14 @@ class PushPlugin extends ServerPlugin {
 
         $principal = $this->currentPrincipal();
         if ($principal === null) {
+            // DAVACL disables the core Auth plugin's autoRequireLogin, so it never
+            // sends a WWW-Authenticate challenge on its own; without one, clients
+            // (e.g. DAVx5's blind first push-register attempt) have no way to
+            // compute credentials for a retry, so issue it here ourselves.
+            $auth = $this->server->getPlugin('auth');
+            if ($auth instanceof \Sabre\DAV\Auth\Plugin) {
+                $auth->challenge($request, $response);
+            }
             throw new \Sabre\DAV\Exception\NotAuthenticated('Authentication required to register a push subscription');
         }
         $acl = $this->server->getPlugin('acl');
