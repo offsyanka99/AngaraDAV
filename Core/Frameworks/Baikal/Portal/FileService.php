@@ -385,17 +385,11 @@ class FileService {
 
     private function requireFileConfig(): FileStorageConfig {
         if (!$this->isEnabledInConfig()) {
-            throw new ApiException(
-                'WebDAV file storage is disabled. Enable it under Admin → AngaraDAV Settings.',
-                503
-            );
+            throw new ApiException('WebDAV file storage is disabled. Enable it under Admin → AngaraDAV Settings.', 503);
         }
         $this->ensureInitialized();
         if ($this->fileConfig === null) {
-            throw new ApiException(
-                $this->initError ?: 'WebDAV file storage is not available',
-                503
-            );
+            throw new ApiException($this->initError ?: 'WebDAV file storage is not available', 503);
         }
 
         return $this->fileConfig;
