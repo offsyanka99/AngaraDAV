@@ -104,102 +104,17 @@ HTML;
         if (version_compare($sVersionFrom, '0.3.0', '<')) {
             // Upgrading from sabre/dav 1.8 schema to 3.1 schema.
 
-            if ($databaseConfig['mysql'] === true) {
-                // MySQL upgrade
+            // SQLite upgrade (MySQL is no longer supported; see the guard in render())
 
-                // sabre/dav 2.0 changes
-                foreach (['calendar', 'addressbook'] as $dataType) {
-                    $tableName = $dataType . 's';
-                    $pdo->exec("ALTER TABLE $tableName ADD synctoken INT(11) UNSIGNED NOT NULL DEFAULT '1'");
-                    $this->aSuccess[] = 'synctoken was added to ' . $tableName;
+            // sabre/dav 2.0 changes
+            foreach (['calendar', 'addressbook'] as $dataType) {
+                $tableName = $dataType . 's';
+                // Note: we can't remove the ctag field in sqlite :(;
+                $pdo->exec("ALTER TABLE $tableName ADD synctoken integer");
+                $this->aSuccess[] = 'synctoken was added to ' . $tableName;
 
-                    $pdo->exec("ALTER TABLE $tableName DROP ctag");
-                    $this->aSuccess[] = 'ctag was removed from ' . $tableName;
-
-                    $changesTable = $dataType . 'changes';
-                    $pdo->exec("
-                        CREATE TABLE $changesTable (
-                            id INT(11) UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-                            uri VARCHAR(200) NOT NULL,
-                            synctoken INT(11) UNSIGNED NOT NULL,
-                            {$dataType}id INT(11) UNSIGNED NOT NULL,
-                            operation TINYINT(1) NOT NULL,
-                            INDEX {$dataType}id_synctoken ({$dataType}id, synctoken)
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
-                    ");
-                    $this->aSuccess[] = $changesTable . ' was created';
-                }
-
+                $changesTable = $dataType . 'changes';
                 $pdo->exec("
-                    CREATE TABLE calendarsubscriptions (
-                        id INT(11) UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-                        uri VARCHAR(200) NOT NULL,
-                        principaluri VARCHAR(100) NOT NULL,
-                        source TEXT,
-                        displayname VARCHAR(100),
-                        refreshrate VARCHAR(10),
-                        calendarorder INT(11) UNSIGNED NOT NULL DEFAULT '0',
-                        calendarcolor VARCHAR(10),
-                        striptodos TINYINT(1) NULL,
-                        stripalarms TINYINT(1) NULL,
-                        stripattachments TINYINT(1) NULL,
-                        lastmodified INT(11) UNSIGNED,
-                        UNIQUE(principaluri, uri)
-                    );
-                ");
-                $this->aSuccess[] = 'calendarsubscriptions was created';
-
-                $pdo->exec("
-                    ALTER TABLE cards
-                    ADD etag VARBINARY(32),
-                    ADD size INT(11) UNSIGNED NOT NULL;
-                ");
-                $this->aSuccess[] = 'etag and size were added to cards';
-
-                // sabre/dav 2.1 changes;
-                $pdo->exec('ALTER TABLE calendarobjects ADD uid VARCHAR(200)');
-
-                $this->aSuccess[] = 'uid was added to calendarobjects';
-
-                $pdo->exec('
-                    CREATE TABLE IF NOT EXISTS schedulingobjects
-                    (
-                        id INT(11) UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-                        principaluri VARCHAR(255),
-                        calendardata MEDIUMBLOB,
-                        uri VARCHAR(200),
-                        lastmodified INT(11) UNSIGNED,
-                        etag VARCHAR(32),
-                        size INT(11) UNSIGNED NOT NULL
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
-                ');
-
-                $this->aSuccess[] = 'schedulingobjects was created';
-
-                // sabre/dav 3.0 changes
-                $pdo->exec("
-                    CREATE TABLE propertystorage (
-                        id INT UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-                        path VARBINARY(1024) NOT NULL,
-                        name VARBINARY(100) NOT NULL,
-                        valuetype INT UNSIGNED,
-                        value MEDIUMBLOB
-                    );
-                ");
-                $pdo->exec('CREATE UNIQUE INDEX path_property ON propertystorage (path(600), name(100));');
-                $this->aSuccess[] = 'propertystorage was created';
-            } else {
-                // SQLite upgrade
-
-                // sabre/dav 2.0 changes
-                foreach (['calendar', 'addressbook'] as $dataType) {
-                    $tableName = $dataType . 's';
-                    // Note: we can't remove the ctag field in sqlite :(;
-                    $pdo->exec("ALTER TABLE $tableName ADD synctoken integer");
-                    $this->aSuccess[] = 'synctoken was added to ' . $tableName;
-
-                    $changesTable = $dataType . 'changes';
-                    $pdo->exec("
                         CREATE TABLE $changesTable (
                             id integer primary key asc,
                             uri text,
@@ -208,9 +123,9 @@ HTML;
                             operation bool
                         );
                     ");
-                    $this->aSuccess[] = $changesTable . ' was created';
-                }
-                $pdo->exec("
+                $this->aSuccess[] = $changesTable . ' was created';
+            }
+            $pdo->exec("
                     CREATE TABLE calendarsubscriptions (
                         id integer primary key asc,
                         uri text,
@@ -226,20 +141,20 @@ HTML;
                         lastmodified int
                     );
                 ");
-                $this->aSuccess[] = 'calendarsubscriptions was created';
-                $pdo->exec("CREATE INDEX principaluri_uri ON calendarsubscriptions (principaluri, uri);");
+            $this->aSuccess[] = 'calendarsubscriptions was created';
+            $pdo->exec("CREATE INDEX principaluri_uri ON calendarsubscriptions (principaluri, uri);");
 
-                $pdo->exec("
+            $pdo->exec("
                     ALTER TABLE cards ADD etag text;
                     ALTER TABLE cards ADD size integer;
                 ");
-                $this->aSuccess[] = 'etag and size were added to cards';
+            $this->aSuccess[] = 'etag and size were added to cards';
 
-                // sabre/dav 2.1 changes;
-                $pdo->exec('ALTER TABLE calendarobjects ADD uid TEXT');
-                $this->aSuccess[] = 'uid was added to calendarobjects';
+            // sabre/dav 2.1 changes;
+            $pdo->exec('ALTER TABLE calendarobjects ADD uid TEXT');
+            $this->aSuccess[] = 'uid was added to calendarobjects';
 
-                $pdo->exec('
+            $pdo->exec('
                     CREATE TABLE IF NOT EXISTS schedulingobjects (
                         id integer primary key asc,
                         principaluri text,
@@ -250,10 +165,10 @@ HTML;
                         size integer
                     )
                 ');
-                $this->aSuccess[] = 'schedulingobjects was created';
+            $this->aSuccess[] = 'schedulingobjects was created';
 
-                // sabre/dav 3.0 changes
-                $pdo->exec("
+            // sabre/dav 3.0 changes
+            $pdo->exec("
                     CREATE TABLE propertystorage (
                         id integer primary key asc,
                         path text,
@@ -262,11 +177,10 @@ HTML;
                         value blob
                     );
                 ");
-                $pdo->exec('CREATE UNIQUE INDEX path_property ON propertystorage (path, name);');
-                $this->aSuccess[] = 'propertystorage was created';
-            }
+            $pdo->exec('CREATE UNIQUE INDEX path_property ON propertystorage (path, name);');
+            $this->aSuccess[] = 'propertystorage was created';
 
-            // Statements for both SQLite and MySQL
+            // Statements for SQLite
             $result = $pdo->query('SELECT id, carddata FROM cards');
             $stmt = $pdo->prepare('UPDATE cards SET etag = ?, size = ? WHERE id = ?');
             while ($row = $result->fetch(\PDO::FETCH_ASSOC)) {
@@ -433,69 +347,6 @@ CREATE TABLE calendars (
 SQL
                 );
                 $this->aSuccess[] = 'Created new calendars table';
-            } else { // mysql
-                $pdo->exec(<<<SQL
-CREATE TABLE calendarinstances (
-    id INTEGER UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    calendarid INTEGER UNSIGNED NOT NULL,
-    principaluri VARBINARY(100),
-    access TINYINT(1) NOT NULL DEFAULT '1' COMMENT '1 = owner, 2 = read, 3 = readwrite',
-    displayname VARCHAR(100),
-    uri VARBINARY(200),
-    description TEXT,
-    calendarorder INT(11) UNSIGNED NOT NULL DEFAULT '0',
-    calendarcolor VARBINARY(10),
-    timezone TEXT,
-    transparent TINYINT(1) NOT NULL DEFAULT '0',
-    share_href VARBINARY(100),
-    share_displayname VARCHAR(100),
-    share_invitestatus TINYINT(1) NOT NULL DEFAULT '2' COMMENT '1 = noresponse, 2 = accepted, 3 = declined, 4 = invalid',
-    UNIQUE(principaluri, uri),
-    UNIQUE(calendarid, principaluri),
-    UNIQUE(calendarid, share_href)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-SQL
-                );
-                $this->aSuccess[] = 'Created calendarinstances table';
-                $pdo->exec('
-INSERT INTO calendarinstances
-    (
-        calendarid,
-        principaluri,
-        access,
-        displayname,
-        uri,
-        description,
-        calendarorder,
-        calendarcolor,
-        transparent
-    )
-SELECT
-    id,
-    principaluri,
-    1,
-    displayname,
-    uri,
-    description,
-    calendarorder,
-    calendarcolor,
-    transparent
-FROM calendars
-');
-                $this->aSuccess[] = 'Migrated calendarinstances table';
-                $calendarBackup = 'calendars_3_1';
-                $pdo->exec('RENAME TABLE calendars TO ' . $calendarBackup);
-                $this->aSuccess[] = 'Did calendars backup';
-
-                $pdo->exec(<<<SQL
-CREATE TABLE calendars (
-    id INTEGER UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    synctoken INTEGER UNSIGNED NOT NULL DEFAULT '1',
-    components VARBINARY(21)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
-SQL
-                );
-                $this->aSuccess[] = 'Created new calendars table';
             }
 
             $pdo->exec(<<<SQL
@@ -514,7 +365,9 @@ SQL
             $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
 
             $oConfig = new \Baikal\Model\Config\Database();
-            $oConfig->set("backend", intval($config['database']['mysql']) === 1 ? 'mysql' : 'sqlite');
+            // Legacy boolean 'mysql' flag is guarded off in render(); anything reaching
+            // here predates the 'backend' key and was SQLite.
+            $oConfig->set("backend", 'sqlite');
             $oConfig->persist();
         }
 

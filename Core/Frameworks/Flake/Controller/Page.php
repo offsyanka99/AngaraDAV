@@ -85,7 +85,7 @@ class Page extends \Flake\Core\Render\Container {
         header("Referrer-Policy: no-referrer");
         header("X-XSS-Protection: 0");
         header("Permissions-Policy: geolocation=(), microphone=(), camera=()");
-        header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+        header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
         if (\Flake\Util\Tools::getCurrentProtocol() === "https") {
             header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
         }
