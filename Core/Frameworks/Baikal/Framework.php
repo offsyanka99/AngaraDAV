@@ -86,7 +86,7 @@ class Framework extends \Flake\Core\Framework {
         // Notices/deprecations are informational by PHP's own semantics (e.g.
         // web-push's GMP/BCMath recommendation); don't promote them to fatal
         // exceptions, only real warnings/errors.
-        static $nonFatal = E_NOTICE | E_USER_NOTICE | E_DEPRECATED | E_USER_DEPRECATED | E_STRICT;
+        static $nonFatal = E_NOTICE | E_USER_NOTICE | E_DEPRECATED | E_USER_DEPRECATED;
         if ($errno & $nonFatal) {
             return false;
         }
