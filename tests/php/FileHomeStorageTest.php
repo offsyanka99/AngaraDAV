@@ -85,7 +85,7 @@ $config = new FileStorageConfig([
     'system' => [
         'files_enabled'          => true,
         'files_storage_path'     => $temporaryRoot,
-        'files_max_upload_bytes' => 1048576,
+        'files_max_upload_mb'    => 1,
         'files_quota_bytes'      => 10,
         'files_quarantine_days'  => 30,
     ],
@@ -213,7 +213,7 @@ $purgeConfig = new FileStorageConfig([
     'system' => [
         'files_enabled'          => true,
         'files_storage_path'     => $temporaryRoot,
-        'files_max_upload_bytes' => 1048576,
+        'files_max_upload_mb'    => 1,
         'files_quota_bytes'      => 10,
         'files_quarantine_days'  => 0,
     ],

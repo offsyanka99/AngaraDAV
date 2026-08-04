@@ -40,14 +40,7 @@ class FileStorageConfig {
         }
         $this->storagePath = self::normalizeAbsolutePath($configuredPath);
 
-        $this->maxUploadBytes = self::configuredInteger(
-            $system,
-            'files_max_upload_bytes',
-            'BAIKAL_FILES_MAX_UPLOAD_BYTES',
-            1073741824,
-            1048576,
-            PHP_INT_MAX
-        );
+        $this->maxUploadBytes = self::resolveMaxUploadMb($system) * 1048576;
         $this->quotaBytes = self::configuredInteger(
             $system,
             'files_quota_bytes',
@@ -220,6 +213,31 @@ class FileStorageConfig {
             }
             $current = $parent;
         }
+    }
+
+    /**
+     * Maximum upload size, in MB. Single source of truth is
+     * files_max_upload_mb / BAIKAL_FILES_MAX_UPLOAD_MB. Falls back to a
+     * pre-1.0.7 byte-based files_max_upload_bytes / BAIKAL_FILES_MAX_UPLOAD_BYTES
+     * value (converted once) only when the MB-based setting is absent, so
+     * existing installs keep their configured limit until re-saved.
+     */
+    private static function resolveMaxUploadMb(array $system): int {
+        $hasMbSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_MB') !== null
+            || array_key_exists('files_max_upload_mb', $system);
+        if ($hasMbSetting) {
+            return self::configuredInteger($system, 'files_max_upload_mb', 'BAIKAL_FILES_MAX_UPLOAD_MB', 1024, 1, 1048576);
+        }
+
+        $hasLegacyBytesSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_BYTES') !== null
+            || array_key_exists('files_max_upload_bytes', $system);
+        if ($hasLegacyBytesSetting) {
+            $legacyBytes = self::configuredInteger($system, 'files_max_upload_bytes', 'BAIKAL_FILES_MAX_UPLOAD_BYTES', 1073741824, 1048576, PHP_INT_MAX);
+
+            return max(1, min(1048576, (int) round($legacyBytes / 1048576)));
+        }
+
+        return 1024;
     }
 
     private static function configuredInteger(

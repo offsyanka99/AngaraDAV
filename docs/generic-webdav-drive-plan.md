@@ -218,7 +218,7 @@ Add defaults and admin controls:
 system:
   files_enabled: false
   files_storage_path: ''
-  files_max_upload_bytes: 1073741824
+  files_max_upload_mb: 1024
   files_quota_bytes: 10737418240
   files_quarantine_days: 30
 ```
@@ -229,7 +229,7 @@ unlimited, but the admin UI and documentation must state that explicitly.
 Environment overrides:
 
 - `BAIKAL_FILES_STORAGE_PATH`
-- `BAIKAL_FILES_MAX_UPLOAD_BYTES`
+- `BAIKAL_FILES_MAX_UPLOAD_MB`
 - `BAIKAL_FILES_QUOTA_BYTES`
 
 Validate numeric values with conservative lower and upper bounds. Environment

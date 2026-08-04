@@ -86,7 +86,7 @@
 #                                Specific/push_debug.log (default off)
 #   BAIKAL_FILES_STORAGE_PATH=/var/lib/baikal-files
 #                              — optional separately mounted file-home dataset
-#   BAIKAL_FILES_MAX_UPLOAD_BYTES=1073741824
+#   BAIKAL_FILES_MAX_UPLOAD_MB=1024
 #   BAIKAL_FILES_QUOTA_BYTES=10737418240
 #   BAIKAL_DAV_MAX_BODY_SIZE=1G — nginx PUT request ceiling
 #
@@ -139,7 +139,7 @@ services:
       # below (see "Optional separate dataset" in the volumes: section) or
       # uploaded files are lost on every container recreate.
       # BAIKAL_FILES_STORAGE_PATH: "/var/lib/baikal-files"
-      # BAIKAL_FILES_MAX_UPLOAD_BYTES: "1073741824"
+      # BAIKAL_FILES_MAX_UPLOAD_MB: "1024"
       # BAIKAL_FILES_QUOTA_BYTES: "10737418240"
       # BAIKAL_DAV_MAX_BODY_SIZE: "1G"
       # Skip entrypoint chown (recommended on TrueNAS after host chown 101:101):

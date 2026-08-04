@@ -86,7 +86,7 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
     # Portal multipart + DAV uploads: PHP default upload_max_filesize is 2M and
     # rejects larger files before FileService runs (UI shows app max ~1G).
     && printf '%s\n' \
-         '; AngaraDAV — align with system.files_max_upload_bytes default (1 GiB)' \
+         '; AngaraDAV — align with system.files_max_upload_mb default (1024 MB)' \
          'upload_max_filesize = 1G' \
          'post_max_size = 1G' \
          'max_file_uploads = 50' \

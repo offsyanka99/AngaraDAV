@@ -7,8 +7,8 @@ system:
     files_enabled: false
     # Empty uses Specific/files. Env: BAIKAL_FILES_STORAGE_PATH.
     files_storage_path: ''
-    # Env overrides: BAIKAL_FILES_MAX_UPLOAD_BYTES / BAIKAL_FILES_QUOTA_BYTES.
-    files_max_upload_bytes: 1073741824
+    # Env overrides: BAIKAL_FILES_MAX_UPLOAD_MB / BAIKAL_FILES_QUOTA_BYTES.
+    files_max_upload_mb: 1024
     files_quota_bytes: 10737418240
     files_quarantine_days: 30
     tasks_enabled: true
