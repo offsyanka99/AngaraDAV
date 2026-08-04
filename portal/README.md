@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `1.0.5`
+**Version:** `1.0.6`
 
 TypeScript SPA for calendars, contacts, tasks, notes, and private WebDAV files.
 Styled like the bookmarks-sync admin UI (dark surface cards, sticky topnav,

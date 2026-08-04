@@ -30,7 +30,7 @@ type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 const TAB_STORAGE_KEY = "angaradav-portal-tab";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "1.0.5";
+const APP_VERSION_FALLBACK = "1.0.6";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {
