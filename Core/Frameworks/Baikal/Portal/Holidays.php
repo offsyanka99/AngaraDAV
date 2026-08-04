@@ -131,7 +131,7 @@ class Holidays {
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_TIMEOUT        => 15,
                 CURLOPT_CONNECTTIMEOUT => 8,
-                CURLOPT_USERAGENT      => 'AngaraDAV-Portal/1.0.4',
+                CURLOPT_USERAGENT      => 'AngaraDAV-Portal/1.0.7',
                 CURLOPT_HTTPHEADER     => ['Accept: application/json'],
             ]);
             $body = curl_exec($ch);

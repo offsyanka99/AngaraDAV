@@ -268,7 +268,7 @@ allowed to modify that calendar.
 | Enable CardDAV / CalDAV | Protocol roots and plugins |
 | Enable WebDAV file storage | Owner-only private file homes under `/dav.php/files/` |
 | WebDAV file storage path | Absolute path outside the web root; empty uses `Specific/files` |
-| WebDAV maximum file size / quota | Per-file upload ceiling and per-user application quota, in bytes |
+| WebDAV maximum file size / quota | Per-file upload ceiling in **MB** and per-user application quota in bytes. Env vars (`BAIKAL_FILES_MAX_UPLOAD_BYTES`) and `baikal.yaml` still store the file size limit in bytes; the admin UI field converts to/from MB |
 | Deleted user file retention | Days before quarantined homes become eligible for purge |
 | Enable Tasks (VTODO) | Default calendars + UI checkbox for todos |
 | Enable Notes (VJOURNAL) | Default calendars + UI checkbox for notes |
@@ -303,6 +303,7 @@ Leave `PORTAL_LOG_LEVEL` at `off` in production; use `debug` only while troubles
 - **`BAIKAL_FILES_STORAGE_PATH` / `BAIKAL_PUSH_EXTERNAL_URL` don't enable their features by themselves.** They only configure the path/URL to use *once* the corresponding feature is turned on in Admin → AngaraDAV Settings (**Enable WebDAV file storage**, **Enable WebDAV-Push**). Setting the env var alone does nothing until that admin checkbox is also checked.
 - **Debug log files are not visible in Dozzle, `docker logs`, or any other stdout/stderr-based log viewer.** `Specific/portal_debug.log` and `Specific/push_debug.log` are deliberately written to files, not stdout/stderr, specifically so routine activity doesn't flood the container's general log stream (see the Portal/Push logging notes above). To read them: `docker exec <container> tail -f /var/www/baikal/Specific/push_debug.log`, or `tail -f` the equivalent path on the host's bind-mounted `Specific/` dataset.
 - **Forgetting to turn `PORTAL_LOG_LEVEL`/`PUSH_LOG_LEVEL` back to `off`** after troubleshooting — both are meant to be temporary.
+- **Raising "Maximum WebDAV file size" in the admin UI without also raising the nginx/PHP upload ceilings.** That field (entered in MB) only enforces the application-level limit while streaming a PUT/COPY body. It is independent of nginx's `client_max_body_size` (`BAIKAL_DAV_MAX_BODY_SIZE`, default `1G`) and PHP's `upload_max_filesize`/`post_max_size` (baked into the image at `1G`). Raising only the admin setting above those still gets uploads rejected by nginx/PHP first.
 
 ### Generic WebDAV file storage
 
@@ -371,9 +372,13 @@ chown -R 101:101 /mnt/tank/apps/baikal/files
 chmod 700 /mnt/tank/apps/baikal/files
 ```
 
-The application file limit is expressed in bytes. The nginx
-`BAIKAL_DAV_MAX_BODY_SIZE` uses nginx size syntax and must be at least as large
-as the application limit. Filesystem/ZFS quotas remain the strongest final
+The admin UI's **Maximum WebDAV file size** field is entered in MB (stored
+internally, and via `BAIKAL_FILES_MAX_UPLOAD_BYTES` / `files_max_upload_bytes`,
+in bytes). It is **not** derived from, or synchronized with, the nginx/PHP
+upload ceilings below — the nginx `BAIKAL_DAV_MAX_BODY_SIZE` and the image's
+PHP `upload_max_filesize`/`post_max_size` must be set at least as large
+separately, or uploads will be rejected by nginx/PHP before this application
+limit is ever checked. Filesystem/ZFS quotas remain the strongest final
 backstop; the application quota provides per-user reporting and `507
 Insufficient Storage` responses.
 

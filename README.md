@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.6`
+**Version:** `1.0.7`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -55,8 +55,9 @@ Legacy release history
 | `1.0.4` | Fixed push delivery pinning to an unreachable IPv6 address on hosts with broken/absent IPv6 routing (`connectionPin()` now prefers IPv4) |
 | `1.0.5` | Portal **Files** tab for private WebDAV homes (browse/upload/download/rename/delete), tab persistence, user menu + Admin role Administration section |
 | `1.0.6` | Files tab: copy + multi-select bulk actions, full-width layout, upload create fix; CI apt install hardening for PHP 8.5 runners |
+| `1.0.7` | Admin **Maximum WebDAV file size** field now entered in MB instead of raw bytes (storage/env var `BAIKAL_FILES_MAX_UPLOAD_BYTES` unchanged, still bytes); documented that it is independent of the nginx/PHP upload ceilings |
 
-Image tags: `latest`, `1.0.6`, `sha-…`.
+Image tags: `latest`, `1.0.7`, `sha-…`.
 
 Quick start (Docker)
 --------------------

@@ -113,8 +113,8 @@ class Standard extends \Baikal\Model\Config {
         ]));
 
         $oMorpho->add(new \Formal\Element\Text([
-            "prop"       => "files_max_upload_bytes",
-            "label"      => "Maximum WebDAV file size (bytes)",
+            "prop"       => "files_max_upload_mb",
+            "label"      => "Maximum WebDAV file size (MB)",
             "validation" => "required",
         ]));
 
@@ -216,6 +216,15 @@ class Standard extends \Baikal\Model\Config {
     }
 
     function set($sProp, $sValue) {
+        // Virtual, form-only property backed by files_max_upload_bytes so
+        // baikal.yaml / BAIKAL_FILES_MAX_UPLOAD_BYTES keep storing bytes
+        // (existing installs, docs, and code are unaffected).
+        if ($sProp === "files_max_upload_mb") {
+            parent::set("files_max_upload_bytes", (int) round(((float) $sValue) * 1048576));
+
+            return $this;
+        }
+
         if ($sProp === "admin_passwordhash" || $sProp === "admin_passwordhash_confirm") {
             # Special handling for password and passwordconfirm
 
@@ -255,6 +264,10 @@ class Standard extends \Baikal\Model\Config {
     }
 
     function get($sProp) {
+        if ($sProp === "files_max_upload_mb") {
+            return (int) round(((int) $this->aData["files_max_upload_bytes"]) / 1048576);
+        }
+
         if ($sProp === "admin_passwordhash" || $sProp === "admin_passwordhash_confirm") {
             return "";
         }
