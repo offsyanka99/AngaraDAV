@@ -334,6 +334,14 @@ private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
 is `info` or `debug` (list/upload/download/mkdir/rename/delete).
 
+**Upload size limits:** the UI “max upload” value is the AngaraDAV app quota
+(`files_max_upload_bytes`). Multipart portal uploads also need matching
+**PHP** (`upload_max_filesize` / `post_max_size`, set to **1G** in the Docker
+image) and **nginx** `/api/` `client_max_body_size` (default **1G**, same
+`BAIKAL_DAV_MAX_BODY_SIZE` override as DAV). A 4 MB file failing with
+“exceeds the server size limit” usually means PHP/nginx still at the old 2 M
+defaults — pull a rebuild that includes the 1G PHP/nginx settings.
+
 #### Storage and limits
 
 The default `Specific/files` tree is already part of the packaged persistent

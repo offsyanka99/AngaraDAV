@@ -3139,20 +3139,22 @@ export function mountApp(root: HTMLElement): void {
             const current = entry?.name ?? "";
             return `<div class="cal-modal" id="files-rename-modal" role="dialog" aria-modal="true" aria-labelledby="files-rename-title">
               <div class="cal-modal-backdrop" data-action="files-rename-close"></div>
-              <div class="cal-modal-card" style="max-width:28rem">
+              <div class="cal-modal-card cal-modal-card-sm">
                 <header class="cal-modal-header">
                   <h3 id="files-rename-title">Rename</h3>
                   <button type="button" class="info-modal-close" data-action="files-rename-close" aria-label="Close">×</button>
                 </header>
-                <form class="stack" data-form="files-rename">
-                  <input type="hidden" name="path" value="${esc(filesRenamePath)}" />
-                  <label>New name
-                    <input type="text" name="newName" value="${esc(current)}" required maxlength="255" autocomplete="off" />
-                  </label>
-                  <div class="row-actions">
+                <form class="stack" data-form="files-rename" id="files-rename-form">
+                  <div class="cal-modal-body">
+                    <input type="hidden" name="path" value="${esc(filesRenamePath)}" />
+                    <label>New name
+                      <input type="text" name="newName" value="${esc(current)}" required maxlength="255" autocomplete="off" />
+                    </label>
+                  </div>
+                  <footer class="cal-modal-footer">
                     <button type="button" class="btn btn-ghost" data-action="files-rename-close">Cancel</button>
                     <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Rename</button>
-                  </div>
+                  </footer>
                 </form>
               </div>
             </div>`;
@@ -3167,16 +3169,22 @@ export function mountApp(root: HTMLElement): void {
             const kind = entry?.type === "dir" ? "folder" : "file";
             return `<div class="cal-modal" id="files-delete-modal" role="dialog" aria-modal="true" aria-labelledby="files-delete-title">
               <div class="cal-modal-backdrop" data-action="files-delete-close"></div>
-              <div class="cal-modal-card" style="max-width:28rem">
+              <div class="cal-modal-card cal-modal-card-sm">
                 <header class="cal-modal-header">
                   <h3 id="files-delete-title">Delete ${esc(kind)}</h3>
                   <button type="button" class="info-modal-close" data-action="files-delete-close" aria-label="Close">×</button>
                 </header>
-                <p>Delete <strong>${esc(label)}</strong>?${entry?.type === "dir" ? " This removes the folder and everything inside it." : ""}</p>
-                <div class="row-actions" style="margin-top:1rem">
+                <div class="cal-modal-body">
+                  <p style="margin:0">Delete <strong>${esc(label)}</strong>?${
+                    entry?.type === "dir"
+                      ? " This removes the folder and everything inside it."
+                      : ""
+                  }</p>
+                </div>
+                <footer class="cal-modal-footer">
                   <button type="button" class="btn btn-ghost" data-action="files-delete-close">Cancel</button>
                   <button type="button" class="btn btn-danger" data-action="files-delete-confirm" data-path="${esc(filesDeletePath)}" ${busy ? "disabled" : ""}>Delete</button>
-                </div>
+                </footer>
               </div>
             </div>`;
           })()

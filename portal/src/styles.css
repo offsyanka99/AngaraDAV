@@ -3141,12 +3141,33 @@ body.cal-modal-open {
 .cal-modal-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.55rem;
   padding: 0.85rem 1.15rem;
   border-top: 1px solid var(--border);
   position: sticky;
   bottom: 0;
   background: var(--surface);
+  flex-shrink: 0;
+}
+
+/* Form wrapping body+footer inside a modal card (Files rename) */
+.cal-modal-card > form.stack {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  gap: 0;
+}
+
+.cal-modal-card > form.stack > .cal-modal-body {
+  flex: 1 1 auto;
+}
+
+.cal-modal-card > form.stack > .cal-modal-footer {
+  margin-top: 0;
 }
 
 /* Info modal */

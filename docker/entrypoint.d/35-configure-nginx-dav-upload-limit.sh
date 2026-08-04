@@ -10,8 +10,9 @@ if ! printf '%s' "$LIMIT" | grep -Eq '^[1-9][0-9]*[kKmMgG]?$'; then
   exit 1
 fi
 
+# Apply to every marker (DAV + portal /api/ body size)
 sed -i -E \
   "s/(client_max_body_size )[1-9][0-9]*[kKmMgG]?;( # BAIKAL_DAV_UPLOAD_LIMIT)/\1${LIMIT};\2/" \
   /etc/nginx/conf.d/default.conf
 
-echo "$ME: info: DAV request-body limit set to $LIMIT"
+echo "$ME: info: DAV and portal API request-body limit set to $LIMIT"

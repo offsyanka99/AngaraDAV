@@ -82,7 +82,17 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
     && sed -i 's|^listen = .*|listen = /var/run/php-fpm.sock|' /etc/php/8.2/fpm/pool.d/www.conf \
     && sed -i 's/^;listen.owner = .*/listen.owner = nginx/' /etc/php/8.2/fpm/pool.d/www.conf \
     && sed -i 's/^;listen.group = .*/listen.group = nginx/' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's/;clear_env = no/clear_env = no/' /etc/php/8.2/fpm/pool.d/www.conf
+    && sed -i 's/;clear_env = no/clear_env = no/' /etc/php/8.2/fpm/pool.d/www.conf \
+    # Portal multipart + DAV uploads: PHP default upload_max_filesize is 2M and
+    # rejects larger files before FileService runs (UI shows app max ~1G).
+    && printf '%s\n' \
+         '; AngaraDAV — align with system.files_max_upload_bytes default (1 GiB)' \
+         'upload_max_filesize = 1G' \
+         'post_max_size = 1G' \
+         'max_file_uploads = 50' \
+         > /etc/php/8.2/fpm/conf.d/99-angaradav-uploads.ini \
+    && cp /etc/php/8.2/fpm/conf.d/99-angaradav-uploads.ini \
+         /etc/php/8.2/cli/conf.d/99-angaradav-uploads.ini
 
 COPY --from=builder --chown=nginx:nginx /src /var/www/baikal
 COPY --from=portal --chown=nginx:nginx /build/html/portal /var/www/baikal/html/portal

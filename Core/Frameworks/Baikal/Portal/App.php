@@ -886,7 +886,12 @@ class App {
         switch ($code) {
             case UPLOAD_ERR_INI_SIZE:
             case UPLOAD_ERR_FORM_SIZE:
-                return 'Uploaded file exceeds the server size limit';
+                $ini = ini_get('upload_max_filesize') ?: '?';
+                $post = ini_get('post_max_size') ?: '?';
+
+                return 'Uploaded file exceeds the PHP/server size limit'
+                    . ' (upload_max_filesize=' . $ini . ', post_max_size=' . $post . ').'
+                    . ' This is separate from the app “max upload” quota shown in the UI.';
             case UPLOAD_ERR_PARTIAL:
                 return 'Upload was incomplete';
             case UPLOAD_ERR_NO_FILE:
