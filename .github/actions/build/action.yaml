@@ -13,7 +13,7 @@ runs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ inputs.php-version }}
-        extensions: mbstring, dom, fileinfo, pgsql, pdo_pgsql, redis, opcache
+        extensions: mbstring, dom, fileinfo, pgsql, pdo_pgsql, pdo_sqlite, sqlite3, redis, opcache
         tools: composer
 
     - name: Get composer cache directory
@@ -31,7 +31,29 @@ runs:
 
     - name: Install patch (for vendor post-install hooks)
       shell: bash
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq patch
+      run: |
+        set -euo pipefail
+        # GitHub runners sometimes ship broken third-party apt sources
+        # (e.g. packages.microsoft.com → 403), which makes plain
+        # `apt-get update` fail. Prefer a package already on PATH, then
+        # install with resilient update handling.
+        if command -v patch >/dev/null 2>&1; then
+          echo "patch already available: $(command -v patch)"
+          exit 0
+        fi
+        # Drop flaky Microsoft / Azure CLI apt lists when present
+        sudo rm -f /etc/apt/sources.list.d/microsoft*.list \
+          /etc/apt/sources.list.d/azure*.list \
+          /etc/apt/sources.list.d/msprod*.list 2>/dev/null || true
+        if ! sudo apt-get update -qq; then
+          echo "Full apt-get update failed; retrying Ubuntu-only sources"
+          # Restrict to Ubuntu archive only if still broken
+          sudo apt-get update -qq \
+            -o Dir::Etc::sourcelist="sources.list" \
+            -o Dir::Etc::sourceparts="-" \
+            -o APT::Get::List-Cleanup="0" || true
+        fi
+        sudo apt-get install -y -qq patch
 
     - name: Install composer dependencies
       shell: bash

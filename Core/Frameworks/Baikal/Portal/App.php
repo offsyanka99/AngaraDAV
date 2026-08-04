@@ -839,6 +839,46 @@ class App {
             return ['entry' => $moved];
         }
 
+        if ($method === 'POST' && $path === '/files/copy') {
+            $body = $this->jsonBody();
+            $copied = $this->files->copy(
+                $username,
+                (string) ($body['path'] ?? ''),
+                isset($body['to']) || isset($body['toPath'])
+                    ? (string) ($body['to'] ?? $body['toPath'] ?? '')
+                    : null,
+                isset($body['newName']) ? (string) $body['newName'] : null
+            );
+            $this->portalServerLog(
+                'files copy to=' . $copied['path'] . ' user=' . $username,
+                'info'
+            );
+
+            return ['entry' => $copied];
+        }
+
+        if ($method === 'POST' && $path === '/files/bulk') {
+            $body = $this->jsonBody();
+            $op = (string) ($body['op'] ?? '');
+            $paths = $body['paths'] ?? [];
+            if (!is_array($paths)) {
+                throw new ApiException('paths must be an array', 400);
+            }
+            $result = $this->files->bulk($username, $op, $paths);
+            $this->portalServerLog(
+                sprintf(
+                    'files bulk op=%s ok=%d failed=%d user=%s',
+                    $op,
+                    $result['ok'],
+                    $result['failed'],
+                    $username
+                ),
+                'info'
+            );
+
+            return $result;
+        }
+
         return null;
     }
 

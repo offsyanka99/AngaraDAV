@@ -411,6 +411,43 @@ body.layout-files .files-table-wrap {
   z-index: 1;
 }
 
+.files-col-check {
+  width: 2.25rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.files-col-check input {
+  cursor: pointer;
+}
+
+.files-row.is-checked {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.files-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.files-bulk-bar .bulk-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
 .files-col-name {
   width: 40%;
 }

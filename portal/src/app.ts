@@ -187,8 +187,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Files",
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
-      "Upload, download, create folders, rename, and delete. Quotas and size limits are configured by the administrator.",
-      "This feature must be enabled under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
+      "Upload, download, create folders, copy, rename, and delete. Use checkboxes to multi-select items for bulk copy or delete.",
+      "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
     ],
   },
   "address-books": {
@@ -444,6 +444,7 @@ export function mountApp(root: HTMLElement): void {
     filesLoading = false;
     filesRenamePath = null;
     filesDeletePath = null;
+    checkedFilePaths = [];
     photoPreview = null;
     photoBase64Pending = null;
     removePhotoPending = false;
@@ -546,8 +547,11 @@ export function mountApp(root: HTMLElement): void {
       if (status.ready) {
         filesPath = list.path;
         filesEntries = list.entries;
+        const valid = new Set(filesEntries.map((e) => e.path));
+        checkedFilePaths = checkedFilePaths.filter((p) => valid.has(p));
       } else {
         filesEntries = [];
+        checkedFilePaths = [];
       }
       log.event("loadFiles", {
         path: filesPath,
@@ -615,6 +619,8 @@ export function mountApp(root: HTMLElement): void {
   let filesLoading = false;
   let filesRenamePath: string | null = null;
   let filesDeletePath: string | null = null;
+  /** Selected entry paths in the current folder (multi-select). */
+  let checkedFilePaths: string[] = [];
 
   function setFlash(type: Flash extends null ? never : NonNullable<Flash>["type"], message: string) {
     if (suppressErrorFlashAfterExpiry && type === "error") {
@@ -3066,11 +3072,35 @@ export function mountApp(root: HTMLElement): void {
         ? Math.min(100, Math.round((100 * st.usedBytes) / st.quotaBytes))
         : 0;
 
+    const nChecked = checkedFilePaths.length;
+    const allChecked =
+      filesEntries.length > 0 && filesEntries.every((e) => checkedFilePaths.includes(e.path));
+    const someChecked = nChecked > 0;
+    const bulkBar =
+      filesEntries.length > 0
+        ? `<div class="bulk-bar files-bulk-bar" role="toolbar" aria-label="Selected files">
+            <label class="bulk-select-all">
+              <input type="checkbox" data-action="files-select-all"
+                ${allChecked ? "checked" : ""}
+                ${someChecked && !allChecked ? "data-indeterminate=1" : ""}
+                ${busy ? "disabled" : ""}
+                aria-label="Select all in this folder" />
+              <span>${nChecked > 0 ? `${nChecked} selected` : "Select"}</span>
+            </label>
+            <div class="bulk-bar-actions">
+              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-copy" ${busy || nChecked === 0 ? "disabled" : ""}>Copy</button>
+              <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${busy || nChecked === 0 ? "disabled" : ""}>Delete</button>
+              <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-clear" ${busy || nChecked === 0 ? "disabled" : ""}>Clear selection</button>
+            </div>
+          </div>`
+        : "";
+
     const rows =
       filesEntries.length === 0
-        ? `<tr><td colspan="4" class="muted">This folder is empty.</td></tr>`
+        ? `<tr><td colspan="5" class="muted">This folder is empty.</td></tr>`
         : filesEntries
             .map((e) => {
+              const checked = checkedFilePaths.includes(e.path);
               const icon = e.type === "dir" ? "📁" : "📄";
               const nameCell =
                 e.type === "dir"
@@ -3079,7 +3109,12 @@ export function mountApp(root: HTMLElement): void {
                     </button>`
                   : `<span class="files-name"><span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}</span>`;
               const size = e.type === "dir" ? "—" : formatBytes(e.size);
-              return `<tr class="files-row" data-path="${esc(e.path)}" data-type="${e.type}">
+              return `<tr class="files-row${checked ? " is-checked" : ""}" data-path="${esc(e.path)}" data-type="${e.type}">
+                <td class="files-col-check">
+                  <input type="checkbox" data-action="files-toggle" data-path="${esc(e.path)}"
+                    ${checked ? "checked" : ""} ${busy ? "disabled" : ""}
+                    aria-label="Select ${esc(e.name)}" />
+                </td>
                 <td class="files-col-name">${nameCell}</td>
                 <td class="files-col-size mono">${size}</td>
                 <td class="files-col-mtime hide-sm">${esc(formatMtime(e.mtime))}</td>
@@ -3089,6 +3124,7 @@ export function mountApp(root: HTMLElement): void {
                       ? `<a class="btn btn-ghost btn-small" href="${esc(api.filesDownloadUrl(e.path))}" download="${esc(e.name)}" data-action="files-download">Download</a>`
                       : ""
                   }
+                  <button type="button" class="btn btn-ghost btn-small" data-action="files-copy" data-path="${esc(e.path)}" ${busy ? "disabled" : ""}>Copy</button>
                   <button type="button" class="btn btn-ghost btn-small" data-action="files-rename-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Rename</button>
                   <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="files-delete-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${busy ? "disabled" : ""}>Delete</button>
                 </td>
@@ -3172,10 +3208,12 @@ export function mountApp(root: HTMLElement): void {
             </label>
           </div>
         </div>
+        ${bulkBar}
         <div class="table-wrap files-table-wrap">
           <table class="files-table">
             <thead>
               <tr>
+                <th class="files-col-check" aria-label="Select"></th>
                 <th class="files-col-name">Name</th>
                 <th class="files-col-size">Size</th>
                 <th class="files-col-mtime hide-sm">Modified</th>
@@ -3183,7 +3221,7 @@ export function mountApp(root: HTMLElement): void {
               </tr>
             </thead>
             <tbody>
-              ${filesLoading && filesEntries.length === 0 ? `<tr><td colspan="4" class="muted">Loading…</td></tr>` : rows}
+              ${filesLoading && filesEntries.length === 0 ? `<tr><td colspan="5" class="muted">Loading…</td></tr>` : rows}
             </tbody>
           </table>
         </div>
@@ -3816,6 +3854,10 @@ export function mountApp(root: HTMLElement): void {
       input.addEventListener("change", () => {
         void onFilesUpload(input);
       });
+    });
+    // Indeterminate "select all" for files multi-select
+    root.querySelectorAll<HTMLInputElement>('input[data-action="files-select-all"][data-indeterminate="1"]').forEach((cb) => {
+      cb.indeterminate = true;
     });
     const shareForm = root.querySelector<HTMLFormElement>('[data-form="share"]');
     shareForm?.addEventListener("submit", (ev) => {
@@ -5125,6 +5167,7 @@ export function mountApp(root: HTMLElement): void {
       filesPath = path;
       filesRenamePath = null;
       filesDeletePath = null;
+      checkedFilePaths = [];
       busy = true;
       clearFlash();
       render();
@@ -5132,6 +5175,112 @@ export function mountApp(root: HTMLElement): void {
         await loadFiles();
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Failed to open folder");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-toggle") {
+      ev.stopPropagation();
+      const path = t.dataset.path ?? "";
+      if (!path) return;
+      const on = (t as HTMLInputElement).checked;
+      if (on) {
+        if (!checkedFilePaths.includes(path)) checkedFilePaths = [...checkedFilePaths, path];
+      } else {
+        checkedFilePaths = checkedFilePaths.filter((p) => p !== path);
+      }
+      render();
+      return;
+    }
+    if (action === "files-select-all") {
+      ev.stopPropagation();
+      const on = (t as HTMLInputElement).checked;
+      checkedFilePaths = on ? filesEntries.map((e) => e.path) : [];
+      render();
+      return;
+    }
+    if (action === "files-bulk-clear") {
+      checkedFilePaths = [];
+      render();
+      return;
+    }
+    if (action === "files-copy") {
+      const path = t.dataset.path ?? "";
+      if (!path) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const res = await api.filesCopy(path);
+        log.event("files.copy", { path, to: res.entry.path });
+        await loadFiles();
+        setFlash("success", `Copied as “${res.entry.name}”`);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Copy failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-bulk-copy") {
+      if (checkedFilePaths.length === 0) return;
+      const paths = [...checkedFilePaths];
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const res = await api.filesBulk("copy", paths);
+        log.event("files.bulk-copy", { ok: res.ok, failed: res.failed });
+        checkedFilePaths = [];
+        await loadFiles();
+        if (res.failed === 0) {
+          setFlash("success", res.ok === 1 ? "Copied 1 item" : `Copied ${res.ok} items`);
+        } else if (res.ok > 0) {
+          setFlash("info", `Copied ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`);
+        } else {
+          setFlash("error", res.errors[0] || "Copy failed");
+        }
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Bulk copy failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "files-bulk-delete") {
+      if (checkedFilePaths.length === 0) return;
+      const n = checkedFilePaths.length;
+      if (
+        !confirm(
+          n === 1
+            ? "Delete the selected item? This cannot be undone."
+            : `Delete ${n} selected items? This cannot be undone.`,
+        )
+      ) {
+        return;
+      }
+      const paths = [...checkedFilePaths];
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const res = await api.filesBulk("delete", paths);
+        log.event("files.bulk-delete", { ok: res.ok, failed: res.failed });
+        checkedFilePaths = [];
+        await loadFiles();
+        if (res.failed === 0) {
+          setFlash("success", res.ok === 1 ? "Deleted 1 item" : `Deleted ${res.ok} items`);
+        } else if (res.ok > 0) {
+          setFlash("info", `Deleted ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`);
+        } else {
+          setFlash("error", res.errors[0] || "Delete failed");
+        }
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Bulk delete failed");
       } finally {
         busy = false;
         render();

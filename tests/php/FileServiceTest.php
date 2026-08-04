@@ -167,6 +167,28 @@ assert_true(file_get_contents($meta2['absolutePath']) === 'v2-longer', 'overwrit
 $status2 = $svc->status('alice');
 assert_true($status2['usedBytes'] >= strlen('v2-longer'), 'used bytes includes file');
 
+// Copy file in same folder with unique name
+$copied = $svc->copy('alice', 'archive/note.txt');
+assert_true($copied['name'] === 'note (copy).txt', 'copy names note (copy).txt');
+assert_true($copied['path'] === 'archive/note (copy).txt', 'copy path under archive/');
+$metaCopy = $svc->openDownload('alice', 'archive/note (copy).txt');
+assert_true(file_get_contents($metaCopy['absolutePath']) === 'v2-longer', 'copy has same contents');
+
+// Copy directory tree
+$svc->createDirectory('alice', 'archive', 'nested');
+$svc->writeFile('alice', 'archive/nested', 'leaf.txt', "leaf\n", false);
+$dirCopy = $svc->copy('alice', 'archive/nested');
+assert_true($dirCopy['type'] === 'dir', 'directory copy type is dir');
+assert_true($dirCopy['name'] === 'nested (copy)', 'directory copy name');
+$listNested = $svc->listEntries('alice', $dirCopy['path']);
+assert_true(count($listNested['entries']) === 1 && $listNested['entries'][0]['name'] === 'leaf.txt', 'copied tree has leaf');
+
+// Bulk copy + delete
+$bulkCopy = $svc->bulk('alice', 'copy', ['archive/note.txt', 'archive/new-via-replace.txt']);
+assert_true($bulkCopy['ok'] === 2 && $bulkCopy['failed'] === 0, 'bulk copy two files');
+$bulkDel = $svc->bulk('alice', 'delete', ['archive/new-via-replace.txt']);
+assert_true($bulkDel['ok'] === 1, 'bulk delete one file');
+
 remove_tree($temporaryRoot);
 
 if ($failures > 0) {

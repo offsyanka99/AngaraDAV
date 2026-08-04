@@ -161,6 +161,115 @@ class HomeStorage {
         });
     }
 
+    /**
+     * Copy a file or directory tree within this home (no symlink following).
+     */
+    public function copy(string $sourcePath, string $destinationPath): void {
+        $sourcePath = $this->validateRelativePath($sourcePath);
+        $destinationPath = $this->validateRelativePath($destinationPath);
+        if ($sourcePath === '' || $destinationPath === '') {
+            throw new Forbidden('A WebDAV file home cannot be copied onto itself as the root');
+        }
+        // Destination must not be inside source for directories
+        if ($destinationPath === $sourcePath
+            || str_starts_with($destinationPath . '/', $sourcePath . '/')
+        ) {
+            throw new Forbidden('Cannot copy a resource into itself');
+        }
+
+        $this->withMutationLock(function () use ($sourcePath, $destinationPath) {
+            $source = $this->getPath($sourcePath);
+            $destination = $this->getPath($destinationPath);
+            $this->assertParentDirectory($destination);
+            if (is_link($source) || !file_exists($source)) {
+                throw new NotFound('The WebDAV resource no longer exists');
+            }
+            if (file_exists($destination) || is_link($destination)) {
+                throw new Conflict('The destination already exists');
+            }
+
+            $bytesNeeded = $this->sizeOfTree($source);
+            $quota = $this->config->getQuotaBytes();
+            if ($quota > 0 && $this->calculateUsage() + $bytesNeeded > $quota) {
+                throw new InsufficientStorage('WebDAV file home quota exceeded');
+            }
+            if (is_file($source)) {
+                if ($bytesNeeded > $this->config->getMaxUploadBytes()) {
+                    throw new PayloadTooLarge('WebDAV file exceeds the configured maximum size');
+                }
+                if (!@copy($source, $destination)) {
+                    throw new \RuntimeException('Unable to copy WebDAV file');
+                }
+                @chmod($destination, 0600);
+
+                return;
+            }
+            if (!is_dir($source)) {
+                throw new NotFound('The WebDAV resource no longer exists');
+            }
+            $this->copyDirectoryTree($source, $destination);
+        });
+    }
+
+    /**
+     * Bytes used by a file, or total file bytes under a directory (no symlinks).
+     */
+    public function sizeOfTree(string $absolutePath): int {
+        if (is_link($absolutePath)) {
+            return 0;
+        }
+        if (is_file($absolutePath)) {
+            return (int) filesize($absolutePath);
+        }
+        if (!is_dir($absolutePath)) {
+            return 0;
+        }
+        $bytes = 0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(
+                $absolutePath,
+                \FilesystemIterator::CURRENT_AS_FILEINFO | \FilesystemIterator::SKIP_DOTS
+            ),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink() || !$entry->isFile()) {
+                continue;
+            }
+            $bytes += $entry->getSize();
+        }
+
+        return $bytes;
+    }
+
+    private function copyDirectoryTree(string $source, string $destination): void {
+        if (!mkdir($destination, 0700) && !is_dir($destination)) {
+            throw new \RuntimeException('Unable to create WebDAV directory copy');
+        }
+        @chmod($destination, 0700);
+        $iterator = new \FilesystemIterator(
+            $source,
+            \FilesystemIterator::CURRENT_AS_FILEINFO | \FilesystemIterator::SKIP_DOTS
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink()) {
+                continue;
+            }
+            $destChild = $destination . DIRECTORY_SEPARATOR . $entry->getFilename();
+            if ($entry->isDir()) {
+                $this->copyDirectoryTree($entry->getPathname(), $destChild);
+            } elseif ($entry->isFile()) {
+                if ($entry->getSize() > $this->config->getMaxUploadBytes()) {
+                    throw new PayloadTooLarge('WebDAV file exceeds the configured maximum size');
+                }
+                if (!@copy($entry->getPathname(), $destChild)) {
+                    throw new \RuntimeException('Unable to copy WebDAV file');
+                }
+                @chmod($destChild, 0600);
+            }
+        }
+    }
+
     public function etag(string $relativePath): string {
         $path = $this->getPath($relativePath);
         if (!is_file($path) || is_link($path)) {

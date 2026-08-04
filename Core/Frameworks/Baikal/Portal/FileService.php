@@ -355,6 +355,130 @@ class FileService {
         ];
     }
 
+    /**
+     * Copy a file or folder. Default: same parent with a unique " (copy)" name.
+     *
+     * @return array{path: string, name: string, type: string}
+     */
+    public function copy(string $username, string $path, ?string $toDir = null, ?string $newName = null): array {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+        $source = $this->normalizeListPath($path);
+        if ($source === '') {
+            throw new ApiException('Cannot copy the file home root', 403);
+        }
+        if (!$storage->isVisibleChild($source)) {
+            throw new ApiException('Not found', 404);
+        }
+        $sourceAbs = $storage->getPath($source);
+        $isDir = is_dir($sourceAbs) && !is_link($sourceAbs);
+        $parent = dirname(str_replace('\\', '/', $source));
+        if ($parent === '.' || $parent === '/') {
+            $parent = '';
+        }
+        $destParent = $toDir !== null ? $this->normalizeListPath($toDir) : $parent;
+        $baseName = $newName !== null && trim($newName) !== ''
+            ? $this->assertName($newName)
+            : $this->uniqueCopyName($storage, $destParent, basename(str_replace('\\', '/', $source)));
+
+        try {
+            $destination = $storage->childPath($destParent, $baseName);
+            $storage->copy($source, $destination);
+        } catch (\Throwable $e) {
+            throw $this->mapStorageException($e);
+        }
+
+        return [
+            'path' => $destination,
+            'name' => $baseName,
+            'type' => $isDir ? 'dir' : 'file',
+        ];
+    }
+
+    /**
+     * Bulk delete or copy selected paths.
+     *
+     * @param list<string> $paths
+     *
+     * @return array{ok: int, failed: int, errors: list<string>, entries?: list<array<string, string>>}
+     */
+    public function bulk(string $username, string $op, array $paths): array {
+        $username = $this->assertUsername($username);
+        $op = strtolower(trim($op));
+        if ($op !== 'delete' && $op !== 'copy') {
+            throw new ApiException('Unsupported bulk operation', 400);
+        }
+        $ok = 0;
+        $failed = 0;
+        $errors = [];
+        $entries = [];
+        $seen = [];
+        foreach ($paths as $raw) {
+            if (!is_string($raw)) {
+                continue;
+            }
+            $p = trim($raw);
+            if ($p === '' || isset($seen[$p])) {
+                continue;
+            }
+            $seen[$p] = true;
+            try {
+                if ($op === 'delete') {
+                    $this->delete($username, $p);
+                } else {
+                    $entries[] = $this->copy($username, $p);
+                }
+                ++$ok;
+            } catch (ApiException $e) {
+                ++$failed;
+                $errors[] = $p . ': ' . $e->getMessage();
+            } catch (\Throwable $e) {
+                ++$failed;
+                $errors[] = $p . ': operation failed';
+                error_log('AngaraDAV portal files bulk: ' . $e->getMessage());
+            }
+        }
+
+        $out = [
+            'ok'     => $ok,
+            'failed' => $failed,
+            'errors' => $errors,
+        ];
+        if ($op === 'copy') {
+            $out['entries'] = $entries;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Build a unique sibling name: "file (copy).txt", "file (copy 2).txt", ….
+     */
+    private function uniqueCopyName(HomeStorage $storage, string $parent, string $name): string {
+        $name = $this->assertName($name);
+        $dot = strrpos($name, '.');
+        // Treat leading-dot names (.env) as no extension
+        $hasExt = $dot !== false && $dot > 0;
+        $stem = $hasExt ? substr($name, 0, $dot) : $name;
+        $ext = $hasExt ? substr($name, $dot) : '';
+
+        for ($n = 1; $n < 1000; ++$n) {
+            $candidate = $n === 1
+                ? $stem . ' (copy)' . $ext
+                : $stem . ' (copy ' . $n . ')' . $ext;
+            try {
+                $rel = $storage->childPath($parent, $candidate);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            if (!$storage->isVisibleChild($rel)) {
+                return $candidate;
+            }
+        }
+
+        return $stem . ' (copy ' . bin2hex(random_bytes(3)) . ')' . $ext;
+    }
+
     public function isEnabledInConfig(): bool {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
 

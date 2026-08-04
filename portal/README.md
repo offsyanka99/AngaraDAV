@@ -91,6 +91,8 @@ Docker image runs this build in a multi-stage `node` stage automatically.
 | DELETE | `/api/files/entry` | session body `{path}` |
 | POST | `/api/files/rename` | session body `{path, newName}` |
 | POST | `/api/files/move` | session body `{from, to, newName?}` |
+| POST | `/api/files/copy` | session body `{path, to?, newName?}` — default same folder as `name (copy).ext` |
+| POST | `/api/files/bulk` | session body `{op: "copy"\|"delete", paths: string[]}` |
 
 Contact write body (create/update): `firstname`, `lastname`, `fullname`, `org`, `title`, `emails[]`, `phones[{type,value}]`, `address{street,city,region,postal,country}`, `url`, `note`, `birthday?`, `specialDate?`, `specialDateLabel?`, `custom[{label,value}]` (stored as vCard `X-*` properties), `photoBase64?`, `removePhoto?`.  
 Updates merge into the existing vCard so unknown standard properties (e.g. `CATEGORIES`) are preserved. Editable custom fields are plain-text `X-*` properties.

@@ -1009,6 +1009,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ from, to, newName }),
     }),
+  filesCopy: (path: string, opts: { to?: string; newName?: string } = {}) =>
+    request<{ entry: FileEntry }>("/files/copy", {
+      method: "POST",
+      body: JSON.stringify({
+        path,
+        to: opts.to,
+        newName: opts.newName,
+      }),
+    }),
+  filesBulk: (op: "delete" | "copy", paths: string[]) =>
+    request<{
+      ok: number;
+      failed: number;
+      errors: string[];
+      entries?: FileEntry[];
+    }>("/files/bulk", {
+      method: "POST",
+      body: JSON.stringify({ op, paths }),
+    }),
 };
 
 export { ApiError };
