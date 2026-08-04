@@ -27,7 +27,7 @@ type TabId = "calendars" | "contacts" | "tasks" | "notes";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
 const APP_VERSION_FALLBACK = "0.11.1-fork.5";
-const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/master/docs";
+const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 type Flash = { type: "error" | "success" | "info"; message: string } | null;
 

@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - master
+      - main
       # Phase 1 import perf test image -> ghcr.io/.../angaradav:perf-import-sqlite-tx
       - perf/import-sqlite-tx
     tags: ["v*"]
   pull_request:
-    branches: [master]
+    branches: [master, main]
   workflow_dispatch:
 
 env:

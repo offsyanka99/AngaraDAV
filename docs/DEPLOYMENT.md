@@ -8,7 +8,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 
 | Image | When |
 |-------|------|
-| `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `master` (GitHub Actions) |
+| `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -142,7 +142,7 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes**. Section help is un
 
 - Backend: PHP API under `/api/` (session cookie; sabre CalDAV/CardDAV backends).
 - Frontend source: [`portal/`](../portal/) (Vite + TypeScript); image build compiles into `html/portal/`.
-- Footer **Docs** -> [github.com/offsyanka99/AngaraDAV/tree/master/docs](https://github.com/offsyanka99/AngaraDAV/tree/master/docs).
+- Footer **Docs** -> [github.com/offsyanka99/AngaraDAV/tree/main/docs](https://github.com/offsyanka99/AngaraDAV/tree/main/docs).
 - **`/dav.php/` remains the combined endpoint** for CalDAV/CardDAV clients, optional private file homes, and the classic browser.
 - Portal meta (read-only / holidays flags): `Specific/portal_meta.json` (include in backups).
 - **Read-only calendars** are enforced on CalDAV (`/dav.php/`, `/cal.php/`) via `ReadOnlyPlugin` — clients get **403** on write methods, not only a portal import block.

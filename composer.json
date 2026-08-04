@@ -53,7 +53,7 @@
     },
     "support": {
         "source": "https://github.com/offsyanka99/AngaraDAV",
-        "docs": "https://github.com/offsyanka99/AngaraDAV/tree/master/docs"
+        "docs": "https://github.com/offsyanka99/AngaraDAV/tree/main/docs"
     },
     "scripts": {
         "cs-fixer": [
