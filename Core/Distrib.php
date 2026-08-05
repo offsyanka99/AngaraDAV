@@ -27,13 +27,53 @@
 
 /*
  * Product compatibility line (bump when documenting a release).
- * Full BAIKAL_VERSION appends +git.<sha> when a build SHA is available.
+ * Full BAIKAL_VERSION appends +<sha> when a build SHA is available
+ * (e.g. 2.0.1+fef872a — no "git." prefix).
  */
 define('BAIKAL_VERSION_BASE', '2.0.1');
 
 // Optional image build stamp written by Dockerfile (Core/BuildInfo.php).
 if (is_readable(__DIR__ . '/BuildInfo.php')) {
     require_once __DIR__ . '/BuildInfo.php';
+}
+
+/**
+ * Semver-ish core of a product version string for upgrade comparisons.
+ * Strips build metadata (+sha, +git.sha) and normalizes whitespace.
+ *
+ * Examples: "2.0.1+fef872a" → "2.0.1", "2.0.0+git.abc" → "2.0.0", "2.0.1" → "2.0.1"
+ */
+function baikal_version_base(string $version): string {
+    $version = trim($version);
+    if ($version === '') {
+        return '';
+    }
+    $plus = strpos($version, '+');
+    if ($plus !== false) {
+        $version = substr($version, 0, $plus);
+    }
+    // Historical "2.0.1-git.xxx" style (unlikely) — keep only before first non-semver junk
+    return trim($version);
+}
+
+/**
+ * True when the running product base is newer than configured_version base.
+ * Rebuilds that only change the build SHA (+…) do not require the upgrade wizard.
+ */
+function baikal_needs_upgrade(?string $configuredVersion): bool {
+    $configured = baikal_version_base((string) $configuredVersion);
+    if ($configured === '') {
+        return false;
+    }
+    $product = defined('BAIKAL_VERSION_BASE')
+        ? (string) BAIKAL_VERSION_BASE
+        : baikal_version_base(defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '');
+
+    if ($product === '') {
+        return false;
+    }
+
+    return version_compare($product, $configured) > 0;
 }
 
 /**
@@ -81,7 +121,7 @@ define('BAIKAL_GIT_SHA', $baikalGit);
 define(
     'BAIKAL_VERSION',
     $baikalGit !== ''
-        ? BAIKAL_VERSION_BASE . '+git.' . $baikalGit
+        ? BAIKAL_VERSION_BASE . '+' . $baikalGit
         : BAIKAL_VERSION_BASE
 );
 define('BAIKAL_HOMEPAGE', 'https://github.com/offsyanka99/AngaraDAV');

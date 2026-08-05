@@ -91,14 +91,14 @@ class InstallService {
             ]);
         }
 
-        // Version upgrade (same gate as classic install index)
-        if ($configuredVersion !== $productVersion) {
+        // Version upgrade: compare bases only (ignore +build.sha rebuilds)
+        if (function_exists('baikal_needs_upgrade') && baikal_needs_upgrade($configuredVersion)) {
             return array_merge($base, [
                 'step'              => 'upgrade',
                 'locked'            => false,
                 'configuredVersion' => $configuredVersion,
                 'hasAdminPassword'  => true,
-                'message'           => 'Product version differs from configured_version; confirm upgrade.',
+                'message'           => 'Product version is newer than configured_version; confirm upgrade.',
             ]);
         }
 

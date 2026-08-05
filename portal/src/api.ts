@@ -208,6 +208,8 @@ export type CalendarEvent = {
   start: string;
   end: string | null;
   allDay: boolean;
+  /** Set client-side when merging multi-calendar month views */
+  instanceId?: number;
 };
 
 export type EventRepeat = {
@@ -435,9 +437,12 @@ export type FileEntry = {
 
 class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Extra fields from the JSON error body (e.g. code, installUrl). */
+  payload: Record<string, unknown>;
+  constructor(message: string, status: number, payload: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.payload = payload;
   }
 }
 
@@ -485,15 +490,33 @@ export type PortalUi = {
   logLevel?: string;
   /** Server idle session lifetime in seconds (matches session_max_age_minutes). */
   sessionIdleSeconds?: number;
-  /** Full product version including +git.<sha> when known (from server). */
+  /** Full product version including +sha when known (from server), e.g. 2.0.1+fef872a. */
   version?: string;
   /** Short git SHA only. */
   git?: string;
 };
 
+/** Install/upgrade wizard status (public; works while portal API is blocked for upgrades). */
+export type InstallStatusPublic = {
+  step: string;
+  locked?: boolean;
+  message?: string;
+  productVersion?: string;
+  configuredVersion?: string | null;
+  installUrl?: string;
+  portalUrl?: string;
+  csrfToken?: string;
+};
+
 /** Paths that may return 401 without meaning “session expired while using the app”. */
 function isAuthExemptPath(path: string): boolean {
-  return path === "/login" || path === "/ui" || path === "/logout";
+  return (
+    path === "/login" ||
+    path === "/ui" ||
+    path === "/logout" ||
+    path === "/install/status" ||
+    path.startsWith("/install/")
+  );
 }
 
 function notifyUnauthorized(path: string, message: string): void {
@@ -540,14 +563,13 @@ async function request<T>(
   );
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
-    if (
-      data &&
-      typeof data === "object" &&
-      data !== null &&
-      "error" in data &&
-      typeof (data as { error: unknown }).error === "string"
-    ) {
-      msg = (data as { error: string }).error;
+    let payload: Record<string, unknown> = {};
+    if (data && typeof data === "object" && data !== null) {
+      const obj = data as Record<string, unknown>;
+      payload = { ...obj };
+      if (typeof obj.error === "string") {
+        msg = obj.error;
+      }
     } else if (res.status === 500 || res.status === 504) {
       msg =
         "Server error during import (often a timeout on large calendars). Try again — already imported events update faster.";
@@ -560,7 +582,7 @@ async function request<T>(
       log.debug(`api ← ${method} ${path} 401 (${ms}ms)`);
       notifyUnauthorized(path, msg);
     }
-    throw new ApiError(msg, res.status);
+    throw new ApiError(msg, res.status, payload);
   }
   log.info(`api ← ${method} ${path} ${res.status} (${ms}ms)`);
   notifySessionActivity(path);
@@ -769,6 +791,20 @@ export const api = {
     request<{ ui: PortalUi; version?: string | null; git?: string | null }>(
       "/ui",
     ),
+  /**
+   * Installer status (public). Safe during product upgrades — uses /api/install/*
+   * which does not go through the normal portal bootstrap upgrade gate.
+   * Response is wrapped as { data: status } by InstallApp.
+   */
+  installStatus: async (): Promise<InstallStatusPublic> => {
+    const res = await request<{ data: InstallStatusPublic } | InstallStatusPublic>(
+      "/install/status",
+    );
+    if (res && typeof res === "object" && "data" in res && res.data) {
+      return res.data;
+    }
+    return res as InstallStatusPublic;
+  },
   /** Admin authz smoke check (requires Admin role). */
   adminPing: () => request<{ ok: boolean; user: string }>("/admin/ping"),
   /** Read-only dashboard stats for Administration → Overview. */

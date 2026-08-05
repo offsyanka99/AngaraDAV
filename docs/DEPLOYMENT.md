@@ -736,6 +736,9 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 
 - **WebDAV-Push shared-calendar fan-out:** when a calendar’s contents change (DAV or portal), enqueue a content-update job for **every** `calendarinstances` path that points at the same `calendarid` (owner + sharees), each with its own topic. Sharee DAVx⁵ clients now receive push instead of waiting for the scheduled poll only.
 - Tests cover path expansion and dual queue jobs for owner/sharee URIs.
+- **Upgrade gate UX:** portal login shows a clear message when `/portal/install/` upgrade (or first setup) is required; portal `/api/*` returns **JSON 503** (`code: upgrade_required`) instead of an HTML 302 to the installer.
+- **Version compare** uses product **base** only (`2.0.1`), so image rebuilds that only change the build SHA do not force the wizard. Display format is `2.0.1+<sha>` (no `git.` segment).
+- **Calendar multi-select:** check multiple calendars to show combined events on the month grid (each calendar’s colour).
 
 ### 2.0.0
 

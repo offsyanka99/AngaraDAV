@@ -35,13 +35,11 @@ if (!is_readable($configPath)) {
             $config = \Symfony\Component\Yaml\Yaml::parseFile($configPath);
             $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
             $configured = (string) ($sys['configured_version'] ?? '');
-            $product = defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '';
             $installDisabled = is_file(PROJECT_PATH_ROOT . 'Specific/INSTALL_DISABLED');
-            if ($configured === '' || ($product !== '' && $configured !== $product) || !$installDisabled) {
-                // Missing finish, upgrade pending, or reinstall open
-                if ($configured === '' || !$installDisabled || ($product !== '' && $configured !== $product)) {
-                    $target = '/portal/install/';
-                }
+            $needsUpgrade = function_exists('baikal_needs_upgrade') && baikal_needs_upgrade($configured);
+            // Missing finish, upgrade pending (base version only), or reinstall open
+            if ($configured === '' || !$installDisabled || $needsUpgrade) {
+                $target = '/portal/install/';
             }
         } catch (\Throwable $e) {
             $target = '/portal/install/';

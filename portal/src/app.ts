@@ -430,8 +430,22 @@ export function mountApp(root: HTMLElement): void {
   let calendars: Calendar[] = [];
   let directory: DirectoryUser[] = [];
   let holidayCountries: HolidayCountry[] = [];
+  /** Primary calendar (create event, edit modal, shares). */
   let selectedId: number | null = null;
+  /** Calendars visible on the month grid (multi-select). */
+  let selectedIds: number[] = [];
   let shares: Share[] = [];
+  /**
+   * Install/upgrade gate for the login screen.
+   * Populated from GET /api/install/status (and from 503 upgrade_required payloads).
+   */
+  let installGate: {
+    step: string;
+    message: string;
+    installUrl: string;
+    productVersion?: string;
+    configuredVersion?: string | null;
+  } | null = null;
   /** Calendar details + share live in a modal (not the right column). */
   let calModalOpen = false;
   /** Create calendar form lives in its own modal. */
@@ -442,7 +456,8 @@ export function mountApp(root: HTMLElement): void {
   let deleteAbConfirmId: number | null = null;
   /** Month grid cursor (local calendar). */
   let monthCursor = { y: new Date().getFullYear(), m: new Date().getMonth() };
-  let monthEvents: CalendarEvent[] = [];
+  /** Month grid events tagged with source calendar instance. */
+  let monthEvents: Array<CalendarEvent & { instanceId: number }> = [];
   let monthEventsLoading = false;
   /** VEVENT create/edit modal (day cell → new; event chip → edit) */
   let eventModalOpen = false;
@@ -578,6 +593,7 @@ export function mountApp(root: HTMLElement): void {
     calendars = [];
     shares = [];
     selectedId = null;
+    selectedIds = [];
     directory = [];
     addressBooks = [];
     selectedAbId = null;
@@ -1372,6 +1388,77 @@ export function mountApp(root: HTMLElement): void {
     suppressErrorFlashAfterExpiry = false;
   }
 
+  function applyInstallGateFromStatus(st: {
+    step?: string;
+    message?: string;
+    installUrl?: string;
+    productVersion?: string;
+    configuredVersion?: string | null;
+  }): void {
+    const step = String(st.step || "");
+    if (
+      step === "upgrade" ||
+      step === "initialize" ||
+      step === "permissions" ||
+      step === "database"
+    ) {
+      installGate = {
+        step,
+        message:
+          st.message ||
+          (step === "upgrade"
+            ? "Complete the upgrade wizard before signing in."
+            : "Complete setup before signing in."),
+        installUrl: st.installUrl || "/portal/install/",
+        productVersion: st.productVersion,
+        configuredVersion: st.configuredVersion ?? null,
+      };
+      if (typeof st.productVersion === "string" && st.productVersion.trim() !== "") {
+        appVersion = st.productVersion.trim();
+      }
+    } else {
+      installGate = null;
+    }
+  }
+
+  function applyInstallGateFromApiError(e: unknown): boolean {
+    if (!(e instanceof ApiError) || e.status !== 503) return false;
+    const code = typeof e.payload.code === "string" ? e.payload.code : "";
+    if (
+      code !== "upgrade_required" &&
+      code !== "not_configured" &&
+      code !== "admin_password_missing"
+    ) {
+      return false;
+    }
+    const step =
+      code === "upgrade_required"
+        ? "upgrade"
+        : code === "admin_password_missing"
+          ? "initialize"
+          : "initialize";
+    installGate = {
+      step,
+      message: e.message,
+      installUrl:
+        typeof e.payload.installUrl === "string"
+          ? e.payload.installUrl
+          : "/portal/install/",
+      productVersion:
+        typeof e.payload.productVersion === "string"
+          ? e.payload.productVersion
+          : undefined,
+      configuredVersion:
+        typeof e.payload.configuredVersion === "string"
+          ? e.payload.configuredVersion
+          : null,
+    };
+    if (installGate.productVersion) {
+      appVersion = installGate.productVersion;
+    }
+    return true;
+  }
+
   async function bootstrap() {
     log.event("bootstrap.start");
     setOnUnauthorized((msg) => {
@@ -1384,6 +1471,16 @@ export function mountApp(root: HTMLElement): void {
     setOnSessionActivity(() => {
       bumpSessionIdleTimer();
     });
+    // Install/upgrade status first (works even when /api/ui is blocked by upgrade gate)
+    try {
+      const st = await api.installStatus();
+      applyInstallGateFromStatus(st);
+    } catch (e) {
+      log.debug(
+        "bootstrap: /api/install/status failed",
+        e instanceof Error ? e.message : e,
+      );
+    }
     // Public prefs first so log level works on the login screen
     try {
       const pub = await api.ui();
@@ -1393,8 +1490,20 @@ export function mountApp(root: HTMLElement): void {
       } else if (pub.ui && typeof pub.ui.version === "string" && pub.ui.version.trim() !== "") {
         appVersion = pub.ui.version.trim();
       }
+      // /api/ui succeeded → not in upgrade block
+      if (installGate?.step === "upgrade") {
+        // status may still say upgrade if race; keep status as source of truth
+      }
     } catch (e) {
       log.debug("bootstrap: /api/ui failed", e instanceof Error ? e.message : e);
+      applyInstallGateFromApiError(e);
+    }
+    if (installGate && installGate.step !== "done" && installGate.step !== "locked") {
+      // Block session restore until setup/upgrade finishes
+      clearPortalSessionState();
+      log.event("bootstrap.installGate", { step: installGate.step });
+      render();
+      return;
     }
     try {
       const me = await api.me();
@@ -1473,17 +1582,26 @@ export function mountApp(root: HTMLElement): void {
         holidayCountries = [];
       }
     }
+    // Drop selections for calendars that no longer exist
+    selectedIds = selectedIds.filter((id) => calendars.some((c) => c.id === id));
     if (selectedId !== null && !calendars.some((c) => c.id === selectedId)) {
       selectedId = null;
       shares = [];
       calModalOpen = false;
       deleteConfirmId = null;
     }
-    if (selectedId === null) {
+    if (selectedIds.length === 0) {
       const def = pickDefaultCalendar();
       if (def) {
+        selectedIds = [def.id];
         selectedId = def.id;
+      } else if (calendars.length > 0) {
+        selectedIds = [calendars[0].id];
+        selectedId = calendars[0].id;
       }
+    }
+    if (selectedId === null && selectedIds.length > 0) {
+      selectedId = selectedIds[0];
     }
     if (selectedId !== null && calModalOpen) {
       await loadShares(selectedId);
@@ -1643,18 +1761,32 @@ export function mountApp(root: HTMLElement): void {
   }
 
   async function loadMonthEvents() {
-    if (selectedId === null) {
+    const ids = selectedIds.filter((id) => calendars.some((c) => c.id === id));
+    if (ids.length === 0) {
       monthEvents = [];
       return;
     }
     const { from, to } = monthRange(monthCursor.y, monthCursor.m);
     monthEventsLoading = true;
-    log.debug("loadMonthEvents", { selectedId, from, to });
+    log.debug("loadMonthEvents", { selectedIds: ids, from, to });
     try {
-      const res = await api.calendarEvents(selectedId, from, to);
-      monthEvents = res.events;
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await api.calendarEvents(id, from, to);
+          return res.events.map((ev) => ({ ...ev, instanceId: id }));
+        }),
+      );
+      const merged = results.flat();
+      // Stable order: by start, then summary
+      merged.sort((a, b) => {
+        const sa = a.start || "";
+        const sb = b.start || "";
+        if (sa !== sb) return sa < sb ? -1 : 1;
+        return (a.summary || "").localeCompare(b.summary || "");
+      });
+      monthEvents = merged;
       log.event("monthEvents.loaded", {
-        calendarId: selectedId,
+        calendarIds: ids,
         count: monthEvents.length,
         from,
         to,
@@ -1667,6 +1799,24 @@ export function mountApp(root: HTMLElement): void {
       );
     } finally {
       monthEventsLoading = false;
+    }
+  }
+
+  function calendarColor(instanceId: number): string {
+    const c = calendars.find((x) => x.id === instanceId);
+    if (!c?.color) return "#3B82F6";
+    return c.color.length >= 7 ? c.color.slice(0, 7) : c.color;
+  }
+
+  function toggleCalendarSelected(id: number): void {
+    if (selectedIds.includes(id)) {
+      selectedIds = selectedIds.filter((x) => x !== id);
+      if (selectedId === id) {
+        selectedId = selectedIds[0] ?? null;
+      }
+    } else {
+      selectedIds = [...selectedIds, id];
+      selectedId = id;
     }
   }
 
@@ -1690,13 +1840,13 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function renderMonthGrid(): string {
-    const selected = selectedId !== null ? calendars.find((c) => c.id === selectedId) : null;
-    const calName = selected?.displayname ?? "Calendar";
-    const color = selected?.color
-      ? selected.color.length >= 7
-        ? selected.color.slice(0, 7)
-        : selected.color
-      : "#3B82F6";
+    const selectedCals = calendars.filter((c) => selectedIds.includes(c.id));
+    const calName =
+      selectedCals.length === 0
+        ? "No calendar selected"
+        : selectedCals.length === 1
+          ? selectedCals[0].displayname
+          : `${selectedCals.length} calendars`;
 
     const y = monthCursor.y;
     const m = monthCursor.m;
@@ -1744,9 +1894,12 @@ export function mountApp(root: HTMLElement): void {
       const more = dayEvents.length - shown.length;
       const chips = shown
         .map((ev) => {
-          const inst = selectedId ?? 0;
+          const inst = (ev as CalendarEvent & { instanceId: number }).instanceId;
           const label = formatEventChipLabel(ev);
-          return `<button type="button" class="month-event${!ev.allDay ? " is-timed" : ""}" title="${esc(label)}" style="--ev-color:${esc(color)}"
+          const color = calendarColor(inst);
+          const calTitle = calendars.find((c) => c.id === inst)?.displayname || "";
+          const tip = calTitle ? `${label} · ${calTitle}` : label;
+          return `<button type="button" class="month-event${!ev.allDay ? " is-timed" : ""}" title="${esc(tip)}" style="--ev-color:${esc(color)}"
             data-action="open-event" data-instance="${inst}" data-uri="${esc(ev.uri)}" ${busy ? "disabled" : ""}>${esc(label)}</button>`;
         })
         .join("");
@@ -1758,10 +1911,12 @@ export function mountApp(root: HTMLElement): void {
         !inMonth && (dayNum === 1 || i === startPad + daysInMonth)
           ? cellDate.toLocaleString(undefined, { month: "short", day: "numeric" })
           : String(dayNum);
+      const primary =
+        selectedId !== null ? calendars.find((c) => c.id === selectedId) ?? null : null;
       const canCreate = !!(
-        selected &&
-        !selected.readOnly &&
-        (selected.canShare || selected.access === "readwrite")
+        primary &&
+        !primary.readOnly &&
+        (primary.canShare || primary.access === "readwrite")
       );
       cells.push(`<div class="month-cell${inMonth ? "" : " is-outside"}${isToday ? " is-today" : ""}${canCreate ? " is-clickable" : ""}"${
         canCreate
@@ -1774,13 +1929,21 @@ export function mountApp(root: HTMLElement): void {
     }
 
     const emptyHint =
-      !selected
+      selectedCals.length === 0
         ? calendars.length === 0
           ? `<p class="muted small month-empty-hint">No calendars yet — create one on the left, or wait for someone to share with you.</p>`
-          : `<p class="muted small month-empty-hint">Select a calendar on the left (owned or shared) to view events.</p>`
+          : `<p class="muted small month-empty-hint">Check one or more calendars on the left to view events.</p>`
         : monthEventsLoading
           ? `<p class="muted small month-empty-hint">Loading events…</p>`
           : "";
+
+    const swatches = selectedCals
+      .slice(0, 6)
+      .map((c) => {
+        const col = c.color && c.color.length >= 7 ? c.color.slice(0, 7) : c.color || "#3B82F6";
+        return `<span class="cal-swatch" style="background:${esc(col)};margin-top:0" title="${esc(c.displayname)}"></span>`;
+      })
+      .join("");
 
     return `<section class="card month-cal-card">
       <div class="month-cal-toolbar">
@@ -1791,7 +1954,7 @@ export function mountApp(root: HTMLElement): void {
         </div>
         <h2 class="month-cal-title">${esc(monthTitle(y, m))}</h2>
         <span class="month-cal-name muted small" title="${esc(calName)}">
-          <span class="cal-swatch" style="background:${esc(color)};margin-top:0"></span>
+          ${swatches}
           ${esc(calName)}
         </span>
       </div>
@@ -2962,21 +3125,54 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function renderLogin() {
+    const gate = installGate;
+    const upgrade =
+      gate &&
+      (gate.step === "upgrade" ||
+        gate.step === "initialize" ||
+        gate.step === "permissions" ||
+        gate.step === "database");
+    const installUrl = gate?.installUrl || "/portal/install/";
+    let gateBanner = "";
+    if (upgrade && gate) {
+      const title =
+        gate.step === "upgrade"
+          ? "Server upgrade required"
+          : "Setup incomplete";
+      const versions =
+        gate.step === "upgrade" && (gate.configuredVersion || gate.productVersion)
+          ? `<p class="muted small" style="margin:0.5rem 0 0">Configured <span class="mono">${esc(String(gate.configuredVersion || "—"))}</span>
+              → product <span class="mono">${esc(String(gate.productVersion || "—"))}</span></p>`
+          : "";
+      gateBanner = `
+        <div class="flash flash-error" role="alert" style="margin-bottom:1rem">
+          <span class="flash-text">
+            <strong>${esc(title)}.</strong>
+            ${esc(gate.message || "Complete the installer before signing in.")}
+            ${versions}
+          </span>
+        </div>
+        <p style="margin:0 0 1rem">
+          <a class="btn btn-primary" href="${esc(installUrl)}">Open installer</a>
+        </p>`;
+    }
+    const loginDisabled = busy || !!upgrade;
     root.innerHTML = shell(
       `<div class="auth-wrap">
         <div class="card auth-card">
           <h1>Sign in</h1>
+          ${gateBanner}
           <p class="muted">Use your AngaraDAV <strong>DAV user</strong> credentials (not the admin password).</p>
           <form class="stack" data-form="login">
             <label>
               Username
-              <input type="text" name="username" autocomplete="username" required />
+              <input type="text" name="username" autocomplete="username" required ${loginDisabled ? "disabled" : ""} />
             </label>
             <label>
               Password
-              <input type="password" name="password" autocomplete="current-password" required />
+              <input type="password" name="password" autocomplete="current-password" required ${loginDisabled ? "disabled" : ""} />
             </label>
-            <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Sign in</button>
+            <button type="submit" class="btn btn-primary" ${loginDisabled ? "disabled" : ""}>Sign in</button>
           </form>
           <p class="muted small" style="margin-top:1rem">
             CalDAV/CardDAV clients keep using <span class="mono">/dav.php/</span>. This portal is for calendars, sharing, and contacts.
@@ -2999,7 +3195,9 @@ export function mountApp(root: HTMLElement): void {
 
     const calRows = own
       .map((c) => {
-        const active = c.id === selectedId ? " is-selected" : "";
+        const visible = selectedIds.includes(c.id);
+        const active = visible ? " is-selected" : "";
+        const primary = c.id === selectedId ? " is-primary" : "";
         const color = c.color
           ? `<span class="cal-swatch" style="background:${esc(c.color)}"></span>`
           : `<span class="cal-swatch cal-swatch-empty"></span>`;
@@ -3009,7 +3207,10 @@ export function mountApp(root: HTMLElement): void {
           (c.holidaysCountry
             ? `<span class="badge badge-admin">holidays ${esc(c.holidaysCountry)}</span>`
             : "");
-        return `<div class="cal-row${active}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0">
+        return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="Toggle on the month grid">
+          <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+            <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${busy ? "disabled" : ""} />
+          </label>
           ${color}
           <span class="cal-row-text">
             <span class="cal-row-title">${esc(c.displayname)}</span>
@@ -3026,15 +3227,20 @@ export function mountApp(root: HTMLElement): void {
 
     const sharedRows = sharedWithMe
       .map((c) => {
-        const active = c.id === selectedId ? " is-selected" : "";
+        const visible = selectedIds.includes(c.id);
+        const active = visible ? " is-selected" : "";
+        const primary = c.id === selectedId ? " is-primary" : "";
         const color = c.color
           ? `<span class="cal-swatch" style="background:${esc(c.color)}"></span>`
           : `<span class="cal-swatch cal-swatch-empty"></span>`;
         const accessHint =
           c.access === "readwrite"
-            ? "Shared with you · full access — select to view and edit events"
-            : "Shared with you · read-only — select to view events";
-        return `<div class="cal-row${active}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="${esc(accessHint)}">
+            ? "Shared with you · full access — check to show events; click to set as primary for new events"
+            : "Shared with you · read-only — check to show events";
+        return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="${esc(accessHint)}">
+          <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+            <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${busy ? "disabled" : ""} />
+          </label>
           ${color}
           <span class="cal-row-text">
             <span class="cal-row-title">${esc(c.displayname)}</span>
@@ -3288,6 +3494,9 @@ export function mountApp(root: HTMLElement): void {
             <div class="calendars-sidebar-head">
               ${infoTitle("Owned", "owned")}
             </div>
+            <p class="muted small" style="margin:0 0 0.65rem">
+              Check calendars to show events on the right. Underlined name is primary for new events.
+            </p>
             <div class="cal-list calendars-owned-list">
               ${calRows || '<p class="muted">No calendars yet. Create one below.</p>'}
               ${
@@ -6643,6 +6852,9 @@ export function mountApp(root: HTMLElement): void {
         readOnly,
       });
       selectedId = res.calendar.id;
+      if (!selectedIds.includes(res.calendar.id)) {
+        selectedIds = [...selectedIds, res.calendar.id];
+      }
       createCalModalOpen = false;
       await loadHome();
       let msg = `Created “${res.calendar.displayname}”`;
@@ -6693,10 +6905,10 @@ export function mountApp(root: HTMLElement): void {
       render();
       return;
     }
-    if (action === "select-cal") {
+    if (action === "select-cal" || action === "toggle-cal") {
       const id = Number(t.dataset.id);
       if (!Number.isFinite(id)) return;
-      selectedId = id;
+      toggleCalendarSelected(id);
       busy = true;
       clearFlash();
       render();
@@ -6716,6 +6928,9 @@ export function mountApp(root: HTMLElement): void {
       const cal = calendars.find((c) => c.id === id && c.canShare);
       if (!cal) return;
       selectedId = id;
+      if (!selectedIds.includes(id)) {
+        selectedIds = [...selectedIds, id];
+      }
       calModalOpen = true;
       deleteConfirmId = null;
       busy = true;
@@ -6777,6 +6992,7 @@ export function mountApp(root: HTMLElement): void {
       try {
         await api.deleteCalendar(id);
         if (selectedId === id) selectedId = null;
+        selectedIds = selectedIds.filter((x) => x !== id);
         deleteConfirmId = null;
         calModalOpen = false;
         shares = [];
@@ -6786,6 +7002,12 @@ export function mountApp(root: HTMLElement): void {
           const def = pickDefaultCalendar();
           if (def) {
             selectedId = def.id;
+            if (!selectedIds.includes(def.id)) {
+              selectedIds = [...selectedIds, def.id];
+            }
+            await loadMonthEvents();
+          } else if (selectedIds.length > 0) {
+            selectedId = selectedIds[0];
             await loadMonthEvents();
           }
         }
