@@ -216,6 +216,8 @@ PORTAL_ADMIN_USERS: "alice,bob"
 
 Incomplete or classic-only areas always keep an **Open classic …** link in the portal. Security review notes: [`portal-admin-security-checklist.md`](portal-admin-security-checklist.md). Program scope: [`portal-admin-integration-scope.txt`](portal-admin-integration-scope.txt).
 
+**Classic `/admin/` deprecation (planning only):** dual-run is intentional in 2.0.0; no day-to-day classic UI is removed yet. Criteria, dual-run requirements, installer policy, and announcement draft: [`portal-admin-classic-deprecation-plan.md`](portal-admin-classic-deprecation-plan.md).
+
 #### Admin audit log
 
 Mutations under `/api/admin/*` append to **`Specific/portal_debug.log`** (never nginx/docker error streams):
@@ -344,7 +346,7 @@ exposure use TLS and consider Basic over HTTPS (see auth notes below).
 
 ### Admin UI (classic `/admin/`)
 
-Classic Web Admin remains the recovery path and the only place for **database credential writes** and the **installer**. Day-to-day admin can use the [portal Administration](#portal-administration-parallel-with-classic-admin) UI instead when you grant the portal Admin role.
+Classic Web Admin remains the recovery path and the only place for **database credential writes** and the **installer**. Day-to-day admin can use the [portal Administration](#portal-administration-parallel-with-classic-admin) UI instead when you grant the portal Admin role. Deprecation of classic day-to-day screens is **not active** in 2.0.0 — see the [deprecation plan](portal-admin-classic-deprecation-plan.md) (checklist only; no routes removed).
 
 - Password stored with PHP `password_hash()` (bcrypt/argon depending on PHP).
 - Legacy SHA-256 / old MD5 admin hashes are accepted once and upgraded on login.

@@ -494,6 +494,11 @@ Step 9.3 — Deprecation plan for classic /admin/ (not execute yet)
     Installer may remain under /admin/install/ permanently or move later.
   Exit criteria: written deprecation checklist (no code removal yet).
 
+  Completed 2026-08-05:
+    Deliverable: docs/portal-admin-classic-deprecation-plan.md
+    (criteria, phased timeline A–D, announcement draft, non-removal list;
+     no classic /admin/ code removed).
+
 Step 9.4 — Observability
   Grok effort : low
   Detail:
