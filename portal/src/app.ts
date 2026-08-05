@@ -2595,16 +2595,12 @@ export function mountApp(root: HTMLElement): void {
     opts: { auth?: boolean; tabs?: string } = {},
   ): string {
     const inAdmin = !!user && activeTab === "admin" && userIsAdmin() && adminUiEnabled();
-    const brandLabel = inAdmin
-      ? "AngaraDAV Administration Portal"
-      : "AngaraDAV User Portal";
-    // Logo + brand wordmark: “DAV” uses primary button blue
-    const brandText = brandLabel.startsWith("AngaraDAV")
-      ? `Angara<span class="brand-dav">DAV</span>${esc(brandLabel.slice("AngaraDAV".length))}`
-      : esc(brandLabel);
+    // Logo + wordmark: DAV blue; portal name after · is soft green (user) / soft red (admin)
+    const portalName = inAdmin ? "Administration Portal" : "User Portal";
+    const portalClass = inAdmin ? "brand-portal brand-portal-admin" : "brand-portal brand-portal-user";
     const brand = `
       <img class="brand-logo" src="/logo.png" width="28" height="28" alt="" aria-hidden="true" />
-      <span class="brand-text">${brandText}</span>`;
+      <span class="brand-text">Angara<span class="brand-dav">DAV</span><span class="brand-sep" aria-hidden="true"> · </span><span class="${portalClass}">${esc(portalName)}</span></span>`;
     const displayName = user ? esc(user.displayname || user.username) : "";
     const adminMenuItem = adminUiEnabled()
       ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">
