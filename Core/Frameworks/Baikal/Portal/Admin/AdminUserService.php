@@ -325,6 +325,11 @@ class AdminUserService {
             throw new ApiException('User not found', 404);
         }
         $username = (string) $row['username'];
+        // Prevent locking out the sole remaining DAV account via admin API
+        $count = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        if ($count <= 1) {
+            throw new ApiException('Cannot delete the last remaining user account', 400);
+        }
         $userId = $this->userIdForUsername($username);
 
         // Prefer model destroy for full lifecycle (file quarantine, groupmembers, …)

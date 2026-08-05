@@ -196,6 +196,14 @@ try {
 }
 
 // --- Delete ---
+// Keep a second user so carol is not the last remaining account
+$svc2->createUser([
+    'username'        => 'keepme',
+    'displayname'     => 'Keep Me',
+    'email'           => 'keep@example.com',
+    'password'        => 'secret',
+    'passwordConfirm' => 'secret',
+]);
 try {
     $svc2->deleteUser('carol', false);
     assert_true(false, 'delete without confirm should throw');
@@ -215,6 +223,14 @@ try {
     assert_true(false, 'delete missing should throw');
 } catch (ApiException $e) {
     assert_true($e->getStatus() === 404, 'delete missing → 404');
+}
+
+// Cannot delete the last remaining user
+try {
+    $svc2->deleteUser('keepme', true);
+    assert_true(false, 'delete last user should fail');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400, 'delete last user → 400');
 }
 
 if ($failures > 0) {

@@ -141,14 +141,37 @@ try {
     assert_true($dbInfo['pgsql_username'] === 'davuser', 'db username');
     assert_true($dbInfo['hasPassword'] === true, 'hasPassword true');
     assert_true($dbInfo['hasEncryptionKey'] === true, 'hasEncryptionKey true');
-    assert_true($dbInfo['writeEnabled'] === false, 'writeEnabled false (deferred)');
+    assert_true($dbInfo['writeEnabled'] === true, 'writeEnabled true (Phase 8.2)');
     assert_true(!array_key_exists('pgsql_password', $dbInfo), 'password never in payload keys');
     assert_true(!array_key_exists('encryption_key', $dbInfo), 'encryption_key never in payload');
     $dbJson = json_encode($dbInfo);
     assert_true($dbJson !== false && !str_contains($dbJson, 'super-secret-db-pass'), 'JSON has no password secret');
     assert_true(!str_contains((string) $dbJson, 'enc-key-secret'), 'JSON has no encryption key');
 
+    // Write requires CONFIRM
+    try {
+        $svcDb->updateDatabaseSettings([
+            'backend'     => 'sqlite',
+            'sqlite_file' => '/tmp/db.sqlite',
+        ]);
+        assert_true(false, 'db write without CONFIRM should fail');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'db write without CONFIRM → 400');
+    }
+    $svcDb->updateDatabaseSettings([
+        'backend'     => 'sqlite',
+        'sqlite_file' => '/tmp/portal-admin-db.sqlite',
+        'confirm'     => 'CONFIRM',
+    ]);
+    $afterWrite = $svcDb->getDatabaseSettings();
+    assert_true($afterWrite['backend'] === 'sqlite', 'after write backend sqlite');
+    assert_true($afterWrite['sqlite_file'] === '/tmp/portal-admin-db.sqlite', 'after write path');
+    // encryption_key preserved, password never in GET
+    $rawDb = Yaml::parseFile($path);
+    assert_true(($rawDb['database']['encryption_key'] ?? '') === 'enc-key-secret', 'encryption key preserved');
+
     // SQLite-only shape
+    $withDb = Yaml::parseFile($path);
     $withDb['database'] = [
         'backend'     => 'sqlite',
         'sqlite_file' => '/data/db.sqlite',
@@ -156,12 +179,63 @@ try {
         'pgsql_dbname'=> '',
         'pgsql_username' => '',
         'pgsql_password' => '',
+        'encryption_key' => 'enc-key-secret',
     ];
     file_put_contents($path, Yaml::dump($withDb, 4, 2));
     $sqliteInfo = (new AdminSettingsService($path))->getDatabaseSettings();
     assert_true($sqliteInfo['backend'] === 'sqlite', 'sqlite backend');
     assert_true($sqliteInfo['sqlite_file'] === '/data/db.sqlite', 'sqlite path');
     assert_true($sqliteInfo['hasPassword'] === false, 'sqlite no password');
+
+    // Reset to default — full wipe: yaml + DB + files + INSTALL_DISABLED
+    $specific = $dir . '/Specific';
+    @mkdir($specific, 0700, true);
+    @mkdir($specific . '/db', 0700, true);
+    @mkdir($specific . '/files/user1', 0700, true);
+    $sqlitePath = $specific . '/db/db.sqlite';
+    file_put_contents($sqlitePath, 'fake-sqlite');
+    file_put_contents($specific . '/files/user1/note.txt', 'data');
+    file_put_contents($specific . '/portal_debug.log', "log\n");
+    $installDisabled = $specific . '/INSTALL_DISABLED';
+    file_put_contents($installDisabled, "1\n");
+    $withDb['database'] = [
+        'backend'     => 'sqlite',
+        'sqlite_file' => $sqlitePath,
+    ];
+    file_put_contents($path, Yaml::dump($withDb, 4, 2));
+    $svcReset = new AdminSettingsService($path, $specific);
+    try {
+        $svcReset->resetToDefault(false);
+        assert_true(false, 'reset without confirm should fail');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'reset without confirm → 400');
+    }
+    assert_true(is_file($path), 'yaml still present after unconfirmed reset');
+    assert_true(is_file($installDisabled), 'INSTALL_DISABLED still present after unconfirmed reset');
+    assert_true(is_file($sqlitePath), 'db still present after unconfirmed reset');
+
+    $result = $svcReset->resetToDefault(true);
+    assert_true($result['ok'] === true, 'reset ok');
+    assert_true(($result['redirectUrl'] ?? '') === '/portal/install/', 'redirect to portal installer');
+    assert_true(!is_file($path), 'baikal.yaml removed');
+    assert_true(!is_file($installDisabled), 'INSTALL_DISABLED removed');
+    assert_true(!is_file($sqlitePath), 'sqlite db removed');
+    assert_true(!is_file($specific . '/files/user1/note.txt'), 'webdav files removed');
+    assert_true(!is_file($specific . '/portal_debug.log'), 'runtime logs removed');
+    $backup = $result['backupPath'] ?? null;
+    assert_true(is_string($backup) && $backup !== '' && is_file($backup), 'backup yaml written');
+    if (is_string($backup) && is_file($backup)) {
+        @unlink($backup);
+    }
+    // cleanup residual dirs
+    $it = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($specific, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($it as $f) {
+        $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
+    }
+    @rmdir($specific);
 } finally {
     @unlink($path);
     @rmdir($dir);

@@ -107,23 +107,23 @@ Entrypoint also logs mount warnings at container start (`25-check-baikal-persist
 | `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload/download/rename/delete) |
 | `/cal.php/` | CalDAV only |
 | `/card.php/` | CardDAV only |
-| `/admin/` | Classic Web Admin (server-rendered; admin password) |
-| `/admin/install/` | Installer / upgrade wizard (stays on classic stack) |
+| `/portal/install/` | Installer / upgrade SPA |
+| `/portal/` → **Administration** | Day-to-day admin (Admin-role DAV users): Overview, System settings, Users, Database |
 
 ## User portal
 
-Modern UI (TypeScript SPA, dark theme aligned with bookmarks-sync admin style) for **end users** and, for designated operators, **day-to-day administration**.  
-Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Section help is under **(i)** icons. Operators with the **Admin role** also get **Administration** in the user menu.
+Modern UI (TypeScript SPA) for **end users** and, for designated operators, **administration**.  
+Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Section help is under **(i)** icons. Operators with the **Admin role** also get **Administration** (Overview · System settings · Users · Database).
 
 | Step | Action |
 |------|--------|
-| 1 | Open `http://NAS-IP:31088/portal/` |
-| 2 | Sign in with a **DAV user** (created in Admin → Users), not the classic admin password |
+| 1 | Open `http://NAS-IP:31088/portal/` (first boot: `/portal/install/`) |
+| 2 | Sign in with a **DAV user** (install creates `admin`; more users under Administration → Users) |
 | 3 | **Calendar:** owned list (Edit / Delete), month grid with create/edit/delete events (RRULE), holidays/read-only; details, share, import/export `.ics`; **select shared calendars** (read-only or full access) to view/edit events; **Add calendar → Import .ics**; large imports show **live %** (chunked SQLite txs keep NAS imports fast) |
 | 4 | **Contacts:** address books (delete confirm), contact search/CRUD, photos, birthday/special dates, custom fields, book + single-contact `.vcf` export (progress dialog with **live %** of cards + result) |
 | 5 | **Tasks / Notes:** CalDAV `VTODO` / `VJOURNAL` on writable calendars (bulk actions on tasks) |
 | 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`) |
-| 7 | **Administration** (Admin role only): Overview, Users CRUD, per-user calendars/address books, System settings; Database is **read-only** in the portal |
+| 7 | **Administration** (Admin role only): Overview, System settings, Users CRUD, Database (CONFIRM gate on write) |
 
 ### Screenshots
 
@@ -165,23 +165,22 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Secti
   - If Docker logs show `FastCGI sent in stderr: "PHP message: AngaraDAV portal: ..."`, request tracing was routed to stderr unexpectedly. Current images write portal traces to `Specific/portal_debug.log`.
   - Public `GET /api/ui` returns prefs (including log level and `sessionIdleSeconds`) without a session
 
-### Portal Administration (parallel with classic `/admin/`)
+### Portal Administration
 
-AngaraDAV runs **two admin UIs** against the same database and `config/baikal.yaml`:
+Primary administration surface for AngaraDAV (same `baikal.yaml` + database):
 
 | Surface | Auth | URL |
 |---------|------|-----|
-| **Portal Administration** | DAV user session + **Admin role** (not the classic admin password) | `/portal/` → user menu → **Administration** (`#admin`, …) |
-| **Classic Web Admin** | Fixed username `admin` + `system.admin_passwordhash` | `/admin/` |
-| **Installer / upgrade** | Classic stack only | `/admin/install/` |
-
-**Last write wins** if both UIs change the same setting or user. Prefer one UI for a given change.
+| **Portal Administration** | DAV user session + **Admin role** | `/portal/` → user menu → **Administration** (`#admin`, `#admin/settings`, `#admin/users`, `#admin/database`) |
+| **Installer / upgrade** | Unauthenticated bootstrap SPA | `/portal/install/` |
 
 #### How the portal Admin role is granted
 
 1. **Env (highest priority):** `PORTAL_ADMIN_USERS` or `BAIKAL_PORTAL_ADMIN_USERS` — comma- or space-separated **DAV usernames**.
 2. **YAML:** `system.portal_admin_users` — list or comma-separated string in `baikal.yaml`.
 3. **Default if neither is set:** DAV user named **`admin`** (case-insensitive).
+
+**Install note:** `/portal/install/` creates DAV user `admin` with the password you choose, and sets YAML `portal_admin_users: admin` when env is unset. If you set `PORTAL_ADMIN_USERS` to another name (e.g. `yurik`), user `admin` can still log into the portal but will **not** see Administration until the env list includes `admin` (or you clear the env).
 
 Examples:
 
@@ -199,24 +198,24 @@ PORTAL_ADMIN_USERS: "alice,bob"
 ```
 
 - Env **overrides** YAML.
-- This is **independent** of the classic `/admin/` password. A DAV user can be a portal Admin without knowing that password, and the classic `admin` password does **not** log you into `/portal/`.
 - Every `/api/admin/*` call requires a portal session **and** Admin role (anonymous → **401**, non-admin → **403**). Hiding the menu is not enough; the API enforces the role.
-- `system.portal_admin_ui_enabled` (default **true**): set `false` to hide the Administration UI in the SPA (menu becomes a link to classic Web Admin). Routes under `/api/admin/*` remain; capability map is still `GET /api/admin/capabilities`.
+- `system.portal_admin_ui_enabled` (default **true**): set `false` to hide the Administration UI in the SPA. Routes under `/api/admin/*` remain; capability map is still `GET /api/admin/capabilities` (`portalAdminUrl` + per-page `portalUrl`).
 
-#### Feature matrix (portal vs classic)
+#### Feature matrix
 
-| Capability | Portal Administration | Classic `/admin/` |
-|------------|----------------------|-------------------|
-| Dashboard / Overview stats | Yes (read-only) | Yes |
-| Users list / create / edit / delete | Yes (full CRUD; digesta1 never returned) | Yes |
-| Per-user calendars & address books | Yes (under Users → user detail) | Yes |
-| System settings (`baikal.yaml` system) | Yes (incl. services, files, push, session, admin password) | Yes |
-| Database settings (backend, credentials) | **Read-only** (password never shown) | **Read + write** |
-| Installer / version upgrade | No | Yes (`/admin/install/`) |
+| Capability | Portal Administration |
+|------------|----------------------|
+| Dashboard / Overview stats | Yes |
+| Users list / create / edit / delete | Yes (full CRUD; digesta1 never returned) |
+| Per-user calendars & address books | Yes (under Users → user detail) |
+| System settings (`baikal.yaml` system) | Yes (services, files, push, session, admin password) |
+| Database settings (backend, credentials) | Yes (password never shown; write requires typing **CONFIRM**) |
+| Installer / version upgrade | Yes (`/portal/install/` + `/api/install/*`) |
+| Reset to Default | Yes (full wipe → `/portal/install/`; backs up `baikal.yaml` only — snapshot volumes first) |
 
-Incomplete or classic-only areas always keep an **Open classic …** link in the portal. Security review notes: [`portal-admin-security-checklist.md`](portal-admin-security-checklist.md). Program scope: [`portal-admin-integration-scope.txt`](portal-admin-integration-scope.txt).
+**Passwords:** Portal login always uses **DAV** credentials. The **server admin password** in System settings is the `baikal.yaml` hash used at install/recovery — distinct from other users’ DAV passwords (install reuses one password for both the server hash and the DAV user `admin`).
 
-**Classic `/admin/` deprecation (planning only):** dual-run is intentional in 2.0.0; no day-to-day classic UI is removed yet. Criteria, dual-run requirements, installer policy, and announcement draft: [`portal-admin-classic-deprecation-plan.md`](portal-admin-classic-deprecation-plan.md).
+Security review notes: [`portal-admin-security-checklist.md`](portal-admin-security-checklist.md). Program scope: [`portal-admin-integration-scope.txt`](portal-admin-integration-scope.txt). Installer details: [`portal-admin-installer-phase10.md`](portal-admin-installer-phase10.md).
 
 #### Admin audit log
 
@@ -275,7 +274,7 @@ docker exec angaradav tail -n 50 /var/www/baikal/Specific/portal_debug.log
 | GET | `/api/me` | Session profile + `ui` prefs (`isAdmin` / `role`) |
 | GET | `/api/admin/ping` | Admin authz smoke check → `{ ok: true, user }` (Admin only) |
 | GET | `/api/admin/dashboard` | Read-only dashboard stats → `{ data: { users, calendars, events, addressBooks, contacts, nbusers…, services, links } }` (Admin only) |
-| GET | `/api/admin/capabilities` | Admin UI feature matrix → `{ data: { uiEnabled, classicAdminUrl, pages[] } }` (Admin only) |
+| GET | `/api/admin/capabilities` | Admin UI feature matrix → `{ data: { uiEnabled, portalAdminUrl, pages[] } }` (Admin only; pages use `portalUrl`) |
 | GET | `/api/admin/users` | List DAV users → `{ users: [{ username, displayname, email, principal }] }` (Admin only; no digesta1) |
 | POST | `/api/admin/users` | Create user (Admin + CSRF); seeds default calendar + address book |
 | GET | `/api/admin/users/{username}` | User detail + resource counts (Admin only; **404** if missing) |
@@ -286,7 +285,7 @@ docker exec angaradav tail -n 50 /var/www/baikal/Specific/portal_debug.log
 | GET/POST | `/api/admin/users/{u}/addressbooks` | List / create address books |
 | GET/PATCH/DELETE | `/api/admin/users/{u}/addressbooks/{id}` | Get / update / delete (`force` for non-empty) |
 | GET/PATCH | `/api/admin/settings/system` | Read / update system settings (never returns password hash; use `admin_password` + confirm to change) |
-| GET | `/api/admin/settings/database` | Read-only DB summary (backend, sqlite path or pgsql host/dbname/user; **never** password). Writes: classic only (**403** on mutating methods) |
+| GET/PATCH | `/api/admin/settings/database` | DB summary / update (never password; PATCH requires `confirm: "CONFIRM"`) |
 | GET | `/api/calendars` | List calendars |
 | POST | `/api/calendars` | Create (`displayname`, `color?`, `description?`, `holidays?`, `holidayCountry?`, `readOnly?`) |
 | PATCH | `/api/calendars/{id}` | Update name / color / description |
@@ -344,15 +343,14 @@ exposure use TLS and consider Basic over HTTPS (see auth notes below).
 
 ## Authentication
 
-### Admin UI (classic `/admin/`)
+### Portal Administration auth
 
-Classic Web Admin remains the recovery path and the only place for **database credential writes** and the **installer**. Day-to-day admin can use the [portal Administration](#portal-administration-parallel-with-classic-admin) UI instead when you grant the portal Admin role. Deprecation of classic day-to-day screens is **not active** in 2.0.0 — see the [deprecation plan](portal-admin-classic-deprecation-plan.md) (checklist only; no routes removed).
+Day-to-day admin and install use the **portal** ([Portal Administration](#portal-administration)):
 
-- Password stored with PHP `password_hash()` (bcrypt/argon depending on PHP).
-- Legacy SHA-256 / old MD5 admin hashes are accepted once and upgraded on login.
-- Rolling idle session (default **15 minutes**, configurable as **Admin session timeout** — same knob as portal idle).
-- Failed login rate limit: **10 attempts / 15 minutes / IP** (file under `Specific/`).
-- Optional Fail2Ban via `failed_access_message` syslog lines.
+- **DAV user** login on `/portal/` with **Admin role** (`PORTAL_ADMIN_USERS` / `portal_admin_users` / default username `admin`).
+- System settings can set the **admin password** (bcrypt hash in `baikal.yaml`) used for install-time and optional recovery paths.
+- Rolling idle session (default **15 minutes**, configurable as session timeout in System settings).
+- Failed portal login rate limit applies (file under `Specific/`).
 
 ### CalDAV / CardDAV users
 
@@ -680,7 +678,7 @@ Keep normal client polling enabled at a reduced frequency. The experimental spec
 
 ## Installer lock
 
-After a normal install, `Specific/INSTALL_DISABLED` is created and `/admin/install/` returns **403**.
+After a normal install, `Specific/INSTALL_DISABLED` is created and `/portal/install/` reports step **done** / locked.
 
 | Env | Effect |
 |-----|--------|

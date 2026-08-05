@@ -30,20 +30,26 @@ $svc = new AdminCapabilitiesService(['system' => []]);
 $cap = $svc->capabilities();
 
 assert_true($cap['uiEnabled'] === true, 'uiEnabled defaults true');
-assert_true($cap['classicAdminUrl'] === '/admin/', 'classicAdminUrl set');
+assert_true(($cap['portalAdminUrl'] ?? '') === '/portal/#admin', 'portalAdminUrl set');
+assert_true(!array_key_exists('classicAdminUrl', $cap), 'no classicAdminUrl key');
 assert_true(is_array($cap['pages']) && count($cap['pages']) >= 4, 'pages list present');
 
 $byId = [];
+$order = [];
 foreach ($cap['pages'] as $p) {
-    assert_true(isset($p['id'], $p['status'], $p['classicUrl'], $p['classicLabel']), 'page has required fields: ' . ($p['id'] ?? '?'));
-    assert_true(is_string($p['classicUrl']) && $p['classicUrl'] !== '', 'classicUrl non-empty for ' . $p['id']);
-    assert_true(str_starts_with($p['classicUrl'], '/admin'), 'classicUrl under /admin for ' . $p['id']);
+    assert_true(isset($p['id'], $p['status'], $p['portalUrl'], $p['portalLabel']), 'page has required fields: ' . ($p['id'] ?? '?'));
+    assert_true(is_string($p['portalUrl']) && $p['portalUrl'] !== '', 'portalUrl non-empty for ' . $p['id']);
+    assert_true(str_starts_with($p['portalUrl'], '/portal/'), 'portalUrl under /portal for ' . $p['id']);
+    assert_true(!array_key_exists('classicUrl', $p), 'no classicUrl on ' . $p['id']);
     $byId[$p['id']] = $p;
+    $order[] = $p['id'];
 }
+
+assert_true($order === ['overview', 'settings', 'users', 'database'], 'tab order overview→settings→users→database');
 
 assert_true(isset($byId['overview']), 'overview page defined');
 assert_true($byId['overview']['available'] === true, 'overview available');
-assert_true($byId['overview']['status'] === 'read-only', 'overview read-only');
+assert_true($byId['overview']['status'] === 'full', 'overview full');
 
 assert_true(isset($byId['users']), 'users page defined');
 assert_true($byId['users']['available'] === true, 'users available');
@@ -51,8 +57,8 @@ assert_true($byId['users']['status'] === 'full', 'users full CRUD');
 
 assert_true(isset($byId['settings']) && $byId['settings']['available'] === true, 'settings available');
 assert_true($byId['settings']['status'] === 'full', 'settings full');
-assert_true(isset($byId['database']) && $byId['database']['available'] === true, 'database page available (read)');
-assert_true($byId['database']['status'] === 'read-only', 'database read-only (writes classic-only)');
+assert_true(isset($byId['database']) && $byId['database']['available'] === true, 'database page available');
+assert_true($byId['database']['status'] === 'full', 'database full (CONFIRM write)');
 
 // Disable whole portal admin UI shell
 $off = (new AdminCapabilitiesService([
@@ -65,10 +71,10 @@ $stringOff = (new AdminCapabilitiesService([
 ]))->capabilities();
 assert_true($stringOff['uiEnabled'] === false, 'portal_admin_ui_enabled string off');
 
-// Every incomplete page must keep a classic fallback (exit criterion)
+// Every incomplete page must keep a portal navigation URL
 foreach ($cap['pages'] as $p) {
     if (!$p['available']) {
-        assert_true($p['classicUrl'] !== '', 'incomplete page has classicUrl: ' . $p['id']);
+        assert_true($p['portalUrl'] !== '', 'incomplete page has portalUrl: ' . $p['id']);
     }
 }
 

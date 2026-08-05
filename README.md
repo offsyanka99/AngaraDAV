@@ -24,11 +24,11 @@ AngaraDAV includes:
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
   - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
-  - **Administration** (Admin-role DAV users): Overview, Users CRUD, per-user calendars/address books, System settings; Database **read-only** in portal. Runs **in parallel** with classic `/admin/` (classic password unchanged). See [Portal Administration](docs/DEPLOYMENT.md#portal-administration-parallel-with-classic-admin).
+  - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
 - `/dav.php/` kept as classic browser and combined CalDAV/CardDAV/WebDAV endpoint
-- Classic **Web Admin** (`/admin/`) remains fully supported during dual-admin operation (installer stays at `/admin/install/`)
+- Day-to-day admin and install live in the **portal** (`/portal/`, `/portal/install/`)
 
 Upstream ancestry: [sabre-io/Baikal](https://github.com/sabre-io/Baikal).
 
@@ -61,7 +61,7 @@ Legacy release history
 | `1.0.8` | Unified the Maximum WebDAV file size setting on a single MB standard end to end: `baikal.yaml`'s `files_max_upload_mb` and `BAIKAL_FILES_MAX_UPLOAD_MB` now store MB directly (previously bytes), matching the admin UI; the old byte-based key/env var still work as a one-time upgrade fallback |
 | `1.0.9` | Extended the MB standard to the WebDAV per-user quota setting: `files_quota_mb` / `BAIKAL_FILES_QUOTA_MB` replace the byte-based `files_quota_bytes` / `BAIKAL_FILES_QUOTA_BYTES` (old key/env var still work as a one-time upgrade fallback; `0` still means unlimited) |
 | `1.0.10` | Files tab: bulk delete modal, copy/move destination modals, header select alignment, remove Clear selection; show max upload/quota in MB from app settings |
-| `2.0.0` | **Portal Administration** dual-admin program: `/api/admin/*` (authz, users CRUD, per-user cal/AB, system settings, DB read-only), SPA Administration shell, audit/observability, security checklist; classic `/admin/` remains in parallel |
+| `2.0.0` | **Portal Administration**: `/api/admin/*` + SPA shell (users, settings, DB with CONFIRM, install at `/portal/install/`); classic Formal `/admin/` UI removed (redirects to portal) |
 
 Image tags: `latest`, `2.0.0`, `sha-…`.
 
@@ -92,8 +92,7 @@ Endpoints
 | `/portal/` | **User portal** — calendars, contacts, tasks, notes, files; **Administration** for Admin-role users |
 | `/dav.php/` | CalDAV + CardDAV (clients + classic WebDAV browser) |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
-| `/admin/` | Classic Web Admin (admin password; still the recovery UI) |
-| `/admin/install/` | Installer / upgrade (classic only) |
+| `/portal/install/` | Installer / upgrade SPA |
 | `/api/` | Portal JSON API (session cookie; `/api/admin/*` is Admin-role only) |
 | `/health.php` | Liveness JSON |
 | `/info.php` | Public status JSON |
@@ -101,8 +100,8 @@ Endpoints
 User portal
 -----------
 
-1. Create DAV users under classic **`/admin/`** (or portal **Administration → Users** once you have an Admin-role account).
-2. Open **`/portal/`**, sign in with **DAV** credentials (not the classic admin password).
+1. Complete **`/portal/install/`** (creates portal user `admin`) or create DAV users under **Administration → Users**.
+2. Open **`/portal/`**, sign in with **DAV** credentials.
 3. **Calendar:** owned list, month view, create/edit events (repeat rules), Edit modal (details, share, import/export `.ics`).
 4. **Contacts:** address books, contact search/CRUD, photos, birthday/special dates, custom fields, import/export `.vcf`.
 5. **Tasks** / **Notes:** manage `VTODO` / `VJOURNAL` on your calendars.

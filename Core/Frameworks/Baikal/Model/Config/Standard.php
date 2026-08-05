@@ -235,7 +235,7 @@ class Standard extends \Baikal\Model\Config {
             if ($sProp === "admin_passwordhash" && $sValue !== "") {
                 parent::set(
                     "admin_passwordhash",
-                    \BaikalAdmin\Core\Auth::hashAdminPassword($sValue, $this->aData["auth_realm"])
+                    \Baikal\Core\AdminPassword::hashAdminPassword($sValue, $this->aData["auth_realm"])
                 );
             }
 

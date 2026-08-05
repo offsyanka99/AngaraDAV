@@ -5,7 +5,7 @@ namespace Baikal\Portal\Admin;
 /**
  * Read-only dashboard stats for the portal Administration Overview.
  *
- * Mirrors classic BaikalAdmin\Controller\Dashboard metrics without HTML/Twig.
+ * Dashboard metrics for portal Administration Overview.
  * Uses PDO counts against the same tables as Baikal\Model\* (no Formal).
  */
 class AdminDashboardService {
@@ -43,6 +43,7 @@ class AdminDashboardService {
      *   nbbooks: int,
      *   nbcontacts: int,
      *   services: array{
+     *     administration: bool,
      *     webAdmin: bool,
      *     caldav: bool,
      *     carddav: bool,
@@ -51,14 +52,14 @@ class AdminDashboardService {
      *     notes: bool,
      *     push: bool
      *   },
-     *   links: array{docs: string, releases: string, classicDashboard: string}
+     *   links: array{docs: string, releases: string, administration: string}
      * }
      */
     public function stats(): array {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
 
         $users = $this->countTable('users');
-        // Classic dashboard counts calendar *instances* via Baikal\Model\Calendar (DATATABLE calendarinstances)
+        // Calendar *instances* (same basis as historical Baikal dashboard)
         $calendars = $this->countTable('calendarinstances');
         $events = $this->countTable('calendarobjects');
         $books = $this->countTable('addressbooks');
@@ -72,26 +73,28 @@ class AdminDashboardService {
             'events'       => $events,
             'addressBooks' => $books,
             'contacts'     => $contacts,
-            // Classic template aliases (side-by-side QA with /admin/ dashboard)
+            // Compact aliases used by the portal Overview cards
             'nbusers'      => $users,
             'nbcalendars'  => $calendars,
             'nbevents'     => $events,
             'nbbooks'      => $books,
             'nbcontacts'   => $contacts,
             'services'     => [
-                // Classic dashboard always shows Web admin as On when you can see it
-                'webAdmin' => true,
-                'caldav'   => self::boolFlag($sys, 'cal_enabled', true),
-                'carddav'  => self::boolFlag($sys, 'card_enabled', true),
-                'files'    => self::boolFlag($sys, 'files_enabled', false),
-                'tasks'    => self::boolFlag($sys, 'tasks_enabled', true),
-                'notes'    => self::boolFlag($sys, 'notes_enabled', false),
-                'push'     => self::boolFlag($sys, 'push_enabled', false),
+                // Portal Administration surface is available when the API can answer
+                'administration' => true,
+                // Legacy alias kept for older SPA builds
+                'webAdmin'       => true,
+                'caldav'         => self::boolFlag($sys, 'cal_enabled', true),
+                'carddav'        => self::boolFlag($sys, 'card_enabled', true),
+                'files'          => self::boolFlag($sys, 'files_enabled', false),
+                'tasks'          => self::boolFlag($sys, 'tasks_enabled', true),
+                'notes'          => self::boolFlag($sys, 'notes_enabled', false),
+                'push'           => self::boolFlag($sys, 'push_enabled', false),
             ],
             'links'        => [
-                'docs'             => 'https://github.com/offsyanka99/AngaraDAV/tree/main/docs',
-                'releases'         => 'https://github.com/offsyanka99/AngaraDAV/releases',
-                'classicDashboard' => '/admin/',
+                'docs'           => 'https://github.com/offsyanka99/AngaraDAV/tree/main/docs',
+                'releases'       => 'https://github.com/offsyanka99/AngaraDAV/releases',
+                'administration' => '/portal/#admin',
             ],
         ];
     }

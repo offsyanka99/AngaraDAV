@@ -107,7 +107,16 @@ $db = $settings->getDatabaseSettings();
 $json = json_encode($db);
 assert_true($json !== false && !str_contains($json, 'db-secret'), 'db GET no password');
 assert_true(!str_contains((string) $json, 'enc-secret'), 'db GET no encryption key');
-assert_true($db['writeEnabled'] === false, 'db write disabled');
+assert_true($db['writeEnabled'] === true, 'db write enabled with CONFIRM gate');
+try {
+    $settings->updateDatabaseSettings([
+        'backend'     => 'sqlite',
+        'sqlite_file' => '/tmp/sec-review.sqlite',
+    ]);
+    assert_true(false, 'db write without CONFIRM should fail');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400, 'db write without CONFIRM → 400');
+}
 
 // --- Users: forbid digesta1 mass-assignment ---
 $pdo = new PDO('sqlite::memory:');

@@ -42,7 +42,8 @@
 #
 # After deploy:
 # 1. Open http://NAS-IP:31088  → complete installer (admin password; select PostgreSQL)
-# 2. Classic Web Admin:  http://NAS-IP:31088/admin/     (admin password)
+# 2. Portal Administration: http://NAS-IP:31088/portal/  (Admin-role DAV user)
+# 3. Installer (first boot):  http://NAS-IP:31088/portal/install/
 # 3. Portal:             http://NAS-IP:31088/portal/    (DAV user login)
 # 4. DAV:                http://NAS-IP:31088/dav.php/
 # 5. Health / Info:      /health.php · /info.php
@@ -50,7 +51,7 @@
 # Portal Administration (Admin-role DAV users): user menu → Administration.
 #   Grant: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
 #   Default if unset: DAV user "admin". Parallel with classic /admin/ (last write wins).
-#   Database credential *writes* stay classic-only; portal shows read-only DB summary.
+#   Database credential writes: portal Administration → Database (type CONFIRM).
 #   See docs/DEPLOYMENT.md → Portal Administration
 #
 # Backup regularly (all three mounts):

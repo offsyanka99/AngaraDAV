@@ -7,9 +7,10 @@ use Symfony\Component\Yaml\Yaml;
 
 /**
  * Read/write system settings from baikal.yaml (Standard config section).
- * Read-only database section (Phase 8) — password never returned; writes deferred.
+ * Database section: read always; write requires body.confirm === "CONFIRM" (Phase 8.2).
  *
  * Never returns admin_passwordhash — only hasAdminPassword.
+ * Never returns pgsql_password / encryption_key — only has* flags.
  * Writes use temp file + rename (same approach as Baikal\Model\Config::writeConfigFile).
  */
 class AdminSettingsService {
@@ -67,12 +68,305 @@ class AdminSettingsService {
     /** @var string Absolute path to baikal.yaml */
     private $configPath;
 
+    /**
+     * Absolute path to Specific/ (INSTALL_DISABLED lives here).
+     * Empty string → resolve from PROJECT_PATH_SPECIFIC or config parent sibling.
+     *
+     * @var string
+     */
+    private $specificDir;
+
     /** @var array<string, mixed> In-memory config document (loaded on construct / refresh) */
     private $document;
 
-    public function __construct(string $configPath) {
+    public function __construct(string $configPath, string $specificDir = '') {
         $this->configPath = $configPath;
+        $this->specificDir = $this->resolveSpecificDir($specificDir);
         $this->document = $this->loadDocument();
+    }
+
+    private function resolveSpecificDir(string $specificDir): string {
+        if ($specificDir !== '') {
+            return rtrim($specificDir, '/');
+        }
+        if (defined('PROJECT_PATH_SPECIFIC') && PROJECT_PATH_SPECIFIC !== '') {
+            return rtrim((string) PROJECT_PATH_SPECIFIC, '/');
+        }
+        // config/ and Specific/ are siblings under the project root
+        $configDir = dirname($this->configPath);
+        $sibling = dirname($configDir) . '/Specific';
+        if (is_dir($sibling)) {
+            return $sibling;
+        }
+
+        return $configDir;
+    }
+
+    private function installDisabledPath(): string {
+        return $this->specificDir . '/INSTALL_DISABLED';
+    }
+
+    /**
+     * Factory-reset: wipe config, database, DAV data, and file homes so
+     * /portal/install/ starts clean.
+     *
+     * Removes (after backing up baikal.yaml only):
+     *   - config/baikal.yaml
+     *   - Specific/INSTALL_DISABLED
+     *   - SQLite DB file (or all tables for PostgreSQL)
+     *   - WebDAV file storage + quarantine
+     *   - Other Specific runtime state (logs, rate files, push identity, …)
+     *
+     * Requires explicit confirm=true.
+     * Honours BAIKAL_LOCK_INSTALL unless BAIKAL_ALLOW_REINSTALL=1.
+     *
+     * @return array{ok: true, redirectUrl: string, backupPath: string|null, wiped: list<string>}
+     */
+    public function resetToDefault(bool $confirm): array {
+        if (!$confirm) {
+            throw new ApiException(
+                'Confirmation required: set confirm to true after acknowledging the reset',
+                400
+            );
+        }
+
+        $forceLock = getenv('BAIKAL_LOCK_INSTALL') === '1';
+        $allowReinstall = getenv('BAIKAL_ALLOW_REINSTALL') === '1';
+        if ($forceLock && !$allowReinstall) {
+            throw new ApiException(
+                'Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to allow reset to default.',
+                403
+            );
+        }
+
+        // Fresh read so we know DB + files paths before deleting yaml
+        $this->document = $this->loadDocument();
+        $wiped = [];
+
+        // 1) Database (users, calendars, contacts, …)
+        $this->wipeDatabase($wiped);
+
+        // 2) WebDAV file homes / quarantine
+        $this->wipeFileStorage($wiped);
+
+        // 3) Other Specific runtime state (keep directory itself)
+        $this->wipeSpecificRuntimeState($wiped);
+
+        // 4) Config yaml (backup first)
+        $configDir = dirname($this->configPath);
+        $backupPath = null;
+        if (is_file($this->configPath)) {
+            if (!is_writable($this->configPath) && !is_writable($configDir)) {
+                throw new ApiException('Config file is not writable', 503);
+            }
+            $backupPath = $this->configPath . '.bak.' . date('Ymd-His') . '.' . bin2hex(random_bytes(3));
+            if (!@copy($this->configPath, $backupPath)) {
+                throw new ApiException('Unable to backup baikal.yaml before reset', 500);
+            }
+            @chmod($backupPath, 0600);
+            if (!@unlink($this->configPath)) {
+                throw new ApiException('Unable to remove baikal.yaml', 500);
+            }
+            $wiped[] = 'baikal.yaml';
+        }
+
+        // 5) Install lock
+        $installDisabled = $this->installDisabledPath();
+        if (is_file($installDisabled)) {
+            if (!is_writable($installDisabled) && !is_writable(dirname($installDisabled))) {
+                throw new ApiException('Unable to remove INSTALL_DISABLED (not writable)', 503);
+            }
+            if (!@unlink($installDisabled)) {
+                throw new ApiException('Unable to remove INSTALL_DISABLED', 500);
+            }
+            $wiped[] = 'INSTALL_DISABLED';
+        }
+
+        $this->document = ['system' => []];
+
+        return [
+            'ok'          => true,
+            'redirectUrl' => '/portal/install/',
+            'backupPath'  => $backupPath,
+            'wiped'       => $wiped,
+        ];
+    }
+
+    /**
+     * @param list<string> $wiped
+     */
+    private function wipeDatabase(array &$wiped): void {
+        $db = is_array($this->document['database'] ?? null) ? $this->document['database'] : [];
+        $backend = strtolower(trim((string) ($db['backend'] ?? '')));
+        if ($backend === '') {
+            if (trim((string) ($db['sqlite_file'] ?? '')) !== '') {
+                $backend = 'sqlite';
+            } elseif (trim((string) ($db['pgsql_host'] ?? '')) !== '') {
+                $backend = 'pgsql';
+            }
+        }
+
+        if ($backend === 'sqlite' || $backend === '') {
+            $sqlite = trim((string) ($db['sqlite_file'] ?? ''));
+            if ($sqlite === '') {
+                $sqlite = $this->specificDir . '/db/db.sqlite';
+            }
+            foreach ([$sqlite, $sqlite . '-wal', $sqlite . '-shm', $sqlite . '-journal'] as $f) {
+                if (is_file($f)) {
+                    if (!@unlink($f)) {
+                        throw new ApiException('Unable to remove database file: ' . $f, 500);
+                    }
+                    $wiped[] = basename($f);
+                }
+            }
+            // Empty default db directory is fine to keep
+            return;
+        }
+
+        if ($backend === 'pgsql') {
+            $host = trim((string) ($db['pgsql_host'] ?? ''));
+            $dbname = trim((string) ($db['pgsql_dbname'] ?? ''));
+            $username = (string) ($db['pgsql_username'] ?? '');
+            $password = (string) ($db['pgsql_password'] ?? '');
+            if ($host === '' || $dbname === '') {
+                $wiped[] = 'pgsql:skipped-incomplete-config';
+
+                return;
+            }
+            try {
+                $pdo = new \PDO(
+                    'pgsql:host=' . $this->pgsqlHostDsn($host) . ';dbname=' . $dbname,
+                    $username,
+                    $password,
+                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+                );
+                // Drop all objects in public schema (users, calendars, …)
+                $pdo->exec('DROP SCHEMA IF EXISTS public CASCADE');
+                $pdo->exec('CREATE SCHEMA public');
+                // Restore default grants when possible
+                if ($username !== '') {
+                    try {
+                        $pdo->exec('GRANT ALL ON SCHEMA public TO ' . $this->pgsqlIdent($username));
+                        $pdo->exec('GRANT ALL ON SCHEMA public TO public');
+                    } catch (\Throwable $e) {
+                        // Non-fatal: superuser may not need grants
+                    }
+                }
+                $wiped[] = 'pgsql:schema-dropped';
+            } catch (\Throwable $e) {
+                throw new ApiException('Unable to wipe PostgreSQL database: ' . $e->getMessage(), 500);
+            }
+        }
+    }
+
+    private function pgsqlHostDsn(string $host): string {
+        // host may be "name:port"
+        if (preg_match('/^(.+):(\d+)$/', $host, $m)) {
+            return $m[1] . ';port=' . $m[2];
+        }
+
+        return $host;
+    }
+
+    private function pgsqlIdent(string $ident): string {
+        // Quote identifier safely (alphanumeric + underscore only for reset grants)
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $ident)) {
+            return 'PUBLIC';
+        }
+
+        return '"' . $ident . '"';
+    }
+
+    /**
+     * @param list<string> $wiped
+     */
+    private function wipeFileStorage(array &$wiped): void {
+        $sys = is_array($this->document['system'] ?? null) ? $this->document['system'] : [];
+        $custom = trim((string) ($sys['files_storage_path'] ?? ''));
+        $paths = [];
+        if ($custom !== '' && $custom[0] === '/') {
+            $paths[] = $custom;
+        }
+        $paths[] = $this->specificDir . '/files';
+        $paths[] = $this->specificDir . '/files_quarantine';
+        $paths[] = $this->specificDir . '/quarantine';
+        foreach (array_unique($paths) as $p) {
+            if (is_dir($p)) {
+                $this->rmTree($p);
+                $wiped[] = 'dir:' . basename($p);
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $wiped
+     */
+    private function wipeSpecificRuntimeState(array &$wiped): void {
+        if (!is_dir($this->specificDir)) {
+            return;
+        }
+        $keepDirs = ['db' => true, 'files' => true, 'files_quarantine' => true, 'quarantine' => true];
+        $keepNames = ['.htaccess' => true, '.' => true, '..' => true];
+        $entries = @scandir($this->specificDir);
+        if (!is_array($entries)) {
+            return;
+        }
+        foreach ($entries as $name) {
+            if (isset($keepNames[$name])) {
+                continue;
+            }
+            $full = $this->specificDir . '/' . $name;
+            // Leave empty structural dirs; remove files and other dirs
+            if (is_file($full) || is_link($full)) {
+                if (@unlink($full)) {
+                    $wiped[] = 'file:' . $name;
+                }
+            } elseif (is_dir($full) && !isset($keepDirs[$name])) {
+                $this->rmTree($full);
+                $wiped[] = 'dir:' . $name;
+            }
+        }
+        // Clear db dir contents if SQLite path was outside or residual files remain
+        $dbDir = $this->specificDir . '/db';
+        if (is_dir($dbDir)) {
+            $dbEntries = @scandir($dbDir) ?: [];
+            foreach ($dbEntries as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $full = $dbDir . '/' . $name;
+                if (is_file($full) || is_link($full)) {
+                    @unlink($full);
+                    $wiped[] = 'db/' . $name;
+                }
+            }
+        }
+    }
+
+    private function rmTree(string $path): void {
+        if (!is_dir($path)) {
+            if (is_file($path) || is_link($path)) {
+                @unlink($path);
+            }
+
+            return;
+        }
+        $items = @scandir($path);
+        if (!is_array($items)) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $full = $path . '/' . $item;
+            if (is_dir($full) && !is_link($full)) {
+                $this->rmTree($full);
+            } else {
+                @unlink($full);
+            }
+        }
+        @rmdir($path);
     }
 
     /**
@@ -103,10 +397,10 @@ class AdminSettingsService {
     }
 
     /**
-     * Read-only database connection summary (Phase 8).
+     * Database connection summary (Phase 8).
      *
      * Never returns pgsql_password or encryption_key material.
-     * Writes intentionally deferred — use classic /admin/?/settings/database.
+     * Writes require updateDatabaseSettings() with confirm === "CONFIRM".
      *
      * @return array{
      *   backend: string,
@@ -116,13 +410,13 @@ class AdminSettingsService {
      *   pgsql_username: string,
      *   hasPassword: bool,
      *   hasEncryptionKey: bool,
-     *   writeEnabled: false,
-     *   classicUrl: string,
+     *   writeEnabled: true,
+     *   writable: bool,
      *   warning: string
      * }
      */
     public function getDatabaseSettings(): array {
-        // Fresh read so operators see latest classic-admin changes
+        // Fresh read so operators see latest changes
         $this->document = $this->loadDocument();
         $db = is_array($this->document['database'] ?? null) ? $this->document['database'] : [];
 
@@ -147,11 +441,91 @@ class AdminSettingsService {
             'pgsql_username'    => (string) ($db['pgsql_username'] ?? ''),
             'hasPassword'       => $password !== '',
             'hasEncryptionKey'  => $encKey !== '',
-            // Product decision (Phase 8.2): portal write DEFERRED — classic only
-            'writeEnabled'      => false,
-            'classicUrl'        => '/admin/?/settings/database',
-            'warning'           => 'Changing database settings can take the instance offline. Portal write is disabled; use classic Web Admin with a recovery plan.',
+            'writeEnabled'      => true,
+            'writable'          => $this->isWritable(),
+            'warning'           => 'Changing database settings can take the instance offline. You must type CONFIRM before save. Back up config and data first.',
         ];
+    }
+
+    /**
+     * Update database connection settings (Phase 8.2).
+     * Requires body.confirm === "CONFIRM" (exact). Never accepts encryption_key.
+     * Empty pgsql_password leaves the stored password unchanged.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    public function updateDatabaseSettings(array $body): array {
+        if (!$this->isWritable()) {
+            throw new ApiException('Config file is not writable', 503);
+        }
+
+        $confirm = trim((string) ($body['confirm'] ?? ''));
+        if ($confirm !== 'CONFIRM') {
+            throw new ApiException(
+                'Type CONFIRM exactly to change database settings',
+                400
+            );
+        }
+
+        $this->assertNoForbiddenBodyKeys($body);
+        // Extra hard reject for encryption_key even if not in FORBIDDEN list wording
+        if (array_key_exists('encryption_key', $body) || array_key_exists('encryptionKey', $body)) {
+            throw new ApiException('Refusing to accept encryption_key in request body', 400);
+        }
+
+        $this->document = $this->loadDocument();
+        if (!isset($this->document['database']) || !is_array($this->document['database'])) {
+            $this->document['database'] = [];
+        }
+        $db = &$this->document['database'];
+
+        $backend = strtolower(trim((string) ($body['backend'] ?? ($db['backend'] ?? 'sqlite'))));
+        if (!in_array($backend, ['sqlite', 'pgsql'], true)) {
+            throw new ApiException('Backend must be sqlite or pgsql', 400);
+        }
+        $db['backend'] = $backend;
+
+        if ($backend === 'sqlite') {
+            $sqlite = trim((string) ($body['sqlite_file'] ?? ($db['sqlite_file'] ?? '')));
+            if ($sqlite === '') {
+                throw new ApiException('SQLite file path is required', 400);
+            }
+            if ($sqlite[0] !== '/') {
+                throw new ApiException('SQLite file path must be absolute', 400);
+            }
+            if (str_contains($sqlite, "\0") || preg_match('#/\.\.(/|$)#', $sqlite)) {
+                throw new ApiException('Invalid SQLite path', 400);
+            }
+            $db['sqlite_file'] = $sqlite;
+        } else {
+            $host = trim((string) ($body['pgsql_host'] ?? ''));
+            $dbname = trim((string) ($body['pgsql_dbname'] ?? ''));
+            $username = trim((string) ($body['pgsql_username'] ?? ''));
+            if ($host === '' || $dbname === '') {
+                throw new ApiException('PostgreSQL host and database name are required', 400);
+            }
+            $db['pgsql_host'] = $host;
+            $db['pgsql_dbname'] = $dbname;
+            $db['pgsql_username'] = $username;
+            if (array_key_exists('pgsql_password', $body)) {
+                $pw = (string) $body['pgsql_password'];
+                // Empty string = keep existing password
+                if ($pw !== '') {
+                    $db['pgsql_password'] = $pw;
+                }
+            }
+        }
+
+        // Ensure encryption_key exists (generate if missing); never overwrite from body
+        if (trim((string) ($db['encryption_key'] ?? '')) === '') {
+            $db['encryption_key'] = bin2hex(random_bytes(32));
+        }
+
+        $this->writeDocument($this->document);
+
+        return $this->getDatabaseSettings();
     }
 
     /**

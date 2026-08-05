@@ -35,8 +35,8 @@ class Framework extends \Flake\Core\Framework {
             # Install tool has been launched and we're already on the install page
             return;
         } else {
-            # Install tool has been launched; redirecting user
-            $sInstallToolUrl = PROJECT_URI . "admin/install/";
+            # Install tool has been launched; redirecting user to portal installer
+            $sInstallToolUrl = PROJECT_URI . "portal/install/";
             header("Location: " . $sInstallToolUrl);
             exit(0);
         }

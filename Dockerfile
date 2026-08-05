@@ -23,13 +23,16 @@ COPY scripts/push-worker.php scripts/files-maintenance.php ./scripts/
 
 # Git may materialize symlinks as one-line text files on Windows. Normalize the
 # tracked web/resource links so local Docker builds match Linux CI builds.
+# Formal admin UI is gone: html/admin/*.php are portal redirects (keep as files).
 RUN ln -sfn ../../Frameworks/Baikal/Resources Core/Resources/Web/Baikal \
-    && ln -sfn ../../Frameworks/BaikalAdmin/Resources Core/Resources/Web/BaikalAdmin \
-    && ln -sfn ../../Frameworks/TwitterBootstrap Core/Resources/Web/TwitterBootstrap \
+    && if [ -d Core/Frameworks/TwitterBootstrap ]; then \
+         ln -sfn ../../Frameworks/TwitterBootstrap Core/Resources/Web/TwitterBootstrap; \
+       fi \
     && ln -sfn ../Core/Frameworks/Baikal/WWWRoot/index.php html/index.php \
-    && ln -sfn ../../Core/Frameworks/BaikalAdmin/WWWRoot/index.php html/admin/index.php \
-    && ln -sfn ../../../Core/Frameworks/BaikalAdmin/WWWRoot/install/index.php html/admin/install/index.php \
-    && ln -sfn ../../Core/Resources/Web html/res/core
+    && ln -sfn ../../Core/Resources/Web html/res/core \
+    && mkdir -p html/admin/install Core/Frameworks/BaikalAdmin/WWWRoot/install \
+    && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/index.php html/admin/index.php \
+    && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/install/index.php html/admin/install/index.php
 
 RUN composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader \
     && sh scripts/apply-vendor-patches.sh \

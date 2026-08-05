@@ -28,6 +28,9 @@ export type AdminDashboardStats = {
   nbbooks?: number;
   nbcontacts?: number;
   services: {
+    /** Portal Administration available */
+    administration?: boolean;
+    /** @deprecated use administration */
     webAdmin?: boolean;
     caldav: boolean;
     carddav: boolean;
@@ -39,7 +42,8 @@ export type AdminDashboardStats = {
   links?: {
     docs?: string;
     releases?: string;
-    classicDashboard?: string;
+    /** Portal Administration overview */
+    administration?: string;
   };
 };
 
@@ -85,7 +89,7 @@ export type AdminUserAddressBook = {
   davUri: string;
 };
 
-/** GET /api/admin/settings/database (read-only; never includes password). */
+/** GET/PATCH /api/admin/settings/database (never includes password; write needs confirm: "CONFIRM"). */
 export type AdminDatabaseSettings = {
   backend: string;
   sqlite_file: string;
@@ -95,7 +99,7 @@ export type AdminDatabaseSettings = {
   hasPassword: boolean;
   hasEncryptionKey: boolean;
   writeEnabled: boolean;
-  classicUrl: string;
+  writable?: boolean;
   warning: string;
 };
 
@@ -141,17 +145,19 @@ export type AdminCapabilityPage = {
   id: string;
   label: string;
   status: AdminFeatureStatus;
-  /** When false, portal shows Coming soon + classic fallback only. */
+  /** When false, page is gated in the Administration shell. */
   available: boolean;
-  classicUrl: string;
-  classicLabel: string;
+  /** Deep link into portal Administration (e.g. /portal/#admin/users). */
+  portalUrl: string;
+  portalLabel: string;
   summary: string;
 };
 
 /** GET /api/admin/capabilities payload. */
 export type AdminCapabilities = {
   uiEnabled: boolean;
-  classicAdminUrl: string;
+  /** Portal Administration entry (/portal/#admin). */
+  portalAdminUrl: string;
   pages: AdminCapabilityPage[];
 };
 
@@ -768,7 +774,7 @@ export const api = {
   /** Read-only dashboard stats for Administration → Overview. */
   adminDashboard: () =>
     request<{ data: AdminDashboardStats }>("/admin/dashboard"),
-  /** Feature gating map for Administration shell (Coming soon / classic fallback). */
+  /** Feature gating map for Administration shell. */
   adminCapabilities: () =>
     request<{ data: AdminCapabilities }>("/admin/capabilities"),
   /** Admin users list (never digesta1). */
@@ -897,9 +903,24 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  /** Read-only database connection summary (never password). */
+  /** Factory reset: remove baikal.yaml + INSTALL_DISABLED; then open installer. */
+  adminResetToDefault: (confirm = true) =>
+    request<{ ok: boolean; redirectUrl: string; backupPath?: string | null }>(
+      "/admin/settings/reset-to-default",
+      {
+        method: "POST",
+        body: JSON.stringify({ confirm }),
+      },
+    ),
+  /** Database connection summary (never password). */
   adminDatabaseSettings: () =>
     request<{ data: AdminDatabaseSettings }>("/admin/settings/database"),
+  /** Update database settings — body must include confirm: "CONFIRM". */
+  adminUpdateDatabaseSettings: (body: Record<string, unknown>) =>
+    request<{ data: AdminDatabaseSettings }>("/admin/settings/database", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   me: async () => {
     const data = await request<{
       user: PortalUser;

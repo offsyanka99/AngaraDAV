@@ -6,6 +6,21 @@ from urllib.parse import urljoin
 BASE_URL = os.environ.get("BAIKAL_BASE_URL", "http://localhost/html/")
 ADMIN_PASSWORD = "secret123"
 
+# Classic Formal /admin/ HTML was removed (portal-only admin). These MechanicalSoup
+# helpers expect Formal install + login forms. Rewrite against /portal/install/ +
+# /api/admin/* (see docs/portal-admin-cutover.md) before re-enabling CI.
+CLASSIC_ADMIN_REMOVED = True
+
+
+def require_classic_admin():
+    if CLASSIC_ADMIN_REMOVED:
+        import pytest
+
+        pytest.skip(
+            "Classic Formal /admin/ removed — rewrite suite for portal install/admin "
+            "(docs/portal-admin-cutover.md)"
+        )
+
 def follow_link_containing(browser: mechanicalsoup.StatefulBrowser, text_substring: str):
     text_substring = text_substring.lower()
     page = browser.get_current_page()
@@ -20,6 +35,7 @@ def follow_link_containing(browser: mechanicalsoup.StatefulBrowser, text_substri
     browser.follow_link(link)
 
 def setup_admin_password(browser: mechanicalsoup.StatefulBrowser):
+    require_classic_admin()
     browser.open(BASE_URL)
     page = browser.get_current_page()
     assert "angaradav initialization wizard" in page.text.lower()

@@ -444,11 +444,11 @@ Step 8.2 — Write path (optional gate)
   Recommendation: DEFER write to post-parity or keep classic-only for DB.
   Exit criteria: documented decision; if deferred, UI shows classic link only.
 
-  Product decision (2026-08-05, implemented):
-    Portal database WRITE is DEFERRED / classic-only.
-    GET /api/admin/settings/database is read-only; mutating methods return 403
-    with pointer to /admin/?/settings/database. UI shows connection summary
-    without secrets and a primary classic fallback link.
+  Product decision (2026-08-05 elevated, implemented):
+    Portal database WRITE enabled with confirm gate: body.confirm must be
+    exactly "CONFIRM". GET never returns pgsql_password or encryption_key.
+    PATCH /api/admin/settings/database + SPA form + CONFIRM modal.
+    Empty pgsql_password keeps existing password; encryption_key not writable.
 
 ================================================================================
 PHASE 9 — Hardening, docs, deprecation path
@@ -529,6 +529,12 @@ Step 10.1 — Decision: keep classic installer
   Recommendation: leave /admin/install/ on classic stack until forced.
   Exit criteria: decision recorded.
 
+  Completed 2026-08-05:
+    Decision: keep /admin/install/ on the classic stack permanently for the
+    initial portal-admin program (and preferred long-term default).
+    Deliverable: docs/portal-admin-installer-phase10.md §1
+    (no portal SPA installer; upgrade still uses classic install tool).
+
 Step 10.2 — If ever migrated
   Grok effort : xhigh
   Detail:
@@ -536,6 +542,14 @@ Step 10.2 — If ever migrated
     care with CSRF and open install locking (INSTALL_DISABLED).
   Exit criteria: out of scope for initial "new administrative portal" program
     unless product elevates priority.
+
+  Completed 2026-08-05 (product elevated — implemented):
+    /portal/install/ SPA + /api/install/* (status, initialize, database, upgrade).
+    CSRF + same-origin + rate limit; INSTALL_DISABLED / BAIKAL_LOCK_* parity.
+    Classic /admin/install/ → 302 /portal/install/; Framework installTool same.
+    Reset to Default redirects to /portal/install/.
+    Deliverable: docs/portal-admin-installer-phase10.md (updated),
+    tests/php/InstallServiceTest.php.
 
 --------------------------------------------------------------------------------
 6. Work not in scope (explicit exclusions for parallel phase)
@@ -648,7 +662,8 @@ Step 10.2 — If ever migrated
       fix bugs in classic unless necessary.
 
   Risk: Scope creep into installer rewrite
-    Mitigation: Phase 10 explicitly deferred.
+    Mitigation: Phase 10 closed as document-and-defer
+    (docs/portal-admin-installer-phase10.md); no SPA installer shipped.
 
 --------------------------------------------------------------------------------
 10. Definition of "fully implemented" (exit from parallel mode)

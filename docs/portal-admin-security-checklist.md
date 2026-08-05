@@ -58,7 +58,7 @@ Use this checklist for every PR that touches `Core/Frameworks/Baikal/Portal/App.
 | `POST/PATCH …/calendars` | uri (create), displayname, description, color, todos, notes | ✅ |
 | `POST/PATCH …/addressbooks` | uri (create), displayname, description | ✅ |
 | `PATCH /admin/settings/system` | Allow-list `EDITABLE_KEYS` + password pair | ✅ Forbidden secret keys → **400** |
-| `PATCH/PUT/POST /admin/settings/database` | N/A | ✅ Always **403** (write deferred) |
+| `PATCH/PUT/POST /admin/settings/database` | backend, paths, `confirm: "CONFIRM"` | ✅ Password never in GET; CONFIRM required |
 
 \* Empty password = leave unchanged.
 
@@ -116,7 +116,7 @@ Ops playbook: [DEPLOYMENT.md — Observability](DEPLOYMENT.md#observability-diag
 | GET | `/api/admin/settings/system` | Admin | — | No password hash |
 | PATCH/PUT | `/api/admin/settings/system` | Admin | Yes | Allow-list + rate-limit password |
 | GET | `/api/admin/settings/database` | Admin | — | Read-only; no password |
-| POST/PUT/PATCH/DELETE | `/api/admin/settings/database` | Admin | Yes | **403** write deferred |
+| GET/PATCH | `/api/admin/settings/database` | Admin | PATCH yes | CONFIRM gate; no secrets in GET |
 | GET | `/api/admin/users` | Admin | — | No digesta1 |
 | POST | `/api/admin/users` | Admin | Yes | Create |
 | GET | `/api/admin/users/{u}` | Admin | — | Detail |
@@ -146,11 +146,14 @@ php tests/php/AdminSettingsServiceTest.php
 
 | Risk | Mitigation / decision |
 |------|------------------------|
-| Dual UI config races (portal + classic settings) | Documented last-write-wins |
-| Admin can delete own DAV account | Classic behavior; no self-delete block |
-| DB settings write | Deferred classic-only (Phase 8) |
+| Admin can delete own DAV account (if not last user) | Last remaining user cannot be deleted |
+| DB settings write | Portal PATCH with `confirm: "CONFIRM"` (Phase 8.2); can brick if wrong |
 | SSRF via `push_external_url` | HTTPS-only; URL not fetched by settings save |
-| Installer unauthenticated bootstrap | Out of scope (Phase 10) |
+| Installer unauthenticated bootstrap | `/api/install/*` — CSRF + same-origin (Origin/Referer required) + rate limit; lock with `BAIKAL_LOCK_INSTALL` |
+| Portal Reset to Default | Admin-only + confirm; full wipe — trust Admin role |
+| Empty Origin+Referer on mutations | **Rejected 403** (fail closed) |
+
+Full narrative review: [`portal-admin-security-review-2026-08-05.md`](portal-admin-security-review-2026-08-05.md).
 
 ---
 

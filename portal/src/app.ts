@@ -33,6 +33,15 @@ import {
   type TaskItem,
 } from "./api";
 import { log, setLogLevel } from "./log";
+import { timezoneSelectOptions } from "./timezones";
+import {
+  esc,
+  renderConfirmCheckbox,
+  renderFlash,
+  renderModal,
+  renderModalFooter,
+  type FlashType,
+} from "./ui";
 
 type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 
@@ -160,15 +169,7 @@ function persistTab(
   }
 }
 
-type Flash = { type: "error" | "success" | "info"; message: string } | null;
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+type Flash = { type: FlashType; message: string } | null;
 
 function accessBadge(access: string): string {
   if (access === "readwrite") {
@@ -305,37 +306,37 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Administration",
     paragraphs: [
       "Server administration for AngaraDAV, available to portal users with the Admin role.",
-      "Overview and full Users CRUD run in this portal. System settings and database still use classic Web Admin (classic admin password) during the parallel phase.",
-      "Admin API calls use your portal DAV session — not the separate classic admin login — and require the Admin role server-side.",
+      "Overview, users, system settings, and database management for operators with the Admin role.",
+      "Admin API calls use your portal DAV session and require the Admin role server-side.",
     ],
   },
   "admin-overview": {
     title: "Overview",
     paragraphs: [
-      "Snapshot of registered users, calendars, events, address books, contacts, and which DAV services are enabled — same metrics as the classic Admin dashboard.",
-      "Version and release links help you compare installs. Counts refresh from GET /api/admin/dashboard.",
+      "Snapshot of registered users, calendars, events, address books, contacts, and which DAV services are enabled.",
+      "Version and release links help you compare installs. Counts refresh from the dashboard API.",
     ],
   },
   "admin-users": {
     title: "Users",
     paragraphs: [
       "List, create, edit, and delete DAV users from the portal. Password digests are never returned.",
-      "Create seeds a default calendar and address book (same as classic admin). Delete removes calendars, contacts, and quarantines file homes when files are enabled.",
-      "Classic Web Admin remains available as a fallback during the parallel phase.",
+      "Create seeds a default calendar and address book. Delete removes calendars, contacts, and quarantines file homes when files are enabled.",
+      "Manage users, system settings, and database from these Administration tabs.",
     ],
   },
   "admin-settings": {
     title: "System settings",
     paragraphs: [
-      "Edit DAV services, files, push, session timeout, portal admin role list, and classic admin password.",
-      "Saves write config/baikal.yaml atomically. Session timeout applies to portal and classic admin idle cookies.",
+      "Edit DAV services, files, push, session timeout, portal admin role list, and admin password.",
+      "Saves write config/baikal.yaml atomically. Session timeout applies to portal idle cookies.",
     ],
   },
   "admin-database": {
     title: "Database",
     paragraphs: [
       "Read-only view of backend type, SQLite path or PostgreSQL host/dbname/username.",
-      "Passwords and encryption keys are never returned. Writes stay classic Web Admin only — wrong values can brick the instance.",
+      "Passwords and encryption keys are never returned. Saving requires typing CONFIRM — wrong values can take the instance offline.",
     ],
   },
 };
@@ -358,7 +359,7 @@ function infoModalHtml(): string {
       <div class="info-modal-card">
         <header class="info-modal-header">
           <h3 id="info-modal-title"></h3>
-          <button type="button" class="info-modal-close" data-action="info-close" aria-label="Close">×</button>
+          <button type="button" class="modal-close info-modal-close" data-action="info-close" aria-label="Close">×</button>
         </header>
         <div class="info-modal-body muted small" id="info-modal-body"></div>
         <footer class="info-modal-footer">
@@ -380,7 +381,7 @@ export function mountApp(root: HTMLElement): void {
   let adminDashboardError: string | null = null;
   /** Feature gating map from GET /api/admin/capabilities */
   let adminCapabilities: AdminCapabilities | null = null;
-  let adminCapabilitiesLoading = false;
+
   let adminCapabilitiesError: string | null = null;
   /** Admin Users list / detail / write modals (Phase 4–5) */
   let adminUsers: AdminUserSummary[] = [];
@@ -412,10 +413,17 @@ export function mountApp(root: HTMLElement): void {
   let adminSystemSettings: AdminSystemSettings | null = null;
   let adminSystemSettingsLoading = false;
   let adminSystemSettingsError: string | null = null;
-  /** Database settings read-only (Phase 8) */
+  /** Reset-to-default confirmation modal (factory reset → installer) */
+  let adminResetModalOpen = false;
+  let adminResetConfirmChecked = false;
+  /** Database settings (Phase 8 / 8.2 write with CONFIRM) */
   let adminDatabaseSettings: AdminDatabaseSettings | null = null;
   let adminDatabaseSettingsLoading = false;
   let adminDatabaseSettingsError: string | null = null;
+  let adminDbFormBackend: "sqlite" | "pgsql" = "sqlite";
+  let adminDbConfirmOpen = false;
+  let adminDbConfirmText = "";
+  let adminDbPendingBody: Record<string, unknown> | null = null;
   /** User-menu dropdown (header name) open state */
   let userMenuOpen = false;
   let userMenuDocClick: ((ev: MouseEvent) => void) | null = null;
@@ -616,7 +624,7 @@ export function mountApp(root: HTMLElement): void {
     adminDashboardLoading = false;
     adminDashboardError = null;
     adminCapabilities = null;
-    adminCapabilitiesLoading = false;
+
     adminCapabilitiesError = null;
     adminUsers = [];
     adminUsersLoading = false;
@@ -641,9 +649,15 @@ export function mountApp(root: HTMLElement): void {
     adminSystemSettings = null;
     adminSystemSettingsLoading = false;
     adminSystemSettingsError = null;
+    adminResetModalOpen = false;
+    adminResetConfirmChecked = false;
     adminDatabaseSettings = null;
     adminDatabaseSettingsLoading = false;
     adminDatabaseSettingsError = null;
+    adminDbFormBackend = "sqlite";
+    adminDbConfirmOpen = false;
+    adminDbConfirmText = "";
+    adminDbPendingBody = null;
     unbindUserMenuOutside();
   }
 
@@ -674,7 +688,7 @@ export function mountApp(root: HTMLElement): void {
       case "coming-soon":
         return "Coming soon";
       case "deferred":
-        return "Classic only";
+        return "Unavailable";
       default:
         return status;
     }
@@ -754,7 +768,7 @@ export function mountApp(root: HTMLElement): void {
         persistTab("calendars");
         setFlash(
           "info",
-          "Portal Administration UI is disabled. Use classic Web Admin at /admin/.",
+          "Portal Administration UI is disabled.",
         );
         return;
       }
@@ -782,7 +796,6 @@ export function mountApp(root: HTMLElement): void {
   }
 
   async function loadAdminCapabilities(): Promise<void> {
-    adminCapabilitiesLoading = true;
     adminCapabilitiesError = null;
     try {
       const res = await api.adminCapabilities();
@@ -792,53 +805,50 @@ export function mountApp(root: HTMLElement): void {
         pages: adminCapabilities.pages?.length ?? 0,
       });
     } catch (e) {
-      // Fail open with built-in defaults so classic links still render
       adminCapabilitiesError = e instanceof Error ? e.message : "Failed to load capabilities";
       adminCapabilities = {
         uiEnabled: true,
-        classicAdminUrl: "/admin/",
+        portalAdminUrl: "/portal/#admin",
         pages: [
           {
             id: "overview",
             label: "Overview",
-            status: "read-only",
-            available: true,
-            classicUrl: "/admin/",
-            classicLabel: "Open classic Dashboard",
-            summary: "Live counts and service flags.",
-          },
-          {
-            id: "users",
-            label: "Users",
             status: "full",
             available: true,
-            classicUrl: "/admin/?/users",
-            classicLabel: "Open classic Users",
-            summary: "Full DAV user CRUD plus calendars and address books.",
+            portalUrl: "/portal/#admin",
+            portalLabel: "Overview",
+            summary: "Live counts and service flags.",
           },
           {
             id: "settings",
             label: "System settings",
             status: "full",
             available: true,
-            classicUrl: "/admin/?/settings/standard",
-            classicLabel: "Open classic System Settings",
+            portalUrl: "/portal/#admin/settings",
+            portalLabel: "System settings",
             summary: "Edit system flags and admin password in the portal.",
+          },
+          {
+            id: "users",
+            label: "Users",
+            status: "full",
+            available: true,
+            portalUrl: "/portal/#admin/users",
+            portalLabel: "Users",
+            summary: "Full DAV user CRUD plus calendars and address books.",
           },
           {
             id: "database",
             label: "Database",
-            status: "read-only",
+            status: "full",
             available: true,
-            classicUrl: "/admin/?/settings/database",
-            classicLabel: "Open classic Database settings",
-            summary: "Read-only view; writes stay classic-only.",
+            portalUrl: "/portal/#admin/database",
+            portalLabel: "Database",
+            summary: "Connection settings; saves require typing CONFIRM.",
           },
         ],
       };
       log.warn("admin.capabilities fallback", adminCapabilitiesError);
-    } finally {
-      adminCapabilitiesLoading = false;
     }
   }
 
@@ -934,6 +944,8 @@ export function mountApp(root: HTMLElement): void {
     try {
       const res = await api.adminDatabaseSettings();
       adminDatabaseSettings = res.data;
+      const b = (res.data.backend || "sqlite").toLowerCase();
+      adminDbFormBackend = b === "pgsql" ? "pgsql" : "sqlite";
     } catch (e) {
       adminDatabaseSettings = null;
       adminDatabaseSettingsError =
@@ -1065,6 +1077,25 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
+  function onAdminDatabaseFormSubmit(form: HTMLFormElement): void {
+    const fd = new FormData(form);
+    const backend = String(fd.get("backend") ?? adminDbFormBackend).toLowerCase() === "pgsql" ? "pgsql" : "sqlite";
+    const body: Record<string, unknown> = { backend };
+    if (backend === "sqlite") {
+      body.sqlite_file = String(fd.get("sqlite_file") ?? "").trim();
+    } else {
+      body.pgsql_host = String(fd.get("pgsql_host") ?? "").trim();
+      body.pgsql_dbname = String(fd.get("pgsql_dbname") ?? "").trim();
+      body.pgsql_username = String(fd.get("pgsql_username") ?? "").trim();
+      body.pgsql_password = String(fd.get("pgsql_password") ?? "");
+    }
+    adminDbPendingBody = body;
+    adminDbConfirmText = "";
+    adminDbConfirmOpen = true;
+    clearFlash();
+    render();
+  }
+
   async function onAdminSettingsSave(form: HTMLFormElement): Promise<void> {
     const fd = new FormData(form);
     const bool = (name: string) =>
@@ -1181,7 +1212,7 @@ export function mountApp(root: HTMLElement): void {
   async function activateTab(tab: TabId, opts: { clearFlash?: boolean } = {}): Promise<void> {
     if (tab === "admin" && (!userIsAdmin() || !adminUiEnabled())) {
       if (userIsAdmin() && adminCapabilities && !adminCapabilities.uiEnabled) {
-        setFlash("info", "Portal Administration UI is disabled. Use classic Web Admin at /admin/.");
+        setFlash("info", "Portal Administration UI is disabled (portal_admin_ui_enabled).");
       }
       tab = "calendars";
     }
@@ -2559,19 +2590,28 @@ export function mountApp(root: HTMLElement): void {
     });
   }
 
-  function shell(body: string, opts: { auth?: boolean } = {}): string {
+  function shell(
+    body: string,
+    opts: { auth?: boolean; tabs?: string } = {},
+  ): string {
+    const inAdmin = !!user && activeTab === "admin" && userIsAdmin() && adminUiEnabled();
+    const brandLabel = inAdmin
+      ? "AngaraDAV Administration Portal"
+      : "AngaraDAV User Portal";
     const brand = `
       <span class="brand-mark" aria-hidden="true">A</span>
-      <span>AngaraDAV User Portal</span>`;
+      <span>${brandLabel}</span>`;
     const displayName = user ? esc(user.displayname || user.username) : "";
     const adminMenuItem = adminUiEnabled()
       ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">
               Administration
             </button>`
-      : userIsAdmin()
-        ? `<a class="user-menu-item" role="menuitem" href="${esc(adminCapabilities?.classicAdminUrl || "/admin/")}">
-              Classic Web Admin
-            </a>`
+      : "";
+    const userPortalMenuItem =
+      inAdmin
+        ? `<button type="button" class="user-menu-item" role="menuitem" data-action="tab" data-tab="calendars">
+              User portal
+            </button>`
         : "";
     const userMenu = user
       ? `<div class="user-menu${userMenuOpen ? " is-open" : ""}">
@@ -2582,6 +2622,7 @@ export function mountApp(root: HTMLElement): void {
               <span class="user-menu-caret" aria-hidden="true">▾</span>
             </button>
             <div class="user-menu-dropdown" role="menu" ${userMenuOpen ? "" : "hidden"}>
+              ${userPortalMenuItem}
               ${adminMenuItem}
               <button type="button" class="user-menu-item user-menu-item-danger" role="menuitem" data-action="logout">
                 Log out
@@ -2612,14 +2653,22 @@ export function mountApp(root: HTMLElement): void {
     );
     const flashHtml = flashOnMain ? renderFlashBanner() : "";
 
+    // Full-width sticky tab strip under topnav (same height for user + admin)
+    const tabsBar =
+      opts.tabs && opts.tabs.trim() !== ""
+        ? `<div class="tabs-bar" role="presentation">
+        <div class="tabs-bar-inner">
+          ${opts.tabs}
+        </div>
+      </div>`
+        : "";
+
     const footer = `
       <footer class="site-footer">
         <div class="container footer-inner">
           <span>AngaraDAV portal <span class="mono">v${esc(appVersion)}</span></span>
           <span class="footer-sep" aria-hidden="true">·</span>
-          <a href="/dav.php/">Classic DAV browser</a>
-          <span class="footer-sep" aria-hidden="true">·</span>
-          <a href="/admin/">Admin</a>
+          <a href="/dav.php/">DAV browser</a>
           <span class="footer-sep" aria-hidden="true">·</span>
           <a href="${esc(DOCS_URL)}" target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
@@ -2632,7 +2681,12 @@ export function mountApp(root: HTMLElement): void {
       document.body.classList.remove("layout-auth");
     }
 
-    return `${nav}
+    // Single sticky chrome stack (topnav + tabs) so heights match user/admin
+    // and content never scrolls under rounded tab corners.
+    return `<div class="app-chrome">
+      ${nav}
+      ${tabsBar}
+    </div>
       <main class="container">
         ${flashHtml}
         ${body}
@@ -2645,10 +2699,7 @@ export function mountApp(root: HTMLElement): void {
   /** Success/error banner; shown on main page or inside open calendar modal. */
   function renderFlashBanner(): string {
     if (!flash) return "";
-    return `<div class="flash flash-${esc(flash.type)}" role="status">
-      <span class="flash-text">${esc(flash.message)}</span>
-      <button type="button" class="flash-close" data-action="flash-close" aria-label="Dismiss message" title="Dismiss">×</button>
-    </div>`;
+    return renderFlash(flash.type, flash.message, { dismissible: true });
   }
 
   function formatFileSize(bytes: number): string {
@@ -2848,18 +2899,20 @@ export function mountApp(root: HTMLElement): void {
         </p>`;
     } else if (p.phase === "done") {
       body = `
-        <div class="flash flash-success import-result" role="status" style="margin:0 0 1rem">
-          <strong>Success.</strong> ${esc(p.resultMessage || "Import completed.")}
-        </div>
+        ${renderFlash("success", `Success. ${p.resultMessage || "Import completed."}`, {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
         <p class="muted small" style="margin:0">
           File: <span class="mono">${esc(p.fileName)}</span>
           · Took ${esc(formatElapsed(p.elapsedSec))}
         </p>`;
     } else {
       body = `
-        <div class="flash flash-error import-result" role="status" style="margin:0 0 1rem">
-          <strong>Failed.</strong> ${esc(p.resultMessage || "Import failed.")}
-        </div>
+        ${renderFlash("error", `Failed. ${p.resultMessage || "Import failed."}`, {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
         <p class="muted small" style="margin:0">
           File: <span class="mono">${esc(p.fileName)}</span>
           · After ${esc(formatElapsed(p.elapsedSec))}
@@ -2869,25 +2922,23 @@ export function mountApp(root: HTMLElement): void {
 
     const footer = running
       ? `<p class="muted small" style="margin:0">Please wait…</p>`
-      : `<button type="button" class="btn btn-primary" data-action="close-import-progress">Close</button>`;
+      : renderModalFooter([
+          { label: "Close", action: "close-import-progress", variant: "primary" },
+        ]);
 
-    return `
-      <div class="cal-modal import-progress-modal" role="dialog" aria-modal="true"
-        aria-labelledby="import-progress-title" data-import-progress>
-        <div class="cal-modal-backdrop"${running ? "" : ' data-action="close-import-progress"'}></div>
-        <div class="cal-modal-card cal-modal-card-sm import-progress-card">
-          <header class="cal-modal-header">
-            <h3 id="import-progress-title">${esc(title)}</h3>
-            ${
-              running
-                ? ""
-                : `<button type="button" class="info-modal-close" data-action="close-import-progress" aria-label="Close">×</button>`
-            }
-          </header>
-          <div class="cal-modal-body">${body}</div>
-          <footer class="cal-modal-footer">${footer}</footer>
-        </div>
-      </div>`;
+    return renderModal({
+      title,
+      titleId: "import-progress-title",
+      closeAction: "close-import-progress",
+      size: "sm",
+      className: "import-progress-modal",
+      cardClassName: "import-progress-card",
+      rootAttrs: "data-import-progress",
+      hideClose: running,
+      lockBackdrop: running,
+      body,
+      footer,
+    });
   }
 
   function readFileTextWithProgress(
@@ -3029,14 +3080,12 @@ export function mountApp(root: HTMLElement): void {
     const shareReadOnlyForced = !!(selected && selected.readOnly);
     const calModal =
       calModalOpen && selected && selected.canShare
-        ? `<div class="cal-modal" id="cal-edit-modal" role="dialog" aria-modal="true" aria-labelledby="cal-modal-title">
-            <div class="cal-modal-backdrop" data-action="close-cal-modal"></div>
-            <div class="cal-modal-card">
-              <header class="cal-modal-header">
-                <h3 id="cal-modal-title">Calendar details</h3>
-                <button type="button" class="info-modal-close" data-action="close-cal-modal" aria-label="Close">×</button>
-              </header>
-              <div class="cal-modal-body">
+        ? renderModal({
+            id: "cal-edit-modal",
+            title: "Calendar details",
+            titleId: "cal-modal-title",
+            closeAction: "close-cal-modal",
+            body: `
                 ${renderFlashBanner()}
                 <section>
                   <p class="muted small mono" style="margin:0">
@@ -3124,13 +3173,9 @@ export function mountApp(root: HTMLElement): void {
                       <input type="file" accept=".ics,text/calendar,text/plain" data-action="import-cal" ${busy || selected.readOnly ? "disabled" : ""} hidden />
                     </label>
                   </div>
-                </section>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="close-cal-modal">Close</button>
-              </footer>
-            </div>
-          </div>`
+                </section>`,
+            footer: [{ label: "Close", action: "close-cal-modal", variant: "ghost" }],
+          })
         : "";
 
     const deleteTarget =
@@ -3138,40 +3183,44 @@ export function mountApp(root: HTMLElement): void {
         ? calendars.find((c) => c.id === deleteConfirmId && c.canShare) ?? null
         : null;
     const deleteModal = deleteTarget
-      ? `<div class="cal-modal" id="cal-delete-modal" role="dialog" aria-modal="true" aria-labelledby="cal-delete-title">
-          <div class="cal-modal-backdrop" data-action="cancel-delete-cal"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="cal-delete-title">Delete calendar</h3>
-              <button type="button" class="info-modal-close" data-action="cancel-delete-cal" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "cal-delete-modal",
+          title: "Delete calendar",
+          titleId: "cal-delete-title",
+          closeAction: "cancel-delete-cal",
+          size: "sm",
+          body: `
               ${renderFlashBanner()}
               <p>You are about to permanently delete <strong>${esc(deleteTarget.displayname)}</strong>
                 <span class="muted small mono">(${esc(deleteTarget.uri)})</span>.</p>
               <p class="muted small">All events, tasks, and notes in this calendar will be removed. Shares will be revoked. This cannot be undone.</p>
-              <label class="checkbox" style="margin-top:1rem">
-                <input type="checkbox" id="delete-cal-confirm" data-action="toggle-delete-confirm" />
-                I understand and want to permanently delete this calendar
-              </label>
-            </div>
-            <footer class="cal-modal-footer">
-              <button type="button" class="btn btn-ghost" data-action="cancel-delete-cal" ${busy ? "disabled" : ""}>Cancel</button>
-              <button type="button" class="btn btn-danger" data-action="confirm-delete-cal" data-id="${deleteTarget.id}" disabled id="delete-cal-submit">Delete permanently</button>
-            </footer>
-          </div>
-        </div>`
+              ${renderConfirmCheckbox({
+                action: "toggle-delete-confirm",
+                label: "I understand and want to permanently delete this calendar",
+                id: "delete-cal-confirm",
+                style: "checkbox",
+              })}`,
+          footer: [
+            { label: "Cancel", action: "cancel-delete-cal", variant: "ghost", disabled: busy },
+            {
+              label: "Delete permanently",
+              action: "confirm-delete-cal",
+              variant: "danger",
+              disabled: true,
+              id: "delete-cal-submit",
+              attrs: `data-id="${deleteTarget.id}"`,
+            },
+          ],
+        })
       : "";
 
     const createCalModal = createCalModalOpen
-      ? `<div class="cal-modal" id="cal-create-modal" role="dialog" aria-modal="true" aria-labelledby="cal-create-title">
-          <div class="cal-modal-backdrop" data-action="close-create-cal-modal"></div>
-          <div class="cal-modal-card">
-            <header class="cal-modal-header">
-              <h3 id="cal-create-title">Add calendar</h3>
-              <button type="button" class="info-modal-close" data-action="close-create-cal-modal" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "cal-create-modal",
+          title: "Add calendar",
+          titleId: "cal-create-title",
+          closeAction: "close-create-cal-modal",
+          body: `
               ${renderFlashBanner()}
               <p class="muted small" style="margin:0 0 0.75rem">
                 Create a personal calendar, optional holidays feed, or a read-only calendar.
@@ -3228,10 +3277,8 @@ export function mountApp(root: HTMLElement): void {
                 <p class="muted small" style="margin:0.5rem 0 0">
                   <strong>Import .ics</strong> creates the calendar (name above, or the file name), then imports events. Not for holidays/read-only calendars.
                 </p>
-              </form>
-            </div>
-          </div>
-        </div>`
+              </form>`,
+        })
       : "";
 
     const calendarsTab = `
@@ -3499,14 +3546,12 @@ export function mountApp(root: HTMLElement): void {
 
     const abModal =
       abModalOpen && selectedAb
-        ? `<div class="cal-modal" id="ab-edit-modal" role="dialog" aria-modal="true" aria-labelledby="ab-modal-title">
-            <div class="cal-modal-backdrop" data-action="close-ab-modal"></div>
-            <div class="cal-modal-card">
-              <header class="cal-modal-header">
-                <h3 id="ab-modal-title">Address book details</h3>
-                <button type="button" class="info-modal-close" data-action="close-ab-modal" aria-label="Close">×</button>
-              </header>
-              <div class="cal-modal-body">
+        ? renderModal({
+            id: "ab-edit-modal",
+            title: "Address book details",
+            titleId: "ab-modal-title",
+            closeAction: "close-ab-modal",
+            body: `
                 ${renderFlashBanner()}
                 <section>
                   <p class="muted small mono" style="margin:0">
@@ -3539,13 +3584,9 @@ export function mountApp(root: HTMLElement): void {
                       </label>
                     </div>
                   </div>
-                </section>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="close-ab-modal">Close</button>
-              </footer>
-            </div>
-          </div>`
+                </section>`,
+            footer: [{ label: "Close", action: "close-ab-modal", variant: "ghost" }],
+          })
         : "";
 
     const deleteAbTarget =
@@ -3553,14 +3594,13 @@ export function mountApp(root: HTMLElement): void {
         ? addressBooks.find((a) => a.id === deleteAbConfirmId) ?? null
         : null;
     const abDeleteModal = deleteAbTarget
-      ? `<div class="cal-modal" id="ab-delete-modal" role="dialog" aria-modal="true" aria-labelledby="ab-delete-title">
-          <div class="cal-modal-backdrop" data-action="cancel-delete-ab"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="ab-delete-title">Delete address book</h3>
-              <button type="button" class="info-modal-close" data-action="cancel-delete-ab" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "ab-delete-modal",
+          title: "Delete address book",
+          titleId: "ab-delete-title",
+          closeAction: "cancel-delete-ab",
+          size: "sm",
+          body: `
               ${renderFlashBanner()}
               <p>You are about to permanently delete <strong>${esc(deleteAbTarget.displayname)}</strong>
                 <span class="muted small mono">(${esc(deleteAbTarget.uri)})</span>.</p>
@@ -3569,17 +3609,24 @@ export function mountApp(root: HTMLElement): void {
                   ? `All ${deleteAbTarget.cardCount} contact${deleteAbTarget.cardCount === 1 ? "" : "s"} in this address book will be removed. This cannot be undone.`
                   : "This address book is empty. This cannot be undone."
               }</p>
-              <label class="checkbox" style="margin-top:1rem">
-                <input type="checkbox" id="delete-ab-confirm" data-action="toggle-delete-ab-confirm" />
-                I understand and want to permanently delete this address book
-              </label>
-            </div>
-            <footer class="cal-modal-footer">
-              <button type="button" class="btn btn-ghost" data-action="cancel-delete-ab" ${busy ? "disabled" : ""}>Cancel</button>
-              <button type="button" class="btn btn-danger" data-action="confirm-delete-ab" data-id="${deleteAbTarget.id}" disabled id="delete-ab-submit">Delete permanently</button>
-            </footer>
-          </div>
-        </div>`
+              ${renderConfirmCheckbox({
+                action: "toggle-delete-ab-confirm",
+                label: "I understand and want to permanently delete this address book",
+                id: "delete-ab-confirm",
+                style: "checkbox",
+              })}`,
+          footer: [
+            { label: "Cancel", action: "cancel-delete-ab", variant: "ghost", disabled: busy },
+            {
+              label: "Delete permanently",
+              action: "confirm-delete-ab",
+              variant: "danger",
+              disabled: true,
+              id: "delete-ab-submit",
+              attrs: `data-id="${deleteAbTarget.id}"`,
+            },
+          ],
+        })
       : "";
 
     const contactsTab = `
@@ -3673,10 +3720,23 @@ export function mountApp(root: HTMLElement): void {
                 ? filesTab
                 : adminTab;
 
-    const showMainTabs = activeTab !== "admin";
-    const tabsHeader = showMainTabs
-      ? `<header class="page-header">
-        <div class="tabs" role="tablist" aria-label="Portal sections">
+    const tabsHtml =
+      activeTab === "admin"
+        ? `<div class="tabs" role="tablist" aria-label="Administration sections">
+          ${adminSubnavButtons()}
+          <button type="button" class="info-btn tab-info" data-action="info"
+            data-info="${
+              adminPage === "overview"
+                ? "admin-overview"
+                : adminPage === "users"
+                  ? "admin-users"
+                  : adminPage === "settings"
+                    ? "admin-settings"
+                    : "admin-database"
+            }"
+            aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
+        </div>`
+        : `<div class="tabs" role="tablist" aria-label="Portal sections">
           <button type="button" role="tab" class="tab-btn${activeTab === "calendars" ? " is-active" : ""}"
             data-action="tab" data-tab="calendars" aria-selected="${activeTab === "calendars"}">
             Calendar
@@ -3700,30 +3760,9 @@ export function mountApp(root: HTMLElement): void {
           <button type="button" class="info-btn tab-info" data-action="info"
             data-info="${tabInfoKey}"
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
-        </div>
-      </header>`
-      : `<header class="page-header page-header-admin">
-        <div class="admin-header-titles">
-          ${infoTitle("Administration", "administration", "h1")}
-          <p class="muted small admin-header-sub">Admin role · ${esc(
-            adminPage === "overview"
-              ? "Overview"
-              : adminPage === "users"
-                ? "Users"
-                : adminPage === "settings"
-                  ? "System settings"
-                  : "Database",
-          )}</p>
-        </div>
-        <button type="button" class="btn btn-ghost btn-small" data-action="tab" data-tab="calendars"
-          title="Back to portal">← Portal</button>
-      </header>`;
+        </div>`;
 
-    root.innerHTML = shell(`
-      ${tabsHeader}
-
-      ${mainTab}
-    `);
+    root.innerHTML = shell(mainTab, { tabs: tabsHtml });
     document.body.classList.toggle(
       "cal-modal-open",
       calModalOpen ||
@@ -3741,6 +3780,8 @@ export function mountApp(root: HTMLElement): void {
         adminUserCreateOpen ||
         adminUserEditOpen ||
         adminUserDeleteUsername !== null ||
+        adminResetModalOpen ||
+        adminDbConfirmOpen ||
         adminCalModal !== null ||
         adminAbModal !== null ||
         adminResourceDelete !== null,
@@ -3778,22 +3819,6 @@ export function mountApp(root: HTMLElement): void {
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  }
-
-  /**
-   * Format app limits that are configured in MB (BAIKAL_FILES_MAX_UPLOAD_MB /
-   * BAIKAL_FILES_QUOTA_MB). Prefer whole-MB labels so the UI matches env/YAML.
-   */
-  function formatLimitFromBytes(bytes: number): string {
-    if (!Number.isFinite(bytes) || bytes < 0) return "—";
-    if (bytes === 0) return "unlimited";
-    const mb = Math.round(bytes / (1024 * 1024));
-    if (mb <= 0) return formatBytes(bytes);
-    if (mb >= 1024 && mb % 1024 === 0) {
-      const gb = mb / 1024;
-      return gb === 1 ? "1 GB" : `${gb} GB`;
-    }
-    return `${mb} MB`;
   }
 
   function formatMtime(ts: number): string {
@@ -3900,27 +3925,24 @@ export function mountApp(root: HTMLElement): void {
         ? (() => {
             const entry = filesEntries.find((x) => x.path === filesRenamePath);
             const current = entry?.name ?? "";
-            return `<div class="cal-modal" id="files-rename-modal" role="dialog" aria-modal="true" aria-labelledby="files-rename-title">
-              <div class="cal-modal-backdrop" data-action="files-rename-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-rename-title">Rename</h3>
-                  <button type="button" class="info-modal-close" data-action="files-rename-close" aria-label="Close">×</button>
-                </header>
-                <form class="stack" data-form="files-rename" id="files-rename-form">
-                  <div class="cal-modal-body">
+            return renderModal({
+              id: "files-rename-modal",
+              title: "Rename",
+              titleId: "files-rename-title",
+              closeAction: "files-rename-close",
+              size: "sm",
+              form: true,
+              formAttrs: 'data-form="files-rename" id="files-rename-form"',
+              body: `
                     <input type="hidden" name="path" value="${esc(filesRenamePath)}" />
                     <label>New name
                       <input type="text" name="newName" value="${esc(current)}" required maxlength="255" autocomplete="off" />
-                    </label>
-                  </div>
-                  <footer class="cal-modal-footer">
-                    <button type="button" class="btn btn-ghost" data-action="files-rename-close">Cancel</button>
-                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Rename</button>
-                  </footer>
-                </form>
-              </div>
-            </div>`;
+                    </label>`,
+              footer: [
+                { label: "Cancel", action: "files-rename-close", variant: "ghost" },
+                { label: "Rename", type: "submit", variant: "primary", disabled: busy },
+              ],
+            });
           })()
         : "";
 
@@ -3950,22 +3972,23 @@ export function mountApp(root: HTMLElement): void {
                     ? " This removes the folder and everything inside it."
                     : ""
                 }</p>`;
-            return `<div class="cal-modal" id="files-delete-modal" role="dialog" aria-modal="true" aria-labelledby="files-delete-title">
-              <div class="cal-modal-backdrop" data-action="files-delete-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-delete-title">${esc(title)}</h3>
-                  <button type="button" class="info-modal-close" data-action="files-delete-close" aria-label="Close">×</button>
-                </header>
-                <div class="cal-modal-body">
-                  ${body}
-                </div>
-                <footer class="cal-modal-footer">
-                  <button type="button" class="btn btn-ghost" data-action="files-delete-close">Cancel</button>
-                  <button type="button" class="btn btn-danger" data-action="files-delete-confirm" ${busy ? "disabled" : ""}>Delete</button>
-                </footer>
-              </div>
-            </div>`;
+            return renderModal({
+              id: "files-delete-modal",
+              title,
+              titleId: "files-delete-title",
+              closeAction: "files-delete-close",
+              size: "sm",
+              body,
+              footer: [
+                { label: "Cancel", action: "files-delete-close", variant: "ghost" },
+                {
+                  label: "Delete",
+                  action: "files-delete-confirm",
+                  variant: "danger",
+                  disabled: busy,
+                },
+              ],
+            });
           })()
         : "";
 
@@ -3981,15 +4004,15 @@ export function mountApp(root: HTMLElement): void {
               ? `${op === "copy" ? "Copy" : "Move"} ${paths.length} items`
               : `${op === "copy" ? "Copy" : "Move"} ${first?.type === "dir" ? "folder" : "file"}`;
             const defaultDest = filesPath;
-            return `<div class="cal-modal" id="files-transfer-modal" role="dialog" aria-modal="true" aria-labelledby="files-transfer-title">
-              <div class="cal-modal-backdrop" data-action="files-transfer-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-transfer-title">${esc(title)}</h3>
-                  <button type="button" class="info-modal-close" data-action="files-transfer-close" aria-label="Close">×</button>
-                </header>
-                <form class="stack" data-form="files-transfer">
-                  <div class="cal-modal-body">
+            return renderModal({
+              id: "files-transfer-modal",
+              title,
+              titleId: "files-transfer-title",
+              closeAction: "files-transfer-close",
+              size: "sm",
+              form: true,
+              formAttrs: 'data-form="files-transfer"',
+              body: `
                     ${
                       multi
                         ? `<p class="muted small" style="margin:0 0 0.75rem">${paths.length} items will be ${op === "copy" ? "copied" : "moved"} into the destination folder (original names kept).</p>`
@@ -4016,28 +4039,30 @@ export function mountApp(root: HTMLElement): void {
                             }
                           </p>`
                         : ""
-                    }
-                  </div>
-                  <footer class="cal-modal-footer">
-                    <button type="button" class="btn btn-ghost" data-action="files-transfer-close">Cancel</button>
-                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>${op === "copy" ? "Copy" : "Move"}</button>
-                  </footer>
-                </form>
-              </div>
-            </div>`;
+                    }`,
+              footer: [
+                { label: "Cancel", action: "files-transfer-close", variant: "ghost" },
+                {
+                  label: op === "copy" ? "Copy" : "Move",
+                  type: "submit",
+                  variant: "primary",
+                  disabled: busy,
+                },
+              ],
+            });
           })()
         : "";
 
     const mkdirModal = filesMkdirOpen
-      ? `<div class="cal-modal" id="files-mkdir-modal" role="dialog" aria-modal="true" aria-labelledby="files-mkdir-title">
-          <div class="cal-modal-backdrop" data-action="files-mkdir-close"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="files-mkdir-title">New folder</h3>
-              <button type="button" class="info-modal-close" data-action="files-mkdir-close" aria-label="Close">×</button>
-            </header>
-            <form class="stack" data-form="files-mkdir">
-              <div class="cal-modal-body">
+      ? renderModal({
+          id: "files-mkdir-modal",
+          title: "New folder",
+          titleId: "files-mkdir-title",
+          closeAction: "files-mkdir-close",
+          size: "sm",
+          form: true,
+          formAttrs: 'data-form="files-mkdir"',
+          body: `
                 <p class="muted small" style="margin:0 0 0.75rem">
                   Create a folder in
                   <span class="mono">${esc(filesPath === "" ? "Home" : filesPath)}</span>
@@ -4045,24 +4070,13 @@ export function mountApp(root: HTMLElement): void {
                 <label>Folder name
                   <input type="text" name="name" value="" required maxlength="255" autocomplete="off"
                     placeholder="e.g. Documents" autofocus />
-                </label>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="files-mkdir-close">Cancel</button>
-                <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create</button>
-              </footer>
-            </form>
-          </div>
-        </div>`
+                </label>`,
+          footer: [
+            { label: "Cancel", action: "files-mkdir-close", variant: "ghost" },
+            { label: "Create", type: "submit", variant: "primary", disabled: busy },
+          ],
+        })
       : "";
-
-    const limitsLine = [
-      `DAV clients: <span class="mono">${esc(st.davPath)}</span>`,
-      `max upload ${esc(formatLimitFromBytes(st.maxUploadBytes))}`,
-      st.quotaBytes > 0
-        ? `quota ${esc(formatLimitFromBytes(st.quotaBytes))}`
-        : "quota unlimited",
-    ].join(" · ");
 
     return `<div class="portal-grid portal-grid-files">
       <section class="card files-panel">
@@ -4075,9 +4089,6 @@ export function mountApp(root: HTMLElement): void {
             <span>${esc(quotaLabel)}</span>
           </div>
         </div>
-        <p class="muted small" style="margin:0.5rem 0 0">
-          ${limitsLine}
-        </p>
         <div class="files-toolbar">
           ${filesBreadcrumb(filesPath)}
           <div class="files-toolbar-actions">
@@ -4125,68 +4136,48 @@ export function mountApp(root: HTMLElement): void {
     return parts[parts.length - 1] || path;
   }
 
-  function adminSubnav(): string {
-    const fallbackItems: { id: AdminPageId; label: string }[] = [
-      { id: "overview", label: "Overview" },
-      { id: "users", label: "Users" },
-      { id: "settings", label: "System settings" },
-      { id: "database", label: "Database" },
-    ];
+  function adminSubnavButtons(): string {
+    /** Fixed UI order: Overview → System settings → Users → Database */
+    const order: AdminPageId[] = ["overview", "settings", "users", "database"];
+    const labels: Record<AdminPageId, string> = {
+      overview: "Overview",
+      settings: "System settings",
+      users: "Users",
+      database: "Database",
+    };
     const fromApi = adminCapabilities?.pages;
-    const items: { id: AdminPageId; label: string; status?: string; available?: boolean }[] =
-      fromApi && fromApi.length > 0
-        ? fromApi
-            .filter((p): p is AdminCapabilityPage & { id: AdminPageId } =>
-              parseAdminPageId(p.id) !== null,
-            )
-            .map((p) => ({
-              id: p.id as AdminPageId,
-              label: p.label,
-              status: p.status,
-              available: p.available,
-            }))
-        : fallbackItems.map((it) => ({ ...it }));
+    const byId = new Map<string, AdminCapabilityPage>();
+    if (fromApi) {
+      for (const p of fromApi) {
+        if (parseAdminPageId(p.id)) byId.set(p.id, p);
+      }
+    }
 
-    const buttons = items
-      .map((it) => {
-        const status = it.status ?? (it.id === "overview" ? "read-only" : "coming-soon");
-        const gated = it.available === false;
-        const badge = gated
-          ? `<span class="badge ${adminStatusBadgeClass(status)} admin-subnav-badge">${esc(
-              status === "deferred" ? "Classic" : "Soon",
-            )}</span>`
-          : status === "read-only"
-            ? `<span class="badge badge-ok admin-subnav-badge">RO</span>`
-            : "";
-        return `<button type="button" role="tab" class="tab-btn admin-subnav-btn${adminPage === it.id ? " is-active" : ""}${gated ? " is-gated" : ""}"
-            data-action="admin-page" data-admin-page="${it.id}"
-            aria-selected="${adminPage === it.id}"
-            title="${esc(it.label)}${gated ? " — " + adminStatusLabel(status) : ""}">
-            <span class="admin-subnav-label">${esc(it.label)}</span>${badge}
+    return order
+      .map((id) => {
+        const p = byId.get(id);
+        const label = p?.label || labels[id];
+        const status = p?.status ?? (id === "overview" ? "read-only" : "full");
+        const gated = p?.available === false;
+        return `<button type="button" role="tab" class="tab-btn${adminPage === id ? " is-active" : ""}${gated ? " is-gated" : ""}"
+            data-action="admin-page" data-admin-page="${id}"
+            aria-selected="${adminPage === id}"
+            title="${esc(label)}${gated ? " — " + adminStatusLabel(status) : ""}">
+            ${esc(label)}
           </button>`;
       })
       .join("");
-    return `<div class="tabs admin-subnav" role="tablist" aria-label="Administration sections">
-      ${buttons}
-      <button type="button" class="info-btn tab-info" data-action="info"
-        data-info="${adminPage === "overview" ? "admin-overview" : adminPage === "users" ? "admin-users" : adminPage === "settings" ? "admin-settings" : "admin-database"}"
-        aria-label="About this section" title="About this section"><span aria-hidden="true">i</span></button>
-    </div>`;
   }
 
   /**
-   * Banner for incomplete admin pages — always includes classic fallback link
-   * (Phase 2.3: no dead-end empty pages).
+   * Banner for incomplete admin pages.
    */
   function adminComingSoonBanner(pageId: AdminPageId): string {
     const meta = adminPageMeta(pageId);
     const status = meta?.status ?? "coming-soon";
     const label = meta?.label ?? pageId;
     const summary =
-      meta?.summary ||
-      "This area is not finished in the portal yet. Use classic Web Admin for the full workflow.";
-    const classicUrl = meta?.classicUrl || "/admin/";
-    const classicLabel = meta?.classicLabel || "Open classic Web Admin";
+      meta?.summary || "This area is not available in portal Administration yet.";
     const statusText = adminStatusLabel(status);
 
     return `<section class="card admin-coming-soon-card">
@@ -4195,36 +4186,6 @@ export function mountApp(root: HTMLElement): void {
         <h2 class="admin-coming-soon-title">${esc(label)}</h2>
       </div>
       <p class="muted">${esc(summary)}</p>
-      <p class="muted small">
-        Portal Administration is shipping incrementally. Classic <span class="mono">/admin/</span>
-        stays fully available during the parallel phase.
-      </p>
-      <div class="admin-link-grid">
-        <a class="btn btn-primary" href="${esc(classicUrl)}">${esc(classicLabel)}</a>
-        <a class="btn btn-ghost" href="${esc(adminCapabilities?.classicAdminUrl || "/admin/")}">Classic dashboard</a>
-      </div>
-    </section>`;
-  }
-
-  function adminClassicFallbackCard(opts: {
-    title: string;
-    body: string;
-    primaryHref: string;
-    primaryLabel: string;
-    extraLinks?: { href: string; label: string }[];
-  }): string {
-    const extras = (opts.extraLinks ?? [])
-      .map((l) => `<a class="btn btn-ghost" href="${esc(l.href)}">${esc(l.label)}</a>`)
-      .join("");
-    return `<section class="card admin-fallback-card">
-      <div class="section-header">
-        <h2>${esc(opts.title)}</h2>
-      </div>
-      <p class="muted">${opts.body}</p>
-      <div class="admin-link-grid">
-        <a class="btn btn-primary" href="${esc(opts.primaryHref)}">${esc(opts.primaryLabel)}</a>
-        ${extras}
-      </div>
     </section>`;
   }
 
@@ -4253,7 +4214,6 @@ export function mountApp(root: HTMLElement): void {
     const roleLine = `<p class="muted small admin-session-line">
       Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
       with role <span class="badge badge-admin">Admin</span>.
-      Portal admin APIs use this session (not the classic admin password).
     </p>`;
 
     let aboutBlock = "";
@@ -4264,9 +4224,6 @@ export function mountApp(root: HTMLElement): void {
       statsBlock = `<section class="card">
         <p class="flash flash-error" style="margin-bottom:0.75rem">${esc(adminDashboardError)}</p>
         <button type="button" class="btn btn-ghost btn-small" data-action="admin-refresh" ${busy ? "disabled" : ""}>Retry</button>
-        <div class="admin-link-grid" style="margin-top:1rem">
-          <a class="btn btn-primary" href="/admin/">Open classic Dashboard</a>
-        </div>
       </section>`;
     } else if (adminDashboard) {
       const d = adminDashboard;
@@ -4296,9 +4253,7 @@ export function mountApp(root: HTMLElement): void {
               </p>
               <p class="muted small admin-link-row">
                 ${links.releases ? `<a href="${esc(links.releases)}" target="_blank" rel="noopener noreferrer">Releases</a>` : ""}
-                ${links.docs ? `<span class="footer-sep">·</span><a href="${esc(links.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ""}
-                <span class="footer-sep">·</span>
-                <a href="${esc(links.classicDashboard || "/admin/")}">Classic dashboard</a>
+                ${links.docs ? `${links.releases ? `<span class="footer-sep">·</span>` : ""}<a href="${esc(links.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ""}
               </p>
             </div>
             <div>
@@ -4306,7 +4261,7 @@ export function mountApp(root: HTMLElement): void {
               <div class="admin-service-table-wrap">
                 <table class="admin-kv-table">
                   <tbody>
-                    <tr><td>Web admin</td><td>${serviceOnOff(svc.webAdmin !== false)}</td></tr>
+                    <tr><td>Administration</td><td>${serviceOnOff(svc.administration !== false && svc.webAdmin !== false)}</td></tr>
                     <tr><td>CalDAV</td><td>${serviceOnOff(!!svc.caldav)}</td></tr>
                     <tr><td>CardDAV</td><td>${serviceOnOff(!!svc.carddav)}</td></tr>
                     <tr><td>Files</td><td>${serviceOnOff(!!svc.files)}</td></tr>
@@ -4321,7 +4276,6 @@ export function mountApp(root: HTMLElement): void {
           ${roleLine}
         </section>`;
 
-      // Statistics section mirrors classic dashboard labels (Registered users, Number of calendars, …)
       const nUsers = d.nbusers ?? d.users;
       const nCals = d.nbcalendars ?? d.calendars;
       const nEvents = d.nbevents ?? d.events;
@@ -4340,7 +4294,7 @@ export function mountApp(root: HTMLElement): void {
             ${adminStatCard("Contacts", nContacts, "CardDAV")}
           </div>
           <div class="admin-service-row">
-            ${serviceBadge(svc.webAdmin !== false, "Web admin")}
+            ${serviceBadge(svc.administration !== false && svc.webAdmin !== false, "Administration")}
             ${serviceBadge(!!svc.caldav, "CalDAV")}
             ${serviceBadge(!!svc.carddav, "CardDAV")}
             ${serviceBadge(!!svc.files, "Files")}
@@ -4356,57 +4310,8 @@ export function mountApp(root: HTMLElement): void {
       </section>`;
     }
 
-    // Capability map (which areas are ready vs classic-only)
-    const capRows = (adminCapabilities?.pages ?? [])
-      .map((p) => {
-        const st = esc(adminStatusLabel(p.status));
-        const badge = `<span class="badge ${adminStatusBadgeClass(p.status)}">${st}</span>`;
-        return `<tr>
-          <td>${esc(p.label)}</td>
-          <td>${badge}</td>
-          <td class="hide-sm muted small">${esc(p.summary)}</td>
-          <td><a class="btn btn-ghost btn-small" href="${esc(p.classicUrl)}">Classic</a></td>
-        </tr>`;
-      })
-      .join("");
-
-    const capTable =
-      capRows !== ""
-        ? `<section class="card">
-        <div class="section-header">
-          <h2>Feature status</h2>
-          ${adminCapabilitiesLoading ? `<span class="muted small">Updating…</span>` : ""}
-        </div>
-        <p class="muted small">Portal Administration ships incrementally. Classic Web Admin covers every area during the parallel phase.</p>
-        <div class="contacts-table-wrap admin-table-placeholder">
-          <table class="contacts-table">
-            <thead>
-              <tr>
-                <th>Area</th>
-                <th>Status</th>
-                <th class="hide-sm">Notes</th>
-                <th>Fallback</th>
-              </tr>
-            </thead>
-            <tbody>${capRows}</tbody>
-          </table>
-        </div>
-        ${adminCapabilitiesError ? `<p class="muted small" style="margin-top:0.75rem">Capability map using defaults (${esc(adminCapabilitiesError)}).</p>` : ""}
-      </section>`
-        : "";
-
     return `${aboutBlock}
-      ${statsBlock}
-      ${capTable}
-      ${adminClassicFallbackCard({
-        title: "Classic Web Admin",
-        body: "Open the classic server-rendered admin for any action not yet available in this portal. Classic login uses the separate <strong>admin</strong> password.",
-        primaryHref: adminCapabilities?.classicAdminUrl || "/admin/",
-        primaryLabel: "Open classic Web Admin",
-        extraLinks: (adminCapabilities?.pages ?? [])
-          .filter((p) => p.id !== "overview")
-          .map((p) => ({ href: p.classicUrl, label: p.label })),
-      })}`;
+      ${statsBlock}`;
   }
 
   function filteredAdminUsers(): AdminUserSummary[] {
@@ -4423,16 +4328,16 @@ export function mountApp(root: HTMLElement): void {
 
   function renderAdminUserCreateModal(): string {
     if (!adminUserCreateOpen) return "";
-    return `<div class="cal-modal" id="admin-user-create-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-create-title">
-      <div class="cal-modal-backdrop" data-action="admin-user-create-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3 id="admin-user-create-title">Add user</h3>
-          <button type="button" class="info-modal-close" data-action="admin-user-create-close" aria-label="Close">×</button>
-        </header>
-        <div class="cal-modal-body">
-          <p class="muted small">Creates a DAV account with a default calendar and address book (same as classic admin).</p>
-          <form class="stack" data-form="admin-user-create" style="margin-top:0.75rem">
+    return renderModal({
+      id: "admin-user-create-modal",
+      title: "Add user",
+      titleId: "admin-user-create-title",
+      closeAction: "admin-user-create-close",
+      size: "sm",
+      form: true,
+      formAttrs: 'data-form="admin-user-create"',
+      body: `
+          <p class="muted small">Creates a DAV account with a default calendar and address book.</p>
             <label>Username
               <input type="text" name="username" required maxlength="255" autocomplete="off" placeholder="alice" ${busy ? "disabled" : ""} />
             </label>
@@ -4447,30 +4352,27 @@ export function mountApp(root: HTMLElement): void {
             </label>
             <label>Confirm password
               <input type="password" name="passwordConfirm" required autocomplete="new-password" ${busy ? "disabled" : ""} />
-            </label>
-            <div class="form-actions-row" style="margin-top:0.5rem">
-              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create user</button>
-              <button type="button" class="btn btn-ghost" data-action="admin-user-create-close" ${busy ? "disabled" : ""}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>`;
+            </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-user-create-close", variant: "ghost", disabled: busy },
+        { label: "Create user", type: "submit", variant: "primary", disabled: busy },
+      ],
+    });
   }
 
   function renderAdminUserEditModal(): string {
     if (!adminUserEditOpen || !adminUserDetail) return "";
     const u = adminUserDetail;
-    return `<div class="cal-modal" id="admin-user-edit-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-edit-title">
-      <div class="cal-modal-backdrop" data-action="admin-user-edit-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3 id="admin-user-edit-title">Edit user</h3>
-          <button type="button" class="info-modal-close" data-action="admin-user-edit-close" aria-label="Close">×</button>
-        </header>
-        <div class="cal-modal-body">
+    return renderModal({
+      id: "admin-user-edit-modal",
+      title: "Edit user",
+      titleId: "admin-user-edit-title",
+      closeAction: "admin-user-edit-close",
+      size: "sm",
+      form: true,
+      formAttrs: 'data-form="admin-user-edit"',
+      body: `
           <p class="muted small">Username <span class="mono">${esc(u.username)}</span> cannot be changed. Leave password fields empty to keep the current password.</p>
-          <form class="stack" data-form="admin-user-edit" style="margin-top:0.75rem">
             <input type="hidden" name="username" value="${esc(u.username)}" />
             <label>Display name
               <input type="text" name="displayname" required maxlength="255" value="${esc(u.displayname)}" autocomplete="off" ${busy ? "disabled" : ""} />
@@ -4483,15 +4385,12 @@ export function mountApp(root: HTMLElement): void {
             </label>
             <label>Confirm new password
               <input type="password" name="passwordConfirm" autocomplete="new-password" ${busy ? "disabled" : ""} />
-            </label>
-            <div class="form-actions-row" style="margin-top:0.5rem">
-              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save changes</button>
-              <button type="button" class="btn btn-ghost" data-action="admin-user-edit-close" ${busy ? "disabled" : ""}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>`;
+            </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-user-edit-close", variant: "ghost", disabled: busy },
+        { label: "Save changes", type: "submit", variant: "primary", disabled: busy },
+      ],
+    });
   }
 
   function renderAdminUserDeleteModal(): string {
@@ -4502,14 +4401,13 @@ export function mountApp(root: HTMLElement): void {
         ? adminUserDetail
         : adminUsers.find((x) => x.username.toLowerCase() === uname.toLowerCase()) ?? null;
     const label = u ? `${u.displayname || u.username} (${u.username})` : uname;
-    return `<div class="cal-modal" id="admin-user-delete-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-delete-title">
-      <div class="cal-modal-backdrop" data-action="admin-user-delete-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3 id="admin-user-delete-title">Delete user</h3>
-          <button type="button" class="info-modal-close" data-action="admin-user-delete-close" aria-label="Close">×</button>
-        </header>
-        <div class="cal-modal-body">
+    return renderModal({
+      id: "admin-user-delete-modal",
+      title: "Delete user",
+      titleId: "admin-user-delete-title",
+      closeAction: "admin-user-delete-close",
+      size: "sm",
+      body: `
           <p>You are about to permanently delete <strong>${esc(label)}</strong>.</p>
           <ul class="admin-feature-list muted">
             <li>All calendars, events, tasks, and notes for this user</li>
@@ -4517,19 +4415,24 @@ export function mountApp(root: HTMLElement): void {
             <li>WebDAV file home (moved to quarantine when files storage is enabled)</li>
           </ul>
           <p class="muted small">This cannot be undone from the portal.</p>
-          <label class="admin-delete-confirm">
-            <input type="checkbox" data-action="admin-user-delete-toggle" ${adminUserDeleteConfirmChecked ? "checked" : ""} ${busy ? "disabled" : ""} />
-            I understand and want to delete this user
-          </label>
-        </div>
-        <footer class="cal-modal-footer">
-          <button type="button" class="btn btn-ghost" data-action="admin-user-delete-close" ${busy ? "disabled" : ""}>Cancel</button>
-          <button type="button" class="btn btn-danger" data-action="admin-user-delete-confirm"
-            data-username="${esc(uname)}"
-            ${busy || !adminUserDeleteConfirmChecked ? "disabled" : ""}>Delete permanently</button>
-        </footer>
-      </div>
-    </div>`;
+          ${renderConfirmCheckbox({
+            action: "admin-user-delete-toggle",
+            label: "I understand and want to delete this user",
+            checked: adminUserDeleteConfirmChecked,
+            disabled: busy,
+            style: "admin",
+          })}`,
+      footer: [
+        { label: "Cancel", action: "admin-user-delete-close", variant: "ghost", disabled: busy },
+        {
+          label: "Delete permanently",
+          action: "admin-user-delete-confirm",
+          variant: "danger",
+          disabled: busy || !adminUserDeleteConfirmChecked,
+          attrs: `data-username="${esc(uname)}"`,
+        },
+      ],
+    });
   }
 
   function renderAdminUserDetailPanel(): string {
@@ -4546,7 +4449,6 @@ export function mountApp(root: HTMLElement): void {
           <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-close">Close</button>
         </div>
         <p class="flash flash-error">${esc(adminUserDetailError)}</p>
-        <a class="btn btn-primary" href="/admin/?/users">Open classic Users</a>
       </section>`;
     }
     if (!adminUserDetail) return "";
@@ -4600,15 +4502,13 @@ export function mountApp(root: HTMLElement): void {
 
     const calModal =
       adminCalModal === "create" || (adminCalModal === "edit" && editCal)
-        ? `<div class="cal-modal" role="dialog" aria-modal="true">
-      <div class="cal-modal-backdrop" data-action="admin-cal-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3>${adminCalModal === "create" ? "Add calendar" : "Edit calendar"}</h3>
-          <button type="button" class="info-modal-close" data-action="admin-cal-close" aria-label="Close">×</button>
-        </header>
-        <div class="cal-modal-body">
-          <form class="stack" data-form="admin-cal">
+        ? renderModal({
+            title: adminCalModal === "create" ? "Add calendar" : "Edit calendar",
+            closeAction: "admin-cal-close",
+            size: "sm",
+            form: true,
+            formAttrs: 'data-form="admin-cal"',
+            body: `
             <input type="hidden" name="instanceId" value="${editCal ? editCal.instanceId : ""}" />
             ${
               adminCalModal === "create"
@@ -4628,28 +4528,23 @@ export function mountApp(root: HTMLElement): void {
               <input type="text" name="calendarcolor" placeholder="#3B82F6" value="${esc(editCal?.calendarcolor ?? "")}" ${busy ? "disabled" : ""} />
             </label>
             <label class="check-row"><input type="checkbox" name="todos" ${editCal?.todos || adminCalModal === "create" ? "checked" : ""} ${busy ? "disabled" : ""} /> Tasks (VTODO)</label>
-            <label class="check-row"><input type="checkbox" name="notes" ${editCal?.notes ? "checked" : ""} ${busy ? "disabled" : ""} /> Notes (VJOURNAL)</label>
-            <div class="form-actions-row">
-              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save</button>
-              <button type="button" class="btn btn-ghost" data-action="admin-cal-close" ${busy ? "disabled" : ""}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>`
+            <label class="check-row"><input type="checkbox" name="notes" ${editCal?.notes ? "checked" : ""} ${busy ? "disabled" : ""} /> Notes (VJOURNAL)</label>`,
+            footer: [
+              { label: "Cancel", action: "admin-cal-close", variant: "ghost", disabled: busy },
+              { label: "Save", type: "submit", variant: "primary", disabled: busy },
+            ],
+          })
         : "";
 
     const abModal =
       adminAbModal === "create" || (adminAbModal === "edit" && editAb)
-        ? `<div class="cal-modal" role="dialog" aria-modal="true">
-      <div class="cal-modal-backdrop" data-action="admin-ab-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3>${adminAbModal === "create" ? "Add address book" : "Edit address book"}</h3>
-          <button type="button" class="info-modal-close" data-action="admin-ab-close" aria-label="Close">×</button>
-        </header>
-        <div class="cal-modal-body">
-          <form class="stack" data-form="admin-ab">
+        ? renderModal({
+            title: adminAbModal === "create" ? "Add address book" : "Edit address book",
+            closeAction: "admin-ab-close",
+            size: "sm",
+            form: true,
+            formAttrs: 'data-form="admin-ab"',
+            body: `
             <input type="hidden" name="id" value="${editAb ? editAb.id : ""}" />
             ${
               adminAbModal === "create"
@@ -4663,39 +4558,36 @@ export function mountApp(root: HTMLElement): void {
             </label>
             <label>Description
               <textarea name="description" rows="2" ${busy ? "disabled" : ""}>${esc(editAb?.description ?? "")}</textarea>
-            </label>
-            <div class="form-actions-row">
-              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save</button>
-              <button type="button" class="btn btn-ghost" data-action="admin-ab-close" ${busy ? "disabled" : ""}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>`
+            </label>`,
+            footer: [
+              { label: "Cancel", action: "admin-ab-close", variant: "ghost", disabled: busy },
+              { label: "Save", type: "submit", variant: "primary", disabled: busy },
+            ],
+          })
         : "";
 
     const resDeleteModal = adminResourceDelete
-      ? `<div class="cal-modal" role="dialog" aria-modal="true">
-      <div class="cal-modal-backdrop" data-action="admin-resource-delete-close"></div>
-      <div class="cal-modal-card cal-modal-card-sm">
-        <header class="cal-modal-header">
-          <h3>Delete ${adminResourceDelete.kind === "calendar" ? "calendar" : "address book"}</h3>
-          <button type="button" class="info-modal-close" data-action="admin-resource-delete-close">×</button>
-        </header>
-        <div class="cal-modal-body">
+      ? renderModal({
+          title: `Delete ${adminResourceDelete.kind === "calendar" ? "calendar" : "address book"}`,
+          closeAction: "admin-resource-delete-close",
+          size: "sm",
+          body: `
           <p>Delete <strong>${esc(adminResourceDelete.label)}</strong> for <span class="mono">${esc(u.username)}</span>?</p>
           ${
             adminResourceDelete.kind === "addressbook"
               ? `<label class="check-row"><input type="checkbox" data-action="admin-ab-force-toggle" ${adminResourceDelete.force ? "checked" : ""} /> Force delete even if contacts exist</label>`
               : `<p class="muted small">Events on this calendar will be removed if this is the only instance.</p>`
-          }
-        </div>
-        <footer class="cal-modal-footer">
-          <button type="button" class="btn btn-ghost" data-action="admin-resource-delete-close">Cancel</button>
-          <button type="button" class="btn btn-danger" data-action="admin-resource-delete-confirm" ${busy ? "disabled" : ""}>Delete</button>
-        </footer>
-      </div>
-    </div>`
+          }`,
+          footer: [
+            { label: "Cancel", action: "admin-resource-delete-close", variant: "ghost" },
+            {
+              label: "Delete",
+              action: "admin-resource-delete-confirm",
+              variant: "danger",
+              disabled: busy,
+            },
+          ],
+        })
       : "";
 
     return `<section class="card admin-user-detail">
@@ -4799,7 +4691,7 @@ export function mountApp(root: HTMLElement): void {
           </div>
         </div>
         <p class="muted small">
-          Same DAV users as classic <span class="mono">/admin/?/users</span>. Passwords and digests are never returned by the API.
+          DAV user accounts. Passwords and digests are never returned by the API.
         </p>
         <div class="admin-users-toolbar">
           <input type="search" data-action="admin-users-search" placeholder="Filter by username, name, email…"
@@ -4824,14 +4716,7 @@ export function mountApp(root: HTMLElement): void {
       ${renderAdminUserDetailPanel()}
       ${renderAdminUserCreateModal()}
       ${renderAdminUserEditModal()}
-      ${renderAdminUserDeleteModal()}
-      ${adminClassicFallbackCard({
-        title: "Classic fallback",
-        body: "Classic Web Admin remains available if you need the Formal forms or nested per-user calendars/address books before Phase 6.",
-        primaryHref: "/admin/?/users",
-        primaryLabel: "Open classic Users",
-        extraLinks: [{ href: "/admin/", label: "Classic dashboard" }],
-      })}`;
+      ${renderAdminUserDeleteModal()}`;
   }
 
   function renderAdminSettingsShell(): string {
@@ -4846,7 +4731,6 @@ export function mountApp(root: HTMLElement): void {
       return `<section class="card">
         <p class="flash flash-error">${esc(adminSystemSettingsError)}</p>
         <button type="button" class="btn btn-ghost" data-action="admin-settings-refresh">Retry</button>
-        <a class="btn btn-primary" href="/admin/?/settings/standard">Open classic System Settings</a>
       </section>`;
     }
     const s = adminSystemSettings;
@@ -4872,7 +4756,7 @@ export function mountApp(root: HTMLElement): void {
         </div>
         <p class="muted small">
           Writes <span class="mono">config/baikal.yaml</span> atomically. Changing
-          <strong>session timeout</strong> affects both portal and classic admin idle cookies.
+          <strong>session timeout</strong> affects portal idle sessions.
           ${s.writable === false ? '<span class="flash flash-error">Config is not writable by PHP.</span>' : ""}
         </p>
         <form class="stack admin-settings-form" data-form="admin-settings">
@@ -4892,8 +4776,9 @@ export function mountApp(root: HTMLElement): void {
             </select>
           </label>
           <label>Server timezone
-            <input type="text" name="timezone" required value="${esc(s.timezone || "UTC")}" list="tz-hints" ${busy || s.writable === false ? "disabled" : ""} />
-            <datalist id="tz-hints"><option value="UTC"><option value="America/Toronto"><option value="Europe/Paris"><option value="America/New_York"></datalist>
+            <select name="timezone" required ${busy || s.writable === false ? "disabled" : ""}>
+              ${timezoneSelectOptions(s.timezone || "UTC")}
+            </select>
           </label>
           <label>Email invite sender
             <input type="text" name="invite_from" value="${esc(s.invite_from || "")}" placeholder="noreply@example.com" ${busy || s.writable === false ? "disabled" : ""} />
@@ -4909,7 +4794,7 @@ export function mountApp(root: HTMLElement): void {
           ${num("files_quarantine_days", s.files_quarantine_days, "Deleted user file retention (days)")}
 
           <h3 class="admin-subsection-title">Session & portal</h3>
-          ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal + classic admin")}
+          ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal session")}
           <label>Portal log level
             <select name="portal_log_level" ${busy || s.writable === false ? "disabled" : ""}>
               ${["off", "error", "warn", "info", "debug"]
@@ -4945,27 +4830,77 @@ export function mountApp(root: HTMLElement): void {
             </select>
           </label>
 
-          <h3 class="admin-subsection-title">Classic admin password</h3>
-          <p class="muted small">${s.hasAdminPassword ? "Leave blank to keep the current password." : "No password set yet."}</p>
-          <label>New admin password
+          <h3 class="admin-subsection-title">Server admin password</h3>
+          <p class="muted small">
+            Stored in <span class="mono">baikal.yaml</span> for install recovery.
+            Portal login uses each DAV user’s own password (e.g. user <span class="mono">admin</span> created at install).
+            ${s.hasAdminPassword ? "Leave blank to keep the current server admin password." : "No server admin password set yet."}
+          </p>
+          <label>New server admin password
             <input type="password" name="admin_password" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
           </label>
-          <label>Confirm admin password
+          <label>Confirm server admin password
             <input type="password" name="admin_password_confirm" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
           </label>
 
           <div class="form-actions-row" style="margin-top:1rem">
             <button type="submit" class="btn btn-primary" ${busy || s.writable === false ? "disabled" : ""}>Save settings</button>
-            <a class="btn btn-ghost" href="/admin/?/settings/standard">Open classic settings</a>
           </div>
         </form>
       </section>
-      ${adminClassicFallbackCard({
-        title: "Classic fallback",
-        body: "Formal forms remain available under classic Web Admin if you prefer them.",
-        primaryHref: "/admin/?/settings/standard",
-        primaryLabel: "Open classic System Settings",
-      })}`;
+      <section class="card card-danger-zone">
+        <div class="section-header">
+          <h2>Danger zone</h2>
+        </div>
+        <p class="muted small">
+          <strong>Reset to Default</strong> is a full factory wipe: config, database (all users and data),
+          WebDAV files, and install lock. A timestamped backup of
+          <span class="mono">baikal.yaml</span> is kept next to config; <strong>back up volumes first</strong>
+          if you need data recovery. Everything else is deleted, then the installer opens.
+        </p>
+        <div class="form-actions-row" style="margin-top:0.75rem">
+          <button type="button" class="btn btn-danger" data-action="admin-reset-open" ${busy || s.writable === false ? "disabled" : ""}>
+            Reset to Default
+          </button>
+        </div>
+      </section>
+      ${renderAdminResetModal()}`;
+  }
+
+  function renderAdminResetModal(): string {
+    if (!adminResetModalOpen) return "";
+    return renderModal({
+      id: "admin-reset-modal",
+      title: "Reset to Default",
+      titleId: "admin-reset-title",
+      closeAction: "admin-reset-close",
+      size: "sm",
+      body: `
+          <p>This permanently wipes this AngaraDAV instance and opens the installer.</p>
+          <ul class="admin-feature-list muted">
+            <li>Deletes <span class="mono">config/baikal.yaml</span> (timestamped backup only)</li>
+            <li>Deletes the database (all DAV users, calendars, contacts, events)</li>
+            <li>Deletes WebDAV file homes and quarantine</li>
+            <li>Removes <span class="mono">INSTALL_DISABLED</span> so install can run</li>
+          </ul>
+          <p class="muted small">This cannot be undone. You will complete setup at <span class="mono">/portal/install/</span>.</p>
+          ${renderConfirmCheckbox({
+            action: "admin-reset-toggle",
+            label: "I understand all data will be deleted and the installer will open",
+            checked: adminResetConfirmChecked,
+            disabled: busy,
+            style: "admin",
+          })}`,
+      footer: [
+        { label: "Cancel", action: "admin-reset-close", variant: "ghost", disabled: busy },
+        {
+          label: "Reset and open installer",
+          action: "admin-reset-confirm",
+          variant: "danger",
+          disabled: busy || !adminResetConfirmChecked,
+        },
+      ],
+    });
   }
 
   function renderAdminDatabaseShell(): string {
@@ -4980,16 +4915,14 @@ export function mountApp(root: HTMLElement): void {
       return `<section class="card">
         <p class="flash flash-error">${esc(adminDatabaseSettingsError)}</p>
         <button type="button" class="btn btn-ghost" data-action="admin-database-refresh">Retry</button>
-        <a class="btn btn-primary" href="/admin/?/settings/database">Open classic Database settings</a>
       </section>`;
     }
     const d = adminDatabaseSettings;
     if (!d) {
       return `<section class="card"><p class="muted">No database settings loaded.</p></section>`;
     }
-    const backend = (d.backend || "unknown").toLowerCase();
-    const backendLabel =
-      backend === "sqlite" ? "SQLite" : backend === "pgsql" ? "PostgreSQL" : esc(d.backend || "—");
+    const backend = adminDbFormBackend;
+    const notWritable = d.writable === false;
 
     return `
       <section class="card">
@@ -4997,41 +4930,102 @@ export function mountApp(root: HTMLElement): void {
           ${infoTitle("Database", "admin-database")}
           <div class="section-actions">
             ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
-            <span class="badge badge-off">Write: classic only</span>
             <button type="button" class="btn btn-ghost btn-small" data-action="admin-database-refresh" ${busy ? "disabled" : ""}>Refresh</button>
           </div>
         </div>
         <p class="flash flash-info" style="margin-bottom:1rem">${esc(d.warning)}</p>
-        <dl class="admin-dl">
-          <div><dt>Backend</dt><dd><span class="badge badge-admin">${backendLabel}</span></dd></div>
+        <dl class="admin-dl admin-dl-stack">
+          <div>
+            <dt>Current backend</dt>
+            <dd><span class="badge badge-admin">${esc((d.backend || "—").toUpperCase())}</span></dd>
+          </div>
           ${
-            backend === "sqlite" || d.sqlite_file
-              ? `<div><dt>SQLite file</dt><dd class="mono">${esc(d.sqlite_file || "—")}</dd></div>`
+            d.backend === "sqlite" || d.sqlite_file
+              ? `<div>
+            <dt>SQLite file</dt>
+            <dd class="mono admin-dl-path">${esc(d.sqlite_file || "—")}</dd>
+          </div>`
               : ""
           }
           ${
-            backend === "pgsql" || d.pgsql_host || d.pgsql_dbname
-              ? `<div><dt>PostgreSQL host</dt><dd class="mono">${esc(d.pgsql_host || "—")}</dd></div>
-          <div><dt>Database name</dt><dd class="mono">${esc(d.pgsql_dbname || "—")}</dd></div>
-          <div><dt>Username</dt><dd class="mono">${esc(d.pgsql_username || "—")}</dd></div>
-          <div><dt>Password</dt><dd>${d.hasPassword ? '<span class="badge badge-ok">Set</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd></div>`
+            d.backend === "pgsql" || d.pgsql_host
+              ? `<div>
+            <dt>PostgreSQL</dt>
+            <dd class="mono admin-dl-path">${esc(d.pgsql_host || "—")} / ${esc(d.pgsql_dbname || "—")} · ${esc(d.pgsql_username || "—")}</dd>
+          </div>
+          <div>
+            <dt>Password</dt>
+            <dd>${d.hasPassword ? '<span class="badge badge-ok">Set</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd>
+          </div>`
               : ""
           }
-          <div><dt>Encryption key</dt><dd>${d.hasEncryptionKey ? '<span class="badge badge-ok">Configured</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd></div>
+          <div>
+            <dt>Encryption key</dt>
+            <dd>${d.hasEncryptionKey ? '<span class="badge badge-ok">Configured</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd>
+          </div>
         </dl>
-        <p class="muted small">
-          Portal write is <strong>disabled by design</strong> (Phase 8 product decision).
-          Wrong values can brick the instance; edit only via classic Web Admin with a backup of
-          <span class="mono">config/baikal.yaml</span>.
-        </p>
+
+        <h3 class="admin-subsection-title">Edit connection</h3>
+        ${notWritable ? `<p class="flash flash-error">Config is not writable by PHP.</p>` : ""}
+        <form class="stack admin-database-form" data-form="admin-database">
+          <label>Backend
+            <select name="backend" data-action="admin-db-backend" ${busy || notWritable ? "disabled" : ""}>
+              <option value="sqlite" ${backend === "sqlite" ? "selected" : ""}>SQLite</option>
+              <option value="pgsql" ${backend === "pgsql" ? "selected" : ""}>PostgreSQL</option>
+            </select>
+          </label>
+          <div data-admin-db-panel="sqlite" style="${backend === "sqlite" ? "" : "display:none"}">
+            <label>SQLite file path
+              <input type="text" name="sqlite_file" class="mono" value="${esc(d.sqlite_file || "")}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+          </div>
+          <div data-admin-db-panel="pgsql" style="${backend === "pgsql" ? "" : "display:none"}">
+            <label>PostgreSQL host
+              <input type="text" name="pgsql_host" class="mono" value="${esc(d.pgsql_host || "")}" placeholder="localhost:5432" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Database name
+              <input type="text" name="pgsql_dbname" class="mono" value="${esc(d.pgsql_dbname || "")}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Username
+              <input type="text" name="pgsql_username" class="mono" value="${esc(d.pgsql_username || "")}" autocomplete="off" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Password
+              <input type="password" name="pgsql_password" autocomplete="new-password" placeholder="${d.hasPassword ? "Leave blank to keep current" : ""}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+          </div>
+          <div class="form-actions-row" style="margin-top:1rem">
+            <button type="submit" class="btn btn-primary" ${busy || notWritable ? "disabled" : ""}>Save database settings…</button>
+          </div>
+        </form>
       </section>
-      ${adminClassicFallbackCard({
-        title: "Change database settings",
-        body: "Use classic Web Admin for any backend or credential change. Confirm you have a recovery path before saving.",
-        primaryHref: d.classicUrl || "/admin/?/settings/database",
-        primaryLabel: "Open classic Database settings",
-        extraLinks: [{ href: "/admin/", label: "Classic dashboard" }],
-      })}`;
+      ${renderAdminDbConfirmModal()}`;
+  }
+
+  function renderAdminDbConfirmModal(): string {
+    if (!adminDbConfirmOpen) return "";
+    const canSave = adminDbConfirmText.trim() === "CONFIRM";
+    return renderModal({
+      id: "admin-db-confirm-modal",
+      title: "Confirm database change",
+      titleId: "admin-db-confirm-title",
+      closeAction: "admin-db-confirm-close",
+      size: "sm",
+      body: `
+          <p>Wrong values can take the instance offline. Type <strong class="mono">CONFIRM</strong> to save.</p>
+          <label>Confirmation
+            <input type="text" data-action="admin-db-confirm-input" value="${esc(adminDbConfirmText)}"
+              autocomplete="off" spellcheck="false" placeholder="CONFIRM" ${busy ? "disabled" : ""} />
+          </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-db-confirm-close", variant: "ghost", disabled: busy },
+        {
+          label: "Save database settings",
+          action: "admin-db-confirm-save",
+          variant: "danger",
+          disabled: busy || !canSave,
+        },
+      ],
+    });
   }
 
   /** Admin-only Administration shell (opened from the user menu). */
@@ -5040,39 +5034,21 @@ export function mountApp(root: HTMLElement): void {
       return `<div class="card"><p class="muted">You do not have permission to view Administration.</p></div>`;
     }
     if (!adminUiEnabled()) {
-      const href = esc(adminCapabilities?.classicAdminUrl || "/admin/");
-      return `<div class="portal-grid portal-grid-admin">
-        <section class="card admin-coming-soon-card">
+      return `<section class="card admin-coming-soon-card">
           <div class="admin-coming-soon-head">
             <span class="badge badge-off">Disabled</span>
             <h2 class="admin-coming-soon-title">Portal Administration</h2>
           </div>
           <p class="muted">
-            The in-portal Administration UI is turned off
+            The Administration UI is turned off
             (<span class="mono">system.portal_admin_ui_enabled</span>).
-            Use classic Web Admin for all server management.
           </p>
-          <div class="admin-link-grid">
-            <a class="btn btn-primary" href="${href}">Open classic Web Admin</a>
-          </div>
-        </section>
-      </div>`;
+        </section>`;
     }
-    const pageBody =
-      adminPage === "users"
-        ? renderAdminUsersShell()
-        : adminPage === "settings"
-          ? renderAdminSettingsShell()
-          : adminPage === "database"
-            ? renderAdminDatabaseShell()
-            : renderAdminOverview();
-
-    return `<div class="portal-grid portal-grid-admin">
-      <div class="admin-shell-nav card">
-        ${adminSubnav()}
-      </div>
-      ${pageBody}
-    </div>`;
+    if (adminPage === "users") return renderAdminUsersShell();
+    if (adminPage === "settings") return renderAdminSettingsShell();
+    if (adminPage === "database") return renderAdminDatabaseShell();
+    return renderAdminOverview();
   }
 
   /** Flatten tasks as a tree (subtasks under parent via RELATED-TO parentUid). */
@@ -5908,6 +5884,28 @@ export function mountApp(root: HTMLElement): void {
     adminSettingsForm?.addEventListener("submit", (ev) => {
       ev.preventDefault();
       void onAdminSettingsSave(adminSettingsForm);
+    });
+    const adminDbForm = root.querySelector<HTMLFormElement>('[data-form="admin-database"]');
+    adminDbForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      onAdminDatabaseFormSubmit(adminDbForm);
+    });
+    const adminDbBackend = root.querySelector<HTMLSelectElement>(
+      'select[data-action="admin-db-backend"]',
+    );
+    adminDbBackend?.addEventListener("change", () => {
+      adminDbFormBackend = adminDbBackend.value === "pgsql" ? "pgsql" : "sqlite";
+      render();
+    });
+    const adminDbConfirmInp = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-db-confirm-input"]',
+    );
+    adminDbConfirmInp?.addEventListener("input", () => {
+      adminDbConfirmText = adminDbConfirmInp.value;
+      const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-db-confirm-save"]');
+      if (btn) {
+        btn.disabled = busy || adminDbConfirmText.trim() !== "CONFIRM";
+      }
     });
     const noteSearchInput = root.querySelector<HTMLInputElement>('input[data-action="note-search"]');
     noteSearchInput?.addEventListener("input", () => {
@@ -7435,6 +7433,48 @@ export function mountApp(root: HTMLElement): void {
       }
       return;
     }
+    if (action === "admin-reset-open") {
+      adminResetModalOpen = true;
+      adminResetConfirmChecked = false;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-reset-close") {
+      adminResetModalOpen = false;
+      adminResetConfirmChecked = false;
+      render();
+      return;
+    }
+    if (action === "admin-reset-toggle") {
+      const cb = t as HTMLInputElement;
+      adminResetConfirmChecked = !!cb.checked;
+      render();
+      return;
+    }
+    if (action === "admin-reset-confirm") {
+      if (!adminResetConfirmChecked) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const res = await api.adminResetToDefault(true);
+        log.event("admin.settings.reset-to-default");
+        adminResetModalOpen = false;
+        adminResetConfirmChecked = false;
+        const dest =
+          res.redirectUrl && res.redirectUrl.startsWith("/")
+            ? res.redirectUrl
+            : "/portal/install/";
+        window.location.assign(dest);
+        return;
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reset failed");
+        busy = false;
+        render();
+      }
+      return;
+    }
     if (action === "admin-database-refresh") {
       busy = true;
       clearFlash();
@@ -7444,6 +7484,57 @@ export function mountApp(root: HTMLElement): void {
         setFlash("success", "Database settings reloaded");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Reload failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-db-backend") {
+      const sel = t as HTMLSelectElement;
+      adminDbFormBackend = sel.value === "pgsql" ? "pgsql" : "sqlite";
+      render();
+      return;
+    }
+    if (action === "admin-db-confirm-close") {
+      adminDbConfirmOpen = false;
+      adminDbConfirmText = "";
+      adminDbPendingBody = null;
+      render();
+      return;
+    }
+    if (action === "admin-db-confirm-input") {
+      const inp = t as HTMLInputElement;
+      adminDbConfirmText = inp.value;
+      // Re-render only the button state lightly via full render
+      render();
+      // restore focus/cursor on the confirm field
+      const el = root.querySelector<HTMLInputElement>('[data-action="admin-db-confirm-input"]');
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+      return;
+    }
+    if (action === "admin-db-confirm-save") {
+      if (adminDbConfirmText.trim() !== "CONFIRM" || !adminDbPendingBody) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const body = { ...adminDbPendingBody, confirm: "CONFIRM" };
+        const res = await api.adminUpdateDatabaseSettings(body);
+        adminDatabaseSettings = res.data;
+        adminDbConfirmOpen = false;
+        adminDbConfirmText = "";
+        adminDbPendingBody = null;
+        const b = (res.data.backend || "sqlite").toLowerCase();
+        adminDbFormBackend = b === "pgsql" ? "pgsql" : "sqlite";
+        log.event("admin.database.save", { backend: res.data.backend });
+        setFlash("success", "Database settings saved");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Database save failed");
       } finally {
         busy = false;
         render();

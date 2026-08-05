@@ -79,7 +79,10 @@ class App {
         $configPath = defined('PROJECT_PATH_CONFIG')
             ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/baikal.yaml'
             : '';
-        $this->adminSettings = new AdminSettingsService($configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'));
+        $this->adminSettings = new AdminSettingsService(
+            $configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'),
+            $this->portalSpecificDir()
+        );
         $this->shares = new ShareService($pdo);
         $this->contacts = new ContactService($pdo);
         $this->items = new CalendarItemService($pdo);
@@ -821,16 +824,95 @@ class App {
             }
         }
 
-        // Database settings — read-only in portal (Phase 8); write deferred to classic
+        // Factory reset → installer (removes baikal.yaml + INSTALL_DISABLED)
+        if ($adminPath === '/admin/settings/reset-to-default' || $adminPath === '/admin/settings/reset-to-default/') {
+            if ($method === 'POST') {
+                $body = $this->jsonBody();
+                $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
+                try {
+                    $result = $this->adminSettings->resetToDefault($confirm);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'reset-to-default',
+                        'system',
+                        'ok',
+                        ['backup' => $result['backupPath'] ?? null]
+                    );
+                    $this->portalServerLog(
+                        'admin reset-to-default ok user=' . $adminUser
+                        . ($result['backupPath'] ? ' backup=' . $result['backupPath'] : ''),
+                        'warn'
+                    );
+
+                    return $result;
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'reset-to-default',
+                        'system',
+                        'error:' . $e->getStatus(),
+                        ['msg' => $e->getMessage()]
+                    );
+                    $this->portalServerLog(
+                        'admin reset-to-default failed user=' . $adminUser
+                        . ' status=' . $e->getStatus()
+                        . ' error=' . $e->getMessage(),
+                        $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Database settings — write requires confirm: "CONFIRM" (Phase 8.2)
         if ($adminPath === '/admin/settings/database' || $adminPath === '/admin/settings/database/') {
             if ($method === 'GET') {
                 return ['data' => $this->adminSettings->getDatabaseSettings()];
             }
-            if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-                throw new ApiException(
-                    'Database settings cannot be changed from the portal. Use classic Web Admin at /admin/?/settings/database',
-                    403
-                );
+            if ($method === 'PUT' || $method === 'PATCH' || $method === 'POST') {
+                $body = $this->jsonBody();
+                $keysCtx = [
+                    'keys'    => implode(',', array_values(array_filter(
+                        array_keys($body),
+                        static function ($k) {
+                            return !in_array($k, ['pgsql_password', 'confirm', 'encryption_key'], true);
+                        }
+                    ))),
+                    'backend' => isset($body['backend']) ? (string) $body['backend'] : null,
+                ];
+                try {
+                    $data = $this->adminSettings->updateDatabaseSettings($body);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-database-settings',
+                        'database',
+                        'ok',
+                        $keysCtx
+                    );
+                    $this->portalServerLog(
+                        'admin database settings save ok user=' . $adminUser
+                        . ' backend=' . (string) ($data['backend'] ?? ''),
+                        'warn'
+                    );
+
+                    return ['data' => $data];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-database-settings',
+                        'database',
+                        'error:' . $e->getStatus(),
+                        array_merge($keysCtx, ['msg' => $e->getMessage()])
+                    );
+                    $this->portalServerLog(
+                        'admin database settings save failed user=' . $adminUser
+                        . ' status=' . $e->getStatus()
+                        . ' error=' . $e->getMessage(),
+                        $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
             }
         }
 
@@ -1434,7 +1516,8 @@ class App {
     }
 
     /**
-     * Reject cross-site browser requests (defense in depth with SameSite=Lax).
+     * Reject cross-site browser requests (defense in depth with SameSite=Lax + CSRF).
+     * Fail closed when neither Origin nor Referer is present on state-changing calls.
      */
     private function assertSameOrigin(): void {
         $host = $_SERVER['HTTP_HOST'] ?? '';
@@ -1464,7 +1547,12 @@ class App {
             if ($rh !== '' && strcasecmp($rh, $host) !== 0) {
                 throw new ApiException('Cross-origin request blocked', 403);
             }
+
+            return;
         }
+        // No Origin/Referer: non-browser clients or stripped headers — require explicit same-site hint
+        // (browser form/fetch always sends one of these for same-origin POSTs).
+        throw new ApiException('Missing Origin or Referer on state-changing request', 403);
     }
 
     /** @var string|null Raw php://input (one-shot stream — cache for reuse) */

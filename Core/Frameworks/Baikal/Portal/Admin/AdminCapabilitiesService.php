@@ -8,11 +8,13 @@ namespace Baikal\Portal\Admin;
  * Status values (parity matrix language):
  *   full        — portal feature complete
  *   read-only   — portal read path available
- *   coming-soon — shell visible; use classic admin for the real work
- *   deferred    — intentionally classic-only for now
+ *   coming-soon — shell visible; work incomplete
+ *   deferred    — intentionally unavailable for now
  *
  * Optional YAML: system.portal_admin_ui_enabled (default true) hides the
  * in-portal Administration section when false; /api/admin/* routes remain.
+ *
+ * All navigation URLs point at the portal SPA (#admin…), not classic Formal /admin/.
  */
 class AdminCapabilitiesService {
     /** @var array<string, mixed> */
@@ -28,14 +30,14 @@ class AdminCapabilitiesService {
     /**
      * @return array{
      *   uiEnabled: bool,
-     *   classicAdminUrl: string,
+     *   portalAdminUrl: string,
      *   pages: list<array{
      *     id: string,
      *     label: string,
      *     status: string,
      *     available: bool,
-     *     classicUrl: string,
-     *     classicLabel: string,
+     *     portalUrl: string,
+     *     portalLabel: string,
      *     summary: string
      *   }>
      * }
@@ -44,51 +46,50 @@ class AdminCapabilitiesService {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
         $uiEnabled = self::boolFlag($sys, 'portal_admin_ui_enabled', true);
 
-        // Living matrix — flip status/available as portal admin phases ship.
-        // Keep classicUrl always set so the UI never dead-ends.
+        // UI tab order: Overview → System settings → Users → Database
         $pages = [
             [
-                'id'           => 'overview',
-                'label'        => 'Overview',
-                'status'       => 'read-only',
-                'available'    => true,
-                'classicUrl'   => '/admin/',
-                'classicLabel' => 'Open classic Dashboard',
-                'summary'      => 'Live counts and service flags from the portal session.',
+                'id'          => 'overview',
+                'label'       => 'Overview',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin',
+                'portalLabel' => 'Overview',
+                'summary'     => 'Live counts and service flags from the portal session.',
             ],
             [
-                'id'           => 'users',
-                'label'        => 'Users',
-                'status'       => 'full',
-                'available'    => true,
-                'classicUrl'   => '/admin/?/users',
-                'classicLabel' => 'Open classic Users',
-                'summary'      => 'Full DAV user CRUD plus per-user calendars and address books.',
+                'id'          => 'settings',
+                'label'       => 'System settings',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/settings',
+                'portalLabel' => 'System settings',
+                'summary'     => 'Edit system flags and admin password; writes baikal.yaml atomically.',
             ],
             [
-                'id'           => 'settings',
-                'label'        => 'System settings',
-                'status'       => 'full',
-                'available'    => true,
-                'classicUrl'   => '/admin/?/settings/standard',
-                'classicLabel' => 'Open classic System Settings',
-                'summary'      => 'Edit system flags and admin password; writes baikal.yaml atomically.',
+                'id'          => 'users',
+                'label'       => 'Users',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/users',
+                'portalLabel' => 'Users',
+                'summary'     => 'Full DAV user CRUD plus per-user calendars and address books.',
             ],
             [
-                'id'           => 'database',
-                'label'        => 'Database',
-                'status'       => 'read-only',
-                'available'    => true,
-                'classicUrl'   => '/admin/?/settings/database',
-                'classicLabel' => 'Open classic Database settings',
-                'summary'      => 'Read-only view (no password). Writes stay classic-only by design.',
+                'id'          => 'database',
+                'label'       => 'Database',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/database',
+                'portalLabel' => 'Database',
+                'summary'     => 'Connection settings; password never returned. Saves require typing CONFIRM.',
             ],
         ];
 
         return [
-            'uiEnabled'       => $uiEnabled,
-            'classicAdminUrl' => '/admin/',
-            'pages'           => $pages,
+            'uiEnabled'      => $uiEnabled,
+            'portalAdminUrl' => '/portal/#admin',
+            'pages'          => $pages,
         ];
     }
 

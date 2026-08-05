@@ -55,6 +55,14 @@ if (!empty($_SERVER['PATH_INFO'])) {
 }
 
 try {
+    $norm = '/' . trim($path, '/');
+    // Unauthenticated install/upgrade API — must not require baikal.yaml / DB
+    if ($norm === '/install' || str_starts_with($norm, '/install/')) {
+        $install = \Baikal\Portal\Install\InstallApp::bootstrap();
+        $install->handle($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);
+        exit;
+    }
+
     $app = \Baikal\Portal\App::bootstrap();
     $app->handle($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);
 } catch (\Baikal\Portal\ApiException $e) {

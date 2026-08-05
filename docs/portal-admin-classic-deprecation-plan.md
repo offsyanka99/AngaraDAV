@@ -1,10 +1,15 @@
 # Classic Web Admin (`/admin/`) — deprecation plan
 
-**Status:** Planning only — **no code removal** under this document.  
+**Status:** **Hard cutover executed** — classic Formal day-to-day UI removed.  
 **Product version:** 2.0.0 (`release/2.0.0-portal-admin`)  
+**Cutover record:** [`portal-admin-cutover.md`](portal-admin-cutover.md)  
 **Related:** [`portal-admin-integration-scope.txt`](portal-admin-integration-scope.txt),  
-[`DEPLOYMENT.md` — Portal Administration](DEPLOYMENT.md#portal-administration-parallel-with-classic-admin),  
+[`DEPLOYMENT.md` — Portal Administration](DEPLOYMENT.md#portal-administration),  
 [`portal-admin-security-checklist.md`](portal-admin-security-checklist.md)
+
+> **Update 2026-08-05:** Day-to-day Formal controllers/templates deleted.  
+> `/admin/` and `/admin/install/` are **redirects** to `/portal/#admin` and `/portal/install/`.  
+> Remaining work (MechanicalSoup rewrite, e2e, image bake) is listed in the cutover doc.
 
 ---
 
@@ -95,7 +100,7 @@ All boxes must be checked **before** any release notes that say “classic day-t
 | **C — Soft hide (optional)** | Following cycle if B went well | Classic day-to-day screens behind flag or footer-only “legacy admin”; install + recovery still documented. |
 | **D — Hard deprecation (optional, separate decision)** | Only after C + zero support load | Remove day-to-day classic controllers/templates **except** `/admin/install/` (and possibly a minimal recovery login). **Not scheduled.** |
 
-**Installer policy:** Prefer **keep `/admin/install/` permanently** on the classic stack (Phase 10 default). Do not block deprecation of day-to-day admin on an SPA installer.
+**Installer policy:** Prefer **keep `/admin/install/` permanently** on the classic stack (Phase 10 default — **recorded** in [`portal-admin-installer-phase10.md`](portal-admin-installer-phase10.md)). Do not block deprecation of day-to-day admin on an SPA installer. Step 10.2 migration remains **out of scope** until product elevates priority.
 
 ---
 
@@ -143,7 +148,7 @@ Do **not** delete without a new ADR:
 |-------------|--------|
 | Written deprecation checklist (this file) | **Done** |
 | Criteria: matrix green + CI e2e + dual-run cycle | **Defined** (not yet all checked — dual-run starts at 2.0.0) |
-| Installer remains classic unless Phase 10 | **Recorded** |
+| Installer remains classic unless Phase 10 | **Recorded** (Phase 10.1/10.2 closed: keep classic; migration deferred — [`portal-admin-installer-phase10.md`](portal-admin-installer-phase10.md)) |
 | No code removal of classic `/admin/` | **Confirmed** |
 
 ---

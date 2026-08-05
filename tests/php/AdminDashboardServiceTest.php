@@ -69,15 +69,16 @@ assert_true($stats['services']['files'] === true, 'files on');
 assert_true($stats['services']['tasks'] === true, 'tasks on');
 assert_true($stats['services']['notes'] === false, 'notes off');
 assert_true($stats['services']['push'] === true, 'push on');
-assert_true($stats['services']['webAdmin'] === true, 'webAdmin always on in stats');
+assert_true($stats['services']['webAdmin'] === true, 'webAdmin legacy alias on');
+assert_true(($stats['services']['administration'] ?? false) === true, 'administration service on');
 assert_true(is_string($stats['version']), 'version key is string');
-// Classic dashboard aliases (nbusers / nbcalendars / …)
+// Compact count aliases (nbusers / nbcalendars / …)
 assert_true($stats['nbusers'] === $stats['users'], 'nbusers alias');
 assert_true($stats['nbcalendars'] === $stats['calendars'], 'nbcalendars alias');
 assert_true($stats['nbevents'] === $stats['events'], 'nbevents alias');
 assert_true($stats['nbbooks'] === $stats['addressBooks'], 'nbbooks alias');
 assert_true($stats['nbcontacts'] === $stats['contacts'], 'nbcontacts alias');
-assert_true(isset($stats['links']['classicDashboard']), 'links.classicDashboard present');
+assert_true(($stats['links']['administration'] ?? '') === '/portal/#admin', 'links.administration portal admin');
 assert_true(isset($stats['links']['releases']), 'links.releases present');
 
 // Defaults when flags omitted
