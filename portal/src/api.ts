@@ -12,6 +12,149 @@ export type PortalUser = {
   role?: string;
 };
 
+/** GET /api/admin/dashboard payload (Administration Overview). */
+export type AdminDashboardStats = {
+  version: string;
+  git?: string;
+  users: number;
+  calendars: number;
+  events: number;
+  addressBooks: number;
+  contacts: number;
+  /** Classic dashboard aliases */
+  nbusers?: number;
+  nbcalendars?: number;
+  nbevents?: number;
+  nbbooks?: number;
+  nbcontacts?: number;
+  services: {
+    webAdmin?: boolean;
+    caldav: boolean;
+    carddav: boolean;
+    files: boolean;
+    tasks: boolean;
+    notes: boolean;
+    push: boolean;
+  };
+  links?: {
+    docs?: string;
+    releases?: string;
+    classicDashboard?: string;
+  };
+};
+
+/** GET /api/admin/users list item (never includes digesta1). */
+export type AdminUserSummary = {
+  username: string;
+  displayname: string;
+  email: string;
+  principal: string;
+};
+
+/** GET /api/admin/users/{username} detail. */
+export type AdminUserDetail = AdminUserSummary & {
+  calendarCount: number;
+  addressBookCount: number;
+  contactCount: number;
+  eventCount: number;
+};
+
+/** Admin-managed calendar for another user. */
+export type AdminUserCalendar = {
+  id: number;
+  instanceId: number;
+  calendarId: number;
+  uri: string;
+  displayname: string;
+  description: string;
+  calendarcolor: string;
+  components: string;
+  todos: boolean;
+  notes: boolean;
+  eventCount: number;
+  davUri: string;
+};
+
+/** Admin-managed address book for another user. */
+export type AdminUserAddressBook = {
+  id: number;
+  uri: string;
+  displayname: string;
+  description: string;
+  contactCount: number;
+  davUri: string;
+};
+
+/** GET /api/admin/settings/database (read-only; never includes password). */
+export type AdminDatabaseSettings = {
+  backend: string;
+  sqlite_file: string;
+  pgsql_host: string;
+  pgsql_dbname: string;
+  pgsql_username: string;
+  hasPassword: boolean;
+  hasEncryptionKey: boolean;
+  writeEnabled: boolean;
+  classicUrl: string;
+  warning: string;
+};
+
+/** GET/PATCH /api/admin/settings/system */
+export type AdminSystemSettings = {
+  timezone: string;
+  card_enabled: boolean;
+  cal_enabled: boolean;
+  files_enabled: boolean;
+  files_storage_path: string;
+  files_max_upload_mb: number;
+  files_quota_mb: number;
+  files_quarantine_days: number;
+  tasks_enabled: boolean;
+  notes_enabled: boolean;
+  invite_from: string;
+  dav_auth_type: string;
+  session_max_age_minutes: number;
+  push_enabled: boolean;
+  push_external_url: string;
+  push_log_level: string;
+  push_max_subscriptions_per_principal?: number;
+  push_max_subscriptions_per_resource?: number;
+  push_max_registrations_per_hour?: number;
+  push_worker_batch_size?: number;
+  push_worker_poll_ms?: number;
+  push_max_delivery_attempts?: number;
+  portal_log_level?: string;
+  portal_time_format?: string;
+  portal_week_start?: string;
+  portal_admin_users?: string | string[];
+  portal_admin_ui_enabled?: boolean;
+  hasAdminPassword: boolean;
+  configured_version?: string;
+  auth_realm?: string;
+  writable?: boolean;
+};
+
+/** Feature status from GET /api/admin/capabilities (parity matrix). */
+export type AdminFeatureStatus = "full" | "read-only" | "coming-soon" | "deferred" | string;
+
+export type AdminCapabilityPage = {
+  id: string;
+  label: string;
+  status: AdminFeatureStatus;
+  /** When false, portal shows Coming soon + classic fallback only. */
+  available: boolean;
+  classicUrl: string;
+  classicLabel: string;
+  summary: string;
+};
+
+/** GET /api/admin/capabilities payload. */
+export type AdminCapabilities = {
+  uiEnabled: boolean;
+  classicAdminUrl: string;
+  pages: AdminCapabilityPage[];
+};
+
 export type Calendar = {
   id: number;
   calendarId: number;
@@ -620,6 +763,143 @@ export const api = {
     request<{ ui: PortalUi; version?: string | null; git?: string | null }>(
       "/ui",
     ),
+  /** Admin authz smoke check (requires Admin role). */
+  adminPing: () => request<{ ok: boolean; user: string }>("/admin/ping"),
+  /** Read-only dashboard stats for Administration → Overview. */
+  adminDashboard: () =>
+    request<{ data: AdminDashboardStats }>("/admin/dashboard"),
+  /** Feature gating map for Administration shell (Coming soon / classic fallback). */
+  adminCapabilities: () =>
+    request<{ data: AdminCapabilities }>("/admin/capabilities"),
+  /** Admin users list (never digesta1). */
+  adminUsers: () => request<{ users: AdminUserSummary[] }>("/admin/users"),
+  /** Admin user detail. */
+  adminUser: (username: string) =>
+    request<{ user: AdminUserDetail }>(
+      `/admin/users/${encodeURIComponent(username)}`,
+    ),
+  /** Create DAV user. */
+  adminCreateUser: (body: {
+    username: string;
+    displayname: string;
+    email: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
+    request<{ user: AdminUserDetail }>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Update displayname / email / optional password. */
+  adminUpdateUser: (
+    username: string,
+    body: {
+      displayname?: string;
+      email?: string;
+      password?: string;
+      passwordConfirm?: string;
+    },
+  ) =>
+    request<{ user: AdminUserDetail }>(
+      `/admin/users/${encodeURIComponent(username)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+  /** Delete user (requires confirm: true). */
+  adminDeleteUser: (username: string, confirm = true) =>
+    request<{ ok: boolean; username: string }>(
+      `/admin/users/${encodeURIComponent(username)}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ confirm }),
+      },
+    ),
+  adminUserCalendars: (username: string) =>
+    request<{ calendars: AdminUserCalendar[] }>(
+      `/admin/users/${encodeURIComponent(username)}/calendars`,
+    ),
+  adminCreateUserCalendar: (
+    username: string,
+    body: {
+      uri: string;
+      displayname: string;
+      description?: string;
+      calendarcolor?: string;
+      todos?: boolean;
+      notes?: boolean;
+    },
+  ) =>
+    request<{ calendar: AdminUserCalendar }>(
+      `/admin/users/${encodeURIComponent(username)}/calendars`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  adminUpdateUserCalendar: (
+    username: string,
+    instanceId: number,
+    body: {
+      displayname?: string;
+      description?: string;
+      calendarcolor?: string;
+      todos?: boolean;
+      notes?: boolean;
+    },
+  ) =>
+    request<{ calendar: AdminUserCalendar }>(
+      `/admin/users/${encodeURIComponent(username)}/calendars/${instanceId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+  adminDeleteUserCalendar: (
+    username: string,
+    instanceId: number,
+    confirm = true,
+  ) =>
+    request<{ ok: boolean }>(
+      `/admin/users/${encodeURIComponent(username)}/calendars/${instanceId}`,
+      { method: "DELETE", body: JSON.stringify({ confirm }) },
+    ),
+  adminUserAddressBooks: (username: string) =>
+    request<{ addressbooks: AdminUserAddressBook[] }>(
+      `/admin/users/${encodeURIComponent(username)}/addressbooks`,
+    ),
+  adminCreateUserAddressBook: (
+    username: string,
+    body: { uri: string; displayname: string; description?: string },
+  ) =>
+    request<{ addressbook: AdminUserAddressBook }>(
+      `/admin/users/${encodeURIComponent(username)}/addressbooks`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  adminUpdateUserAddressBook: (
+    username: string,
+    id: number,
+    body: { displayname?: string; description?: string },
+  ) =>
+    request<{ addressbook: AdminUserAddressBook }>(
+      `/admin/users/${encodeURIComponent(username)}/addressbooks/${id}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+  adminDeleteUserAddressBook: (
+    username: string,
+    id: number,
+    confirm = true,
+    force = false,
+  ) =>
+    request<{ ok: boolean }>(
+      `/admin/users/${encodeURIComponent(username)}/addressbooks/${id}`,
+      { method: "DELETE", body: JSON.stringify({ confirm, force }) },
+    ),
+  adminSystemSettings: () =>
+    request<{ data: AdminSystemSettings }>("/admin/settings/system"),
+  adminUpdateSystemSettings: (body: Record<string, unknown>) =>
+    request<{ data: AdminSystemSettings }>("/admin/settings/system", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  /** Read-only database connection summary (never password). */
+  adminDatabaseSettings: () =>
+    request<{ data: AdminDatabaseSettings }>("/admin/settings/database"),
   me: async () => {
     const data = await request<{
       user: PortalUser;

@@ -4,6 +4,15 @@ import {
   setOnSessionActivity,
   setOnUnauthorized,
   type AddressBook,
+  type AdminCapabilities,
+  type AdminCapabilityPage,
+  type AdminDashboardStats,
+  type AdminDatabaseSettings,
+  type AdminSystemSettings,
+  type AdminUserAddressBook,
+  type AdminUserCalendar,
+  type AdminUserDetail,
+  type AdminUserSummary,
   type Calendar,
   type CalendarEvent,
   type CalendarEventDetail,
@@ -27,10 +36,14 @@ import { log, setLogLevel } from "./log";
 
 type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 
+/** Nested Administration views: #admin, #admin/users, #admin/settings, #admin/database */
+type AdminPageId = "overview" | "users" | "settings" | "database";
+
 const TAB_STORAGE_KEY = "angaradav-portal-tab";
+const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "1.0.10";
+const APP_VERSION_FALLBACK = "2.0.0";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {
@@ -47,10 +60,55 @@ function parseTabId(raw: string | null | undefined): TabId | null {
   return null;
 }
 
+function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
+  if (
+    raw === "overview" ||
+    raw === "users" ||
+    raw === "settings" ||
+    raw === "database"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+/**
+ * Parse location hash into portal tab + optional admin sub-page + user detail.
+ * Supports #admin, #admin/overview, #admin/users, #admin/users/{username},
+ * #admin/settings, #admin/database.
+ */
+function parseLocationRoute(): {
+  tab: TabId | null;
+  adminPage: AdminPageId | null;
+  adminUsername: string | null;
+} {
+  const raw = (typeof location !== "undefined" ? location.hash : "")
+    .replace(/^#/, "")
+    .split(/[?&]/)[0]
+    .replace(/^\/+/, "");
+  if (!raw) {
+    return { tab: null, adminPage: null, adminUsername: null };
+  }
+  if (raw === "admin" || raw.startsWith("admin/")) {
+    const parts = raw.split("/").filter(Boolean);
+    const sub = parts[1] ?? "overview";
+    const page = parseAdminPageId(sub) ?? "overview";
+    let adminUsername: string | null = null;
+    if (page === "users" && parts[2]) {
+      try {
+        adminUsername = decodeURIComponent(parts[2]);
+      } catch {
+        adminUsername = parts[2];
+      }
+    }
+    return { tab: "admin", adminPage: page, adminUsername };
+  }
+  return { tab: parseTabId(raw), adminPage: null, adminUsername: null };
+}
+
 /** Restore tab after F5: prefer URL hash, then sessionStorage. */
 function readStoredTab(): TabId {
-  const hash = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "").split(/[?&]/)[0];
-  const fromHash = parseTabId(hash);
+  const fromHash = parseLocationRoute().tab;
   if (fromHash) return fromHash;
   try {
     const fromStore = parseTabId(sessionStorage.getItem(TAB_STORAGE_KEY));
@@ -61,14 +119,42 @@ function readStoredTab(): TabId {
   return "calendars";
 }
 
-function persistTab(tab: TabId): void {
+function readStoredAdminPage(): AdminPageId {
+  const fromHash = parseLocationRoute().adminPage;
+  if (fromHash) return fromHash;
+  try {
+    const fromStore = parseAdminPageId(sessionStorage.getItem(ADMIN_PAGE_STORAGE_KEY));
+    if (fromStore) return fromStore;
+  } catch {
+    /* ignore */
+  }
+  return "overview";
+}
+
+function adminHash(page: AdminPageId, adminUsername: string | null = null): string {
+  if (page === "overview") return "#admin";
+  if (page === "users" && adminUsername) {
+    return `#admin/users/${encodeURIComponent(adminUsername)}`;
+  }
+  return `#admin/${page}`;
+}
+
+function persistTab(
+  tab: TabId,
+  adminPage: AdminPageId = "overview",
+  adminUsername: string | null = null,
+): void {
   try {
     sessionStorage.setItem(TAB_STORAGE_KEY, tab);
+    if (tab === "admin") {
+      sessionStorage.setItem(ADMIN_PAGE_STORAGE_KEY, adminPage);
+    }
   } catch {
     /* ignore */
   }
   if (typeof history === "undefined" || typeof location === "undefined") return;
-  const desired = `#${tab}`;
+  const desired =
+    tab === "admin" ? adminHash(adminPage, adminUsername) : `#${tab}`;
   if (location.hash !== desired) {
     history.replaceState(null, "", `${location.pathname}${location.search}${desired}`);
   }
@@ -218,8 +304,38 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   administration: {
     title: "Administration",
     paragraphs: [
-      "Server administration for AngaraDAV. Open the classic Web Admin for users, system settings, and database configuration.",
-      "The Admin UI uses the separate admin password (not your DAV user password), unless you already have an admin session.",
+      "Server administration for AngaraDAV, available to portal users with the Admin role.",
+      "Overview and full Users CRUD run in this portal. System settings and database still use classic Web Admin (classic admin password) during the parallel phase.",
+      "Admin API calls use your portal DAV session — not the separate classic admin login — and require the Admin role server-side.",
+    ],
+  },
+  "admin-overview": {
+    title: "Overview",
+    paragraphs: [
+      "Snapshot of registered users, calendars, events, address books, contacts, and which DAV services are enabled — same metrics as the classic Admin dashboard.",
+      "Version and release links help you compare installs. Counts refresh from GET /api/admin/dashboard.",
+    ],
+  },
+  "admin-users": {
+    title: "Users",
+    paragraphs: [
+      "List, create, edit, and delete DAV users from the portal. Password digests are never returned.",
+      "Create seeds a default calendar and address book (same as classic admin). Delete removes calendars, contacts, and quarantines file homes when files are enabled.",
+      "Classic Web Admin remains available as a fallback during the parallel phase.",
+    ],
+  },
+  "admin-settings": {
+    title: "System settings",
+    paragraphs: [
+      "Edit DAV services, files, push, session timeout, portal admin role list, and classic admin password.",
+      "Saves write config/baikal.yaml atomically. Session timeout applies to portal and classic admin idle cookies.",
+    ],
+  },
+  "admin-database": {
+    title: "Database",
+    paragraphs: [
+      "Read-only view of backend type, SQLite path or PostgreSQL host/dbname/username.",
+      "Passwords and encryption keys are never returned. Writes stay classic Web Admin only — wrong values can brick the instance.",
     ],
   },
 };
@@ -256,6 +372,50 @@ export function mountApp(root: HTMLElement): void {
   let user: PortalUser | null = null;
   let flash: Flash = null;
   let activeTab: TabId = readStoredTab();
+  /** Nested Administration page when activeTab === "admin" */
+  let adminPage: AdminPageId = readStoredAdminPage();
+  /** Cached Overview stats (null until first successful load) */
+  let adminDashboard: AdminDashboardStats | null = null;
+  let adminDashboardLoading = false;
+  let adminDashboardError: string | null = null;
+  /** Feature gating map from GET /api/admin/capabilities */
+  let adminCapabilities: AdminCapabilities | null = null;
+  let adminCapabilitiesLoading = false;
+  let adminCapabilitiesError: string | null = null;
+  /** Admin Users list / detail / write modals (Phase 4–5) */
+  let adminUsers: AdminUserSummary[] = [];
+  let adminUsersLoading = false;
+  let adminUsersError: string | null = null;
+  let adminUsersQuery = "";
+  let adminSelectedUsername: string | null =
+    parseLocationRoute().adminUsername ?? null;
+  let adminUserDetail: AdminUserDetail | null = null;
+  let adminUserDetailLoading = false;
+  let adminUserDetailError: string | null = null;
+  let adminUserCreateOpen = false;
+  let adminUserEditOpen = false;
+  let adminUserDeleteUsername: string | null = null;
+  let adminUserDeleteConfirmChecked = false;
+  /** Per-user calendars / address books (Phase 6) */
+  let adminUserCalendars: AdminUserCalendar[] = [];
+  let adminUserAddressBooks: AdminUserAddressBook[] = [];
+  let adminUserResourcesLoading = false;
+  let adminCalModal: "create" | "edit" | null = null;
+  let adminCalEditId: number | null = null;
+  let adminAbModal: "create" | "edit" | null = null;
+  let adminAbEditId: number | null = null;
+  let adminResourceDelete:
+    | { kind: "calendar"; id: number; label: string }
+    | { kind: "addressbook"; id: number; label: string; force?: boolean }
+    | null = null;
+  /** System settings (Phase 7) */
+  let adminSystemSettings: AdminSystemSettings | null = null;
+  let adminSystemSettingsLoading = false;
+  let adminSystemSettingsError: string | null = null;
+  /** Database settings read-only (Phase 8) */
+  let adminDatabaseSettings: AdminDatabaseSettings | null = null;
+  let adminDatabaseSettingsLoading = false;
+  let adminDatabaseSettingsError: string | null = null;
   /** User-menu dropdown (header name) open state */
   let userMenuOpen = false;
   let userMenuDocClick: ((ev: MouseEvent) => void) | null = null;
@@ -452,11 +612,78 @@ export function mountApp(root: HTMLElement): void {
     removePhotoPending = false;
     busy = false;
     userMenuOpen = false;
+    adminDashboard = null;
+    adminDashboardLoading = false;
+    adminDashboardError = null;
+    adminCapabilities = null;
+    adminCapabilitiesLoading = false;
+    adminCapabilitiesError = null;
+    adminUsers = [];
+    adminUsersLoading = false;
+    adminUsersError = null;
+    adminUsersQuery = "";
+    adminSelectedUsername = null;
+    adminUserDetail = null;
+    adminUserDetailLoading = false;
+    adminUserDetailError = null;
+    adminUserCreateOpen = false;
+    adminUserEditOpen = false;
+    adminUserDeleteUsername = null;
+    adminUserDeleteConfirmChecked = false;
+    adminUserCalendars = [];
+    adminUserAddressBooks = [];
+    adminUserResourcesLoading = false;
+    adminCalModal = null;
+    adminCalEditId = null;
+    adminAbModal = null;
+    adminAbEditId = null;
+    adminResourceDelete = null;
+    adminSystemSettings = null;
+    adminSystemSettingsLoading = false;
+    adminSystemSettingsError = null;
+    adminDatabaseSettings = null;
+    adminDatabaseSettingsLoading = false;
+    adminDatabaseSettingsError = null;
     unbindUserMenuOutside();
   }
 
   function userIsAdmin(): boolean {
     return !!(user?.isAdmin || user?.role === "Admin");
+  }
+
+  /** Portal Administration section enabled (YAML portal_admin_ui_enabled). */
+  function adminUiEnabled(): boolean {
+    if (!userIsAdmin()) return false;
+    // Until capabilities load, allow Admin users into the shell (fail open for admins)
+    if (adminCapabilities === null) return true;
+    return adminCapabilities.uiEnabled !== false;
+  }
+
+  function adminPageMeta(pageId: AdminPageId): AdminCapabilityPage | null {
+    const pages = adminCapabilities?.pages;
+    if (!pages) return null;
+    return pages.find((p) => p.id === pageId) ?? null;
+  }
+
+  function adminStatusLabel(status: string): string {
+    switch (status) {
+      case "full":
+        return "Full";
+      case "read-only":
+        return "Read-only";
+      case "coming-soon":
+        return "Coming soon";
+      case "deferred":
+        return "Classic only";
+      default:
+        return status;
+    }
+  }
+
+  function adminStatusBadgeClass(status: string): string {
+    if (status === "full" || status === "read-only") return "badge-ok";
+    if (status === "deferred") return "badge-off";
+    return "badge-soon";
   }
 
   function unbindUserMenuOutside(): void {
@@ -484,17 +711,487 @@ export function mountApp(root: HTMLElement): void {
     }, 0);
   }
 
-  /** Clamp tab if Administration is restored for a non-admin user. */
+  /** Clamp tab if Administration is restored for a non-admin / disabled UI. */
   function normalizeActiveTab(): void {
-    if (activeTab === "admin" && !userIsAdmin()) {
+    if (activeTab === "admin" && (!userIsAdmin() || !adminUiEnabled())) {
       activeTab = "calendars";
+      adminPage = "overview";
       persistTab(activeTab);
     }
   }
 
+  async function activateAdminPage(
+    page: AdminPageId,
+    opts: { clearFlash?: boolean; username?: string | null } = {},
+  ): Promise<void> {
+    if (!userIsAdmin()) {
+      await activateTab("calendars", opts);
+      return;
+    }
+    activeTab = "admin";
+    adminPage = page;
+    if (page !== "users") {
+      adminSelectedUsername = null;
+      adminUserDetail = null;
+      adminUserDetailError = null;
+    } else if (opts.username !== undefined) {
+      adminSelectedUsername = opts.username;
+      if (!opts.username) {
+        adminUserDetail = null;
+        adminUserDetailError = null;
+      }
+    }
+    userMenuOpen = false;
+    persistTab("admin", page, adminSelectedUsername);
+    log.event("tab", { tab: "admin", adminPage: page, user: adminSelectedUsername });
+    if (opts.clearFlash !== false) clearFlash();
+    busy = true;
+    render();
+    try {
+      await loadAdminCapabilities();
+      if (!adminUiEnabled()) {
+        activeTab = "calendars";
+        persistTab("calendars");
+        setFlash(
+          "info",
+          "Portal Administration UI is disabled. Use classic Web Admin at /admin/.",
+        );
+        return;
+      }
+      const meta = adminPageMeta(page);
+      if (page === "overview" && meta?.available !== false) {
+        await loadAdminDashboard();
+      } else if (page === "users" && meta?.available !== false) {
+        await loadAdminUsers();
+        if (adminSelectedUsername) {
+          await loadAdminUserDetail(adminSelectedUsername);
+          await loadAdminUserResources(adminSelectedUsername);
+        }
+      } else if (page === "settings" && meta?.available !== false) {
+        await loadAdminSystemSettings();
+      } else if (page === "database" && meta?.available !== false) {
+        await loadAdminDatabaseSettings();
+      }
+    } catch (e) {
+      log.warn("admin page load failed", e instanceof Error ? e.message : e);
+      setFlash("error", e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function loadAdminCapabilities(): Promise<void> {
+    adminCapabilitiesLoading = true;
+    adminCapabilitiesError = null;
+    try {
+      const res = await api.adminCapabilities();
+      adminCapabilities = res.data;
+      log.debug("admin.capabilities", {
+        uiEnabled: adminCapabilities.uiEnabled,
+        pages: adminCapabilities.pages?.length ?? 0,
+      });
+    } catch (e) {
+      // Fail open with built-in defaults so classic links still render
+      adminCapabilitiesError = e instanceof Error ? e.message : "Failed to load capabilities";
+      adminCapabilities = {
+        uiEnabled: true,
+        classicAdminUrl: "/admin/",
+        pages: [
+          {
+            id: "overview",
+            label: "Overview",
+            status: "read-only",
+            available: true,
+            classicUrl: "/admin/",
+            classicLabel: "Open classic Dashboard",
+            summary: "Live counts and service flags.",
+          },
+          {
+            id: "users",
+            label: "Users",
+            status: "full",
+            available: true,
+            classicUrl: "/admin/?/users",
+            classicLabel: "Open classic Users",
+            summary: "Full DAV user CRUD plus calendars and address books.",
+          },
+          {
+            id: "settings",
+            label: "System settings",
+            status: "full",
+            available: true,
+            classicUrl: "/admin/?/settings/standard",
+            classicLabel: "Open classic System Settings",
+            summary: "Edit system flags and admin password in the portal.",
+          },
+          {
+            id: "database",
+            label: "Database",
+            status: "read-only",
+            available: true,
+            classicUrl: "/admin/?/settings/database",
+            classicLabel: "Open classic Database settings",
+            summary: "Read-only view; writes stay classic-only.",
+          },
+        ],
+      };
+      log.warn("admin.capabilities fallback", adminCapabilitiesError);
+    } finally {
+      adminCapabilitiesLoading = false;
+    }
+  }
+
+  async function loadAdminDashboard(): Promise<void> {
+    adminDashboardLoading = true;
+    adminDashboardError = null;
+    try {
+      const res = await api.adminDashboard();
+      adminDashboard = res.data;
+      log.debug("admin.dashboard", {
+        users: adminDashboard.users,
+        calendars: adminDashboard.calendars,
+      });
+    } catch (e) {
+      adminDashboard = null;
+      adminDashboardError = e instanceof Error ? e.message : "Failed to load dashboard";
+      throw e;
+    } finally {
+      adminDashboardLoading = false;
+    }
+  }
+
+  async function loadAdminUsers(): Promise<void> {
+    adminUsersLoading = true;
+    adminUsersError = null;
+    try {
+      const res = await api.adminUsers();
+      adminUsers = res.users ?? [];
+      log.debug("admin.users", { count: adminUsers.length });
+    } catch (e) {
+      adminUsers = [];
+      adminUsersError = e instanceof Error ? e.message : "Failed to load users";
+      throw e;
+    } finally {
+      adminUsersLoading = false;
+    }
+  }
+
+  async function loadAdminUserDetail(username: string): Promise<void> {
+    adminUserDetailLoading = true;
+    adminUserDetailError = null;
+    try {
+      const res = await api.adminUser(username);
+      adminUserDetail = res.user;
+      adminSelectedUsername = res.user.username;
+      log.debug("admin.user", { username: res.user.username });
+    } catch (e) {
+      adminUserDetail = null;
+      adminUserDetailError = e instanceof Error ? e.message : "Failed to load user";
+      throw e;
+    } finally {
+      adminUserDetailLoading = false;
+    }
+  }
+
+  async function loadAdminUserResources(username: string): Promise<void> {
+    adminUserResourcesLoading = true;
+    try {
+      const [cals, abs] = await Promise.all([
+        api.adminUserCalendars(username),
+        api.adminUserAddressBooks(username),
+      ]);
+      adminUserCalendars = cals.calendars ?? [];
+      adminUserAddressBooks = abs.addressbooks ?? [];
+    } catch (e) {
+      adminUserCalendars = [];
+      adminUserAddressBooks = [];
+      throw e;
+    } finally {
+      adminUserResourcesLoading = false;
+    }
+  }
+
+  async function loadAdminSystemSettings(): Promise<void> {
+    adminSystemSettingsLoading = true;
+    adminSystemSettingsError = null;
+    try {
+      const res = await api.adminSystemSettings();
+      adminSystemSettings = res.data;
+    } catch (e) {
+      adminSystemSettings = null;
+      adminSystemSettingsError =
+        e instanceof Error ? e.message : "Failed to load settings";
+      throw e;
+    } finally {
+      adminSystemSettingsLoading = false;
+    }
+  }
+
+  async function loadAdminDatabaseSettings(): Promise<void> {
+    adminDatabaseSettingsLoading = true;
+    adminDatabaseSettingsError = null;
+    try {
+      const res = await api.adminDatabaseSettings();
+      adminDatabaseSettings = res.data;
+    } catch (e) {
+      adminDatabaseSettings = null;
+      adminDatabaseSettingsError =
+        e instanceof Error ? e.message : "Failed to load database settings";
+      throw e;
+    } finally {
+      adminDatabaseSettingsLoading = false;
+    }
+  }
+
+  async function onAdminUserCreate(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const username = String(fd.get("username") ?? "").trim();
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
+    const passwordConfirm = String(fd.get("passwordConfirm") ?? "");
+    if (!username || !displayname || !email || !password) {
+      setFlash("error", "Username, display name, email, and password are required");
+      render();
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setFlash("error", "Password confirmation does not match");
+      render();
+      return;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminCreateUser({
+        username,
+        displayname,
+        email,
+        password,
+        passwordConfirm,
+      });
+      log.event("admin.user.create", { username: res.user.username });
+      adminUserCreateOpen = false;
+      adminSelectedUsername = res.user.username;
+      adminUserDetail = res.user;
+      persistTab("admin", "users", res.user.username);
+      await loadAdminUsers();
+      setFlash("success", `Created user “${res.user.username}”`);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Create failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminCalSave(form: HTMLFormElement): Promise<void> {
+    if (!adminSelectedUsername) return;
+    const uname = adminSelectedUsername;
+    const fd = new FormData(form);
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const description = String(fd.get("description") ?? "").trim();
+    const calendarcolor = String(fd.get("calendarcolor") ?? "").trim();
+    const todos = form.querySelector<HTMLInputElement>('input[name="todos"]')?.checked ?? false;
+    const notes = form.querySelector<HTMLInputElement>('input[name="notes"]')?.checked ?? false;
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      if (adminCalModal === "create") {
+        const uri = String(fd.get("uri") ?? "").trim().toLowerCase();
+        await api.adminCreateUserCalendar(uname, {
+          uri,
+          displayname,
+          description,
+          calendarcolor: calendarcolor || undefined,
+          todos,
+          notes,
+        });
+        setFlash("success", `Created calendar “${displayname}”`);
+      } else {
+        const instanceId = Number(fd.get("instanceId"));
+        await api.adminUpdateUserCalendar(uname, instanceId, {
+          displayname,
+          description,
+          calendarcolor,
+          todos,
+          notes,
+        });
+        setFlash("success", `Updated calendar “${displayname}”`);
+      }
+      adminCalModal = null;
+      adminCalEditId = null;
+      await loadAdminUserResources(uname);
+      await loadAdminUserDetail(uname);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminAbSave(form: HTMLFormElement): Promise<void> {
+    if (!adminSelectedUsername) return;
+    const uname = adminSelectedUsername;
+    const fd = new FormData(form);
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const description = String(fd.get("description") ?? "").trim();
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      if (adminAbModal === "create") {
+        const uri = String(fd.get("uri") ?? "").trim().toLowerCase();
+        await api.adminCreateUserAddressBook(uname, { uri, displayname, description });
+        setFlash("success", `Created address book “${displayname}”`);
+      } else {
+        const id = Number(fd.get("id"));
+        await api.adminUpdateUserAddressBook(uname, id, { displayname, description });
+        setFlash("success", `Updated address book “${displayname}”`);
+      }
+      adminAbModal = null;
+      adminAbEditId = null;
+      await loadAdminUserResources(uname);
+      await loadAdminUserDetail(uname);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminSettingsSave(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const bool = (name: string) =>
+      !!form.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.checked;
+    const body: Record<string, unknown> = {
+      cal_enabled: bool("cal_enabled"),
+      card_enabled: bool("card_enabled"),
+      tasks_enabled: bool("tasks_enabled"),
+      notes_enabled: bool("notes_enabled"),
+      files_enabled: bool("files_enabled"),
+      push_enabled: bool("push_enabled"),
+      portal_admin_ui_enabled: bool("portal_admin_ui_enabled"),
+      timezone: String(fd.get("timezone") ?? "").trim(),
+      invite_from: String(fd.get("invite_from") ?? "").trim(),
+      dav_auth_type: String(fd.get("dav_auth_type") ?? "Digest"),
+      files_storage_path: String(fd.get("files_storage_path") ?? "").trim(),
+      files_max_upload_mb: Number(fd.get("files_max_upload_mb") ?? 0),
+      files_quota_mb: Number(fd.get("files_quota_mb") ?? 0),
+      files_quarantine_days: Number(fd.get("files_quarantine_days") ?? 0),
+      session_max_age_minutes: Number(fd.get("session_max_age_minutes") ?? 15),
+      portal_log_level: String(fd.get("portal_log_level") ?? "off"),
+      portal_admin_users: String(fd.get("portal_admin_users") ?? "").trim(),
+      push_external_url: String(fd.get("push_external_url") ?? "").trim(),
+      push_log_level: String(fd.get("push_log_level") ?? "off"),
+    };
+    const pw = String(fd.get("admin_password") ?? "");
+    const pwc = String(fd.get("admin_password_confirm") ?? "");
+    if (pw !== "" || pwc !== "") {
+      body.admin_password = pw;
+      body.admin_password_confirm = pwc;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminUpdateSystemSettings(body);
+      adminSystemSettings = res.data;
+      log.event("admin.settings.save");
+      setFlash("success", "System settings saved");
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminUserEdit(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const username = String(fd.get("username") ?? "").trim();
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
+    const passwordConfirm = String(fd.get("passwordConfirm") ?? "");
+    if (!username) {
+      setFlash("error", "Username is required");
+      render();
+      return;
+    }
+    if (!displayname || !email) {
+      setFlash("error", "Display name and email are required");
+      render();
+      return;
+    }
+    if (password !== "" || passwordConfirm !== "") {
+      if (password === "" || passwordConfirm === "") {
+        setFlash("error", "Password and confirmation are required to change password");
+        render();
+        return;
+      }
+      if (password !== passwordConfirm) {
+        setFlash("error", "Password confirmation does not match");
+        render();
+        return;
+      }
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const body: {
+        displayname: string;
+        email: string;
+        password?: string;
+        passwordConfirm?: string;
+      } = { displayname, email };
+      if (password !== "") {
+        body.password = password;
+        body.passwordConfirm = passwordConfirm;
+      }
+      const res = await api.adminUpdateUser(username, body);
+      log.event("admin.user.update", {
+        username: res.user.username,
+        passwordChanged: password !== "",
+      });
+      adminUserEditOpen = false;
+      adminUserDetail = res.user;
+      adminSelectedUsername = res.user.username;
+      await loadAdminUsers();
+      setFlash(
+        "success",
+        password !== ""
+          ? `Updated “${res.user.username}” (password changed)`
+          : `Updated “${res.user.username}”`,
+      );
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Update failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
   async function activateTab(tab: TabId, opts: { clearFlash?: boolean } = {}): Promise<void> {
-    if (tab === "admin" && !userIsAdmin()) {
+    if (tab === "admin" && (!userIsAdmin() || !adminUiEnabled())) {
+      if (userIsAdmin() && adminCapabilities && !adminCapabilities.uiEnabled) {
+        setFlash("info", "Portal Administration UI is disabled. Use classic Web Admin at /admin/.");
+      }
       tab = "calendars";
+    }
+    if (tab === "admin") {
+      // Entering Administration from the user menu → Overview (or last hash page)
+      await activateAdminPage(adminPage || "overview", {
+        ...opts,
+        username: adminPage === "users" ? adminSelectedUsername : null,
+      });
+      return;
     }
     activeTab = tab;
     userMenuOpen = false;
@@ -677,9 +1374,35 @@ export function mountApp(root: HTMLElement): void {
       }
       log.event("bootstrap.session", { username: user?.username ?? null });
       bumpSessionIdleTimer();
+      if (userIsAdmin()) {
+        try {
+          await loadAdminCapabilities();
+        } catch (e) {
+          log.warn("admin.capabilities bootstrap", e instanceof Error ? e.message : e);
+        }
+      }
       normalizeActiveTab();
-      persistTab(activeTab);
+      persistTab(activeTab, adminPage);
       await loadHome();
+      if (activeTab === "admin" && userIsAdmin() && adminUiEnabled()) {
+        try {
+          if (adminPage === "overview" && adminPageMeta("overview")?.available !== false) {
+            await loadAdminDashboard();
+          } else if (adminPage === "users" && adminPageMeta("users")?.available !== false) {
+            await loadAdminUsers();
+            if (adminSelectedUsername) {
+              await loadAdminUserDetail(adminSelectedUsername);
+              await loadAdminUserResources(adminSelectedUsername);
+            }
+          } else if (adminPage === "settings" && adminPageMeta("settings")?.available !== false) {
+            await loadAdminSystemSettings();
+          } else if (adminPage === "database" && adminPageMeta("database")?.available !== false) {
+            await loadAdminDatabaseSettings();
+          }
+        } catch (e) {
+          log.warn("admin bootstrap load", e instanceof Error ? e.message : e);
+        }
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         // Anonymous visit or expired cookie on first paint — never keep a stale shell
@@ -1841,11 +2564,15 @@ export function mountApp(root: HTMLElement): void {
       <span class="brand-mark" aria-hidden="true">A</span>
       <span>AngaraDAV User Portal</span>`;
     const displayName = user ? esc(user.displayname || user.username) : "";
-    const adminMenuItem = userIsAdmin()
+    const adminMenuItem = adminUiEnabled()
       ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">
               Administration
             </button>`
-      : "";
+      : userIsAdmin()
+        ? `<a class="user-menu-item" role="menuitem" href="${esc(adminCapabilities?.classicAdminUrl || "/admin/")}">
+              Classic Web Admin
+            </a>`
+        : "";
     const userMenu = user
       ? `<div class="user-menu${userMenuOpen ? " is-open" : ""}">
             <button type="button" class="user-menu-trigger" data-action="user-menu-toggle"
@@ -2976,7 +3703,18 @@ export function mountApp(root: HTMLElement): void {
         </div>
       </header>`
       : `<header class="page-header page-header-admin">
-        ${infoTitle("Administration", "administration", "h1")}
+        <div class="admin-header-titles">
+          ${infoTitle("Administration", "administration", "h1")}
+          <p class="muted small admin-header-sub">Admin role · ${esc(
+            adminPage === "overview"
+              ? "Overview"
+              : adminPage === "users"
+                ? "Users"
+                : adminPage === "settings"
+                  ? "System settings"
+                  : "Database",
+          )}</p>
+        </div>
         <button type="button" class="btn btn-ghost btn-small" data-action="tab" data-tab="calendars"
           title="Back to portal">← Portal</button>
       </header>`;
@@ -2999,7 +3737,13 @@ export function mountApp(root: HTMLElement): void {
         filesRenamePath !== null ||
         filesDeletePaths !== null ||
         filesTransfer !== null ||
-        filesMkdirOpen,
+        filesMkdirOpen ||
+        adminUserCreateOpen ||
+        adminUserEditOpen ||
+        adminUserDeleteUsername !== null ||
+        adminCalModal !== null ||
+        adminAbModal !== null ||
+        adminResourceDelete !== null,
     );
     document.body.classList.toggle("layout-contacts", activeTab === "contacts");
     document.body.classList.toggle("layout-calendars", activeTab === "calendars");
@@ -3381,29 +4125,953 @@ export function mountApp(root: HTMLElement): void {
     return parts[parts.length - 1] || path;
   }
 
-  /** Admin-only Administration section (opened from the user menu). */
+  function adminSubnav(): string {
+    const fallbackItems: { id: AdminPageId; label: string }[] = [
+      { id: "overview", label: "Overview" },
+      { id: "users", label: "Users" },
+      { id: "settings", label: "System settings" },
+      { id: "database", label: "Database" },
+    ];
+    const fromApi = adminCapabilities?.pages;
+    const items: { id: AdminPageId; label: string; status?: string; available?: boolean }[] =
+      fromApi && fromApi.length > 0
+        ? fromApi
+            .filter((p): p is AdminCapabilityPage & { id: AdminPageId } =>
+              parseAdminPageId(p.id) !== null,
+            )
+            .map((p) => ({
+              id: p.id as AdminPageId,
+              label: p.label,
+              status: p.status,
+              available: p.available,
+            }))
+        : fallbackItems.map((it) => ({ ...it }));
+
+    const buttons = items
+      .map((it) => {
+        const status = it.status ?? (it.id === "overview" ? "read-only" : "coming-soon");
+        const gated = it.available === false;
+        const badge = gated
+          ? `<span class="badge ${adminStatusBadgeClass(status)} admin-subnav-badge">${esc(
+              status === "deferred" ? "Classic" : "Soon",
+            )}</span>`
+          : status === "read-only"
+            ? `<span class="badge badge-ok admin-subnav-badge">RO</span>`
+            : "";
+        return `<button type="button" role="tab" class="tab-btn admin-subnav-btn${adminPage === it.id ? " is-active" : ""}${gated ? " is-gated" : ""}"
+            data-action="admin-page" data-admin-page="${it.id}"
+            aria-selected="${adminPage === it.id}"
+            title="${esc(it.label)}${gated ? " — " + adminStatusLabel(status) : ""}">
+            <span class="admin-subnav-label">${esc(it.label)}</span>${badge}
+          </button>`;
+      })
+      .join("");
+    return `<div class="tabs admin-subnav" role="tablist" aria-label="Administration sections">
+      ${buttons}
+      <button type="button" class="info-btn tab-info" data-action="info"
+        data-info="${adminPage === "overview" ? "admin-overview" : adminPage === "users" ? "admin-users" : adminPage === "settings" ? "admin-settings" : "admin-database"}"
+        aria-label="About this section" title="About this section"><span aria-hidden="true">i</span></button>
+    </div>`;
+  }
+
+  /**
+   * Banner for incomplete admin pages — always includes classic fallback link
+   * (Phase 2.3: no dead-end empty pages).
+   */
+  function adminComingSoonBanner(pageId: AdminPageId): string {
+    const meta = adminPageMeta(pageId);
+    const status = meta?.status ?? "coming-soon";
+    const label = meta?.label ?? pageId;
+    const summary =
+      meta?.summary ||
+      "This area is not finished in the portal yet. Use classic Web Admin for the full workflow.";
+    const classicUrl = meta?.classicUrl || "/admin/";
+    const classicLabel = meta?.classicLabel || "Open classic Web Admin";
+    const statusText = adminStatusLabel(status);
+
+    return `<section class="card admin-coming-soon-card">
+      <div class="admin-coming-soon-head">
+        <span class="badge ${adminStatusBadgeClass(status)}">${esc(statusText)}</span>
+        <h2 class="admin-coming-soon-title">${esc(label)}</h2>
+      </div>
+      <p class="muted">${esc(summary)}</p>
+      <p class="muted small">
+        Portal Administration is shipping incrementally. Classic <span class="mono">/admin/</span>
+        stays fully available during the parallel phase.
+      </p>
+      <div class="admin-link-grid">
+        <a class="btn btn-primary" href="${esc(classicUrl)}">${esc(classicLabel)}</a>
+        <a class="btn btn-ghost" href="${esc(adminCapabilities?.classicAdminUrl || "/admin/")}">Classic dashboard</a>
+      </div>
+    </section>`;
+  }
+
+  function adminClassicFallbackCard(opts: {
+    title: string;
+    body: string;
+    primaryHref: string;
+    primaryLabel: string;
+    extraLinks?: { href: string; label: string }[];
+  }): string {
+    const extras = (opts.extraLinks ?? [])
+      .map((l) => `<a class="btn btn-ghost" href="${esc(l.href)}">${esc(l.label)}</a>`)
+      .join("");
+    return `<section class="card admin-fallback-card">
+      <div class="section-header">
+        <h2>${esc(opts.title)}</h2>
+      </div>
+      <p class="muted">${opts.body}</p>
+      <div class="admin-link-grid">
+        <a class="btn btn-primary" href="${esc(opts.primaryHref)}">${esc(opts.primaryLabel)}</a>
+        ${extras}
+      </div>
+    </section>`;
+  }
+
+  function serviceBadge(on: boolean, label: string): string {
+    return `<span class="badge ${on ? "badge-ok" : "badge-off"}">${esc(label)}: ${on ? "On" : "Off"}</span>`;
+  }
+
+  function serviceOnOff(on: boolean): string {
+    return `<span class="badge ${on ? "badge-ok" : "badge-off"}">${on ? "On" : "Off"}</span>`;
+  }
+
+  function adminStatCard(label: string, value: string | number, hint?: string): string {
+    return `<div class="admin-stat-card">
+      <div class="admin-stat-value mono">${esc(String(value))}</div>
+      <div class="admin-stat-label">${esc(label)}</div>
+      ${hint ? `<div class="admin-stat-hint muted small">${esc(hint)}</div>` : ""}
+    </div>`;
+  }
+
+  function renderAdminOverview(): string {
+    const meta = adminPageMeta("overview");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("overview");
+    }
+
+    const roleLine = `<p class="muted small admin-session-line">
+      Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
+      with role <span class="badge badge-admin">Admin</span>.
+      Portal admin APIs use this session (not the classic admin password).
+    </p>`;
+
+    let aboutBlock = "";
+    let statsBlock = "";
+    if (adminDashboardLoading && !adminDashboard) {
+      statsBlock = `<section class="card"><p class="muted">Loading overview…</p></section>`;
+    } else if (adminDashboardError && !adminDashboard) {
+      statsBlock = `<section class="card">
+        <p class="flash flash-error" style="margin-bottom:0.75rem">${esc(adminDashboardError)}</p>
+        <button type="button" class="btn btn-ghost btn-small" data-action="admin-refresh" ${busy ? "disabled" : ""}>Retry</button>
+        <div class="admin-link-grid" style="margin-top:1rem">
+          <a class="btn btn-primary" href="/admin/">Open classic Dashboard</a>
+        </div>
+      </section>`;
+    } else if (adminDashboard) {
+      const d = adminDashboard;
+      const svc = d.services;
+      const links = d.links ?? {};
+      const statusBadge = meta
+        ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>`
+        : "";
+      const versionLabel = d.version ? esc(d.version) : "—";
+      const gitLabel = d.git ? esc(d.git) : "";
+
+      aboutBlock = `
+        <section class="card admin-about-card">
+          <div class="section-header">
+            ${infoTitle("About this system", "admin-overview")}
+            <div class="section-actions">
+              ${statusBadge}
+              <button type="button" class="btn btn-ghost btn-small" data-action="admin-refresh" ${busy || adminDashboardLoading ? "disabled" : ""}>Refresh</button>
+            </div>
+          </div>
+          <div class="admin-about-grid">
+            <div>
+              <h3 class="admin-subsection-title">Version</h3>
+              <p>
+                AngaraDAV <span class="badge badge-admin">v${versionLabel}</span>
+                ${gitLabel ? `<span class="mono muted small"> (${gitLabel})</span>` : ""}
+              </p>
+              <p class="muted small admin-link-row">
+                ${links.releases ? `<a href="${esc(links.releases)}" target="_blank" rel="noopener noreferrer">Releases</a>` : ""}
+                ${links.docs ? `<span class="footer-sep">·</span><a href="${esc(links.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ""}
+                <span class="footer-sep">·</span>
+                <a href="${esc(links.classicDashboard || "/admin/")}">Classic dashboard</a>
+              </p>
+            </div>
+            <div>
+              <h3 class="admin-subsection-title">Services</h3>
+              <div class="admin-service-table-wrap">
+                <table class="admin-kv-table">
+                  <tbody>
+                    <tr><td>Web admin</td><td>${serviceOnOff(svc.webAdmin !== false)}</td></tr>
+                    <tr><td>CalDAV</td><td>${serviceOnOff(!!svc.caldav)}</td></tr>
+                    <tr><td>CardDAV</td><td>${serviceOnOff(!!svc.carddav)}</td></tr>
+                    <tr><td>Files</td><td>${serviceOnOff(!!svc.files)}</td></tr>
+                    <tr><td>Tasks</td><td>${serviceOnOff(!!svc.tasks)}</td></tr>
+                    <tr><td>Notes</td><td>${serviceOnOff(!!svc.notes)}</td></tr>
+                    <tr><td>Push</td><td>${serviceOnOff(!!svc.push)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          ${roleLine}
+        </section>`;
+
+      // Statistics section mirrors classic dashboard labels (Registered users, Number of calendars, …)
+      const nUsers = d.nbusers ?? d.users;
+      const nCals = d.nbcalendars ?? d.calendars;
+      const nEvents = d.nbevents ?? d.events;
+      const nBooks = d.nbbooks ?? d.addressBooks;
+      const nContacts = d.nbcontacts ?? d.contacts;
+      statsBlock = `
+        <section class="card admin-stats-card">
+          <div class="section-header">
+            <h2>Statistics</h2>
+          </div>
+          <div class="admin-stat-grid">
+            ${adminStatCard("Registered users", nUsers, "Users")}
+            ${adminStatCard("Calendars", nCals, "CalDAV")}
+            ${adminStatCard("Events", nEvents, "CalDAV")}
+            ${adminStatCard("Address books", nBooks, "CardDAV")}
+            ${adminStatCard("Contacts", nContacts, "CardDAV")}
+          </div>
+          <div class="admin-service-row">
+            ${serviceBadge(svc.webAdmin !== false, "Web admin")}
+            ${serviceBadge(!!svc.caldav, "CalDAV")}
+            ${serviceBadge(!!svc.carddav, "CardDAV")}
+            ${serviceBadge(!!svc.files, "Files")}
+            ${serviceBadge(!!svc.tasks, "Tasks")}
+            ${serviceBadge(!!svc.notes, "Notes")}
+            ${serviceBadge(!!svc.push, "Push")}
+          </div>
+        </section>`;
+    } else {
+      statsBlock = `<section class="card">
+        ${infoTitle("System snapshot", "admin-overview")}
+        ${roleLine}
+      </section>`;
+    }
+
+    // Capability map (which areas are ready vs classic-only)
+    const capRows = (adminCapabilities?.pages ?? [])
+      .map((p) => {
+        const st = esc(adminStatusLabel(p.status));
+        const badge = `<span class="badge ${adminStatusBadgeClass(p.status)}">${st}</span>`;
+        return `<tr>
+          <td>${esc(p.label)}</td>
+          <td>${badge}</td>
+          <td class="hide-sm muted small">${esc(p.summary)}</td>
+          <td><a class="btn btn-ghost btn-small" href="${esc(p.classicUrl)}">Classic</a></td>
+        </tr>`;
+      })
+      .join("");
+
+    const capTable =
+      capRows !== ""
+        ? `<section class="card">
+        <div class="section-header">
+          <h2>Feature status</h2>
+          ${adminCapabilitiesLoading ? `<span class="muted small">Updating…</span>` : ""}
+        </div>
+        <p class="muted small">Portal Administration ships incrementally. Classic Web Admin covers every area during the parallel phase.</p>
+        <div class="contacts-table-wrap admin-table-placeholder">
+          <table class="contacts-table">
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Status</th>
+                <th class="hide-sm">Notes</th>
+                <th>Fallback</th>
+              </tr>
+            </thead>
+            <tbody>${capRows}</tbody>
+          </table>
+        </div>
+        ${adminCapabilitiesError ? `<p class="muted small" style="margin-top:0.75rem">Capability map using defaults (${esc(adminCapabilitiesError)}).</p>` : ""}
+      </section>`
+        : "";
+
+    return `${aboutBlock}
+      ${statsBlock}
+      ${capTable}
+      ${adminClassicFallbackCard({
+        title: "Classic Web Admin",
+        body: "Open the classic server-rendered admin for any action not yet available in this portal. Classic login uses the separate <strong>admin</strong> password.",
+        primaryHref: adminCapabilities?.classicAdminUrl || "/admin/",
+        primaryLabel: "Open classic Web Admin",
+        extraLinks: (adminCapabilities?.pages ?? [])
+          .filter((p) => p.id !== "overview")
+          .map((p) => ({ href: p.classicUrl, label: p.label })),
+      })}`;
+  }
+
+  function filteredAdminUsers(): AdminUserSummary[] {
+    const q = adminUsersQuery.trim().toLowerCase();
+    if (!q) return adminUsers;
+    return adminUsers.filter((u) => {
+      return (
+        u.username.toLowerCase().includes(q) ||
+        (u.displayname || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q)
+      );
+    });
+  }
+
+  function renderAdminUserCreateModal(): string {
+    if (!adminUserCreateOpen) return "";
+    return `<div class="cal-modal" id="admin-user-create-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-create-title">
+      <div class="cal-modal-backdrop" data-action="admin-user-create-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3 id="admin-user-create-title">Add user</h3>
+          <button type="button" class="info-modal-close" data-action="admin-user-create-close" aria-label="Close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <p class="muted small">Creates a DAV account with a default calendar and address book (same as classic admin).</p>
+          <form class="stack" data-form="admin-user-create" style="margin-top:0.75rem">
+            <label>Username
+              <input type="text" name="username" required maxlength="255" autocomplete="off" placeholder="alice" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Display name
+              <input type="text" name="displayname" required maxlength="255" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Email
+              <input type="email" name="email" required maxlength="255" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Password
+              <input type="password" name="password" required autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Confirm password
+              <input type="password" name="passwordConfirm" required autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>
+            <div class="form-actions-row" style="margin-top:0.5rem">
+              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create user</button>
+              <button type="button" class="btn btn-ghost" data-action="admin-user-create-close" ${busy ? "disabled" : ""}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderAdminUserEditModal(): string {
+    if (!adminUserEditOpen || !adminUserDetail) return "";
+    const u = adminUserDetail;
+    return `<div class="cal-modal" id="admin-user-edit-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-edit-title">
+      <div class="cal-modal-backdrop" data-action="admin-user-edit-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3 id="admin-user-edit-title">Edit user</h3>
+          <button type="button" class="info-modal-close" data-action="admin-user-edit-close" aria-label="Close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <p class="muted small">Username <span class="mono">${esc(u.username)}</span> cannot be changed. Leave password fields empty to keep the current password.</p>
+          <form class="stack" data-form="admin-user-edit" style="margin-top:0.75rem">
+            <input type="hidden" name="username" value="${esc(u.username)}" />
+            <label>Display name
+              <input type="text" name="displayname" required maxlength="255" value="${esc(u.displayname)}" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Email
+              <input type="email" name="email" required maxlength="255" value="${esc(u.email)}" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>New password
+              <input type="password" name="password" autocomplete="new-password" placeholder="Leave empty to keep current" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Confirm new password
+              <input type="password" name="passwordConfirm" autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>
+            <div class="form-actions-row" style="margin-top:0.5rem">
+              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save changes</button>
+              <button type="button" class="btn btn-ghost" data-action="admin-user-edit-close" ${busy ? "disabled" : ""}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderAdminUserDeleteModal(): string {
+    if (!adminUserDeleteUsername) return "";
+    const uname = adminUserDeleteUsername;
+    const u =
+      adminUserDetail && adminUserDetail.username.toLowerCase() === uname.toLowerCase()
+        ? adminUserDetail
+        : adminUsers.find((x) => x.username.toLowerCase() === uname.toLowerCase()) ?? null;
+    const label = u ? `${u.displayname || u.username} (${u.username})` : uname;
+    return `<div class="cal-modal" id="admin-user-delete-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-delete-title">
+      <div class="cal-modal-backdrop" data-action="admin-user-delete-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3 id="admin-user-delete-title">Delete user</h3>
+          <button type="button" class="info-modal-close" data-action="admin-user-delete-close" aria-label="Close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <p>You are about to permanently delete <strong>${esc(label)}</strong>.</p>
+          <ul class="admin-feature-list muted">
+            <li>All calendars, events, tasks, and notes for this user</li>
+            <li>All address books and contacts</li>
+            <li>WebDAV file home (moved to quarantine when files storage is enabled)</li>
+          </ul>
+          <p class="muted small">This cannot be undone from the portal.</p>
+          <label class="admin-delete-confirm">
+            <input type="checkbox" data-action="admin-user-delete-toggle" ${adminUserDeleteConfirmChecked ? "checked" : ""} ${busy ? "disabled" : ""} />
+            I understand and want to delete this user
+          </label>
+        </div>
+        <footer class="cal-modal-footer">
+          <button type="button" class="btn btn-ghost" data-action="admin-user-delete-close" ${busy ? "disabled" : ""}>Cancel</button>
+          <button type="button" class="btn btn-danger" data-action="admin-user-delete-confirm"
+            data-username="${esc(uname)}"
+            ${busy || !adminUserDeleteConfirmChecked ? "disabled" : ""}>Delete permanently</button>
+        </footer>
+      </div>
+    </div>`;
+  }
+
+  function renderAdminUserDetailPanel(): string {
+    if (!adminSelectedUsername) return "";
+    if (adminUserDetailLoading && !adminUserDetail) {
+      return `<section class="card admin-user-detail">
+        <p class="muted">Loading user <span class="mono">${esc(adminSelectedUsername)}</span>…</p>
+      </section>`;
+    }
+    if (adminUserDetailError && !adminUserDetail) {
+      return `<section class="card admin-user-detail">
+        <div class="section-header">
+          <h2>User detail</h2>
+          <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-close">Close</button>
+        </div>
+        <p class="flash flash-error">${esc(adminUserDetailError)}</p>
+        <a class="btn btn-primary" href="/admin/?/users">Open classic Users</a>
+      </section>`;
+    }
+    if (!adminUserDetail) return "";
+    const u = adminUserDetail;
+    const calRows =
+      adminUserResourcesLoading && adminUserCalendars.length === 0
+        ? `<tr><td colspan="5" class="muted">Loading calendars…</td></tr>`
+        : adminUserCalendars.length === 0
+          ? `<tr><td colspan="5" class="muted">No calendars.</td></tr>`
+          : adminUserCalendars
+              .map(
+                (c) => `<tr>
+          <td class="mono">${esc(c.uri)}</td>
+          <td>${esc(c.displayname)}</td>
+          <td class="hide-sm">${esc(String(c.eventCount))}${c.todos ? ' <span class="badge badge-admin">tasks</span>' : ""}${c.notes ? ' <span class="badge badge-admin">notes</span>' : ""}</td>
+          <td class="hide-sm mono small">${esc(c.davUri)}</td>
+          <td class="admin-user-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-cal-edit" data-id="${c.instanceId}" ${busy ? "disabled" : ""}>Edit</button>
+            <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-cal-delete" data-id="${c.instanceId}" data-label="${esc(c.displayname)}" ${busy ? "disabled" : ""}>Delete</button>
+          </td>
+        </tr>`,
+              )
+              .join("");
+    const abRows =
+      adminUserResourcesLoading && adminUserAddressBooks.length === 0
+        ? `<tr><td colspan="4" class="muted">Loading address books…</td></tr>`
+        : adminUserAddressBooks.length === 0
+          ? `<tr><td colspan="4" class="muted">No address books.</td></tr>`
+          : adminUserAddressBooks
+              .map(
+                (a) => `<tr>
+          <td class="mono">${esc(a.uri)}</td>
+          <td>${esc(a.displayname)}</td>
+          <td class="hide-sm">${esc(String(a.contactCount))}</td>
+          <td class="admin-user-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-ab-edit" data-id="${a.id}" ${busy ? "disabled" : ""}>Edit</button>
+            <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-ab-delete" data-id="${a.id}" data-label="${esc(a.displayname)}" ${busy ? "disabled" : ""}>Delete</button>
+          </td>
+        </tr>`,
+              )
+              .join("");
+
+    const editCal =
+      adminCalEditId !== null
+        ? adminUserCalendars.find((c) => c.instanceId === adminCalEditId) ?? null
+        : null;
+    const editAb =
+      adminAbEditId !== null
+        ? adminUserAddressBooks.find((a) => a.id === adminAbEditId) ?? null
+        : null;
+
+    const calModal =
+      adminCalModal === "create" || (adminCalModal === "edit" && editCal)
+        ? `<div class="cal-modal" role="dialog" aria-modal="true">
+      <div class="cal-modal-backdrop" data-action="admin-cal-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3>${adminCalModal === "create" ? "Add calendar" : "Edit calendar"}</h3>
+          <button type="button" class="info-modal-close" data-action="admin-cal-close" aria-label="Close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <form class="stack" data-form="admin-cal">
+            <input type="hidden" name="instanceId" value="${editCal ? editCal.instanceId : ""}" />
+            ${
+              adminCalModal === "create"
+                ? `<label>URI token id
+              <input type="text" name="uri" required pattern="[a-z0-9-]+" placeholder="work" ${busy ? "disabled" : ""} />
+              <span class="muted small">Lowercase letters, digits, dashes.</span>
+            </label>`
+                : `<p class="muted small">URI <span class="mono">${esc(editCal!.uri)}</span> (read-only)</p>`
+            }
+            <label>Display name
+              <input type="text" name="displayname" required value="${esc(editCal?.displayname ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Description
+              <textarea name="description" rows="2" ${busy ? "disabled" : ""}>${esc(editCal?.description ?? "")}</textarea>
+            </label>
+            <label>Color (#RRGGBB)
+              <input type="text" name="calendarcolor" placeholder="#3B82F6" value="${esc(editCal?.calendarcolor ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label class="check-row"><input type="checkbox" name="todos" ${editCal?.todos || adminCalModal === "create" ? "checked" : ""} ${busy ? "disabled" : ""} /> Tasks (VTODO)</label>
+            <label class="check-row"><input type="checkbox" name="notes" ${editCal?.notes ? "checked" : ""} ${busy ? "disabled" : ""} /> Notes (VJOURNAL)</label>
+            <div class="form-actions-row">
+              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save</button>
+              <button type="button" class="btn btn-ghost" data-action="admin-cal-close" ${busy ? "disabled" : ""}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`
+        : "";
+
+    const abModal =
+      adminAbModal === "create" || (adminAbModal === "edit" && editAb)
+        ? `<div class="cal-modal" role="dialog" aria-modal="true">
+      <div class="cal-modal-backdrop" data-action="admin-ab-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3>${adminAbModal === "create" ? "Add address book" : "Edit address book"}</h3>
+          <button type="button" class="info-modal-close" data-action="admin-ab-close" aria-label="Close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <form class="stack" data-form="admin-ab">
+            <input type="hidden" name="id" value="${editAb ? editAb.id : ""}" />
+            ${
+              adminAbModal === "create"
+                ? `<label>URI token id
+              <input type="text" name="uri" required pattern="[a-z0-9-]+" placeholder="personal" ${busy ? "disabled" : ""} />
+            </label>`
+                : `<p class="muted small">URI <span class="mono">${esc(editAb!.uri)}</span> (read-only)</p>`
+            }
+            <label>Display name
+              <input type="text" name="displayname" required value="${esc(editAb?.displayname ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Description
+              <textarea name="description" rows="2" ${busy ? "disabled" : ""}>${esc(editAb?.description ?? "")}</textarea>
+            </label>
+            <div class="form-actions-row">
+              <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Save</button>
+              <button type="button" class="btn btn-ghost" data-action="admin-ab-close" ${busy ? "disabled" : ""}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`
+        : "";
+
+    const resDeleteModal = adminResourceDelete
+      ? `<div class="cal-modal" role="dialog" aria-modal="true">
+      <div class="cal-modal-backdrop" data-action="admin-resource-delete-close"></div>
+      <div class="cal-modal-card cal-modal-card-sm">
+        <header class="cal-modal-header">
+          <h3>Delete ${adminResourceDelete.kind === "calendar" ? "calendar" : "address book"}</h3>
+          <button type="button" class="info-modal-close" data-action="admin-resource-delete-close">×</button>
+        </header>
+        <div class="cal-modal-body">
+          <p>Delete <strong>${esc(adminResourceDelete.label)}</strong> for <span class="mono">${esc(u.username)}</span>?</p>
+          ${
+            adminResourceDelete.kind === "addressbook"
+              ? `<label class="check-row"><input type="checkbox" data-action="admin-ab-force-toggle" ${adminResourceDelete.force ? "checked" : ""} /> Force delete even if contacts exist</label>`
+              : `<p class="muted small">Events on this calendar will be removed if this is the only instance.</p>`
+          }
+        </div>
+        <footer class="cal-modal-footer">
+          <button type="button" class="btn btn-ghost" data-action="admin-resource-delete-close">Cancel</button>
+          <button type="button" class="btn btn-danger" data-action="admin-resource-delete-confirm" ${busy ? "disabled" : ""}>Delete</button>
+        </footer>
+      </div>
+    </div>`
+      : "";
+
+    return `<section class="card admin-user-detail">
+      <div class="section-header">
+        <h2>User <span class="mono">${esc(u.username)}</span></h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-small" data-action="admin-user-edit-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Edit</button>
+          <button type="button" class="btn btn-small btn-danger" data-action="admin-user-delete-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Delete</button>
+          <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-close">Close</button>
+        </div>
+      </div>
+      <p class="muted small admin-breadcrumb">Users → <span class="mono">${esc(u.username)}</span></p>
+      <dl class="admin-dl">
+        <div><dt>Username</dt><dd class="mono">${esc(u.username)}</dd></div>
+        <div><dt>Display name</dt><dd>${esc(u.displayname || "—")}</dd></div>
+        <div><dt>Email</dt><dd>${u.email ? `<a href="mailto:${esc(u.email)}">${esc(u.email)}</a>` : "—"}</dd></div>
+        <div><dt>Principal</dt><dd class="mono">${esc(u.principal)}</dd></div>
+        <div><dt>Calendars</dt><dd>${esc(String(u.calendarCount))}</dd></div>
+        <div><dt>Events / objects</dt><dd>${esc(String(u.eventCount))}</dd></div>
+        <div><dt>Address books</dt><dd>${esc(String(u.addressBookCount))}</dd></div>
+        <div><dt>Contacts</dt><dd>${esc(String(u.contactCount))}</dd></div>
+      </dl>
+    </section>
+    <section class="card">
+      <div class="section-header">
+        <h2>Calendars</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-small" data-action="admin-cal-create" ${busy ? "disabled" : ""}>Add calendar</button>
+        </div>
+      </div>
+      <div class="contacts-table-wrap admin-table-placeholder">
+        <table class="contacts-table">
+          <thead><tr><th>URI</th><th>Name</th><th class="hide-sm">Objects</th><th class="hide-sm">DAV path</th><th>Actions</th></tr></thead>
+          <tbody>${calRows}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <div class="section-header">
+        <h2>Address books</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-small" data-action="admin-ab-create" ${busy ? "disabled" : ""}>Add address book</button>
+        </div>
+      </div>
+      <div class="contacts-table-wrap admin-table-placeholder">
+        <table class="contacts-table">
+          <thead><tr><th>URI</th><th>Name</th><th class="hide-sm">Contacts</th><th>Actions</th></tr></thead>
+          <tbody>${abRows}</tbody>
+        </table>
+      </div>
+    </section>
+    ${calModal}${abModal}${resDeleteModal}`;
+  }
+
+  function renderAdminUsersShell(): string {
+    const meta = adminPageMeta("users");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("users");
+    }
+
+    const list = filteredAdminUsers();
+    const rows =
+      adminUsersLoading && adminUsers.length === 0
+        ? `<tr><td colspan="4" class="muted admin-table-empty">Loading users…</td></tr>`
+        : list.length === 0
+          ? `<tr><td colspan="4" class="muted admin-table-empty">${
+              adminUsersError
+                ? esc(adminUsersError)
+                : adminUsersQuery.trim()
+                  ? "No users match this filter."
+                  : "No users found."
+            }</td></tr>`
+          : list
+              .map((u) => {
+                const active =
+                  adminSelectedUsername &&
+                  adminSelectedUsername.toLowerCase() === u.username.toLowerCase()
+                    ? " is-selected"
+                    : "";
+                return `<tr class="contact-table-row${active}" data-action="admin-user-view" data-username="${esc(u.username)}" tabindex="0" role="button">
+                  <td class="mono">${esc(u.username)}</td>
+                  <td class="hide-sm">${esc(u.displayname || "—")}</td>
+                  <td class="hide-sm">${esc(u.email || "—")}</td>
+                  <td class="admin-user-actions">
+                    <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-view" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>View</button>
+                    <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-edit-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Edit</button>
+                    <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-user-delete-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Delete</button>
+                  </td>
+                </tr>`;
+              })
+              .join("");
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("Users", "admin-users")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-users-refresh" ${busy || adminUsersLoading ? "disabled" : ""}>Refresh</button>
+            <button type="button" class="btn btn-primary btn-small" data-action="admin-user-create-open" ${busy ? "disabled" : ""}>Add user</button>
+          </div>
+        </div>
+        <p class="muted small">
+          Same DAV users as classic <span class="mono">/admin/?/users</span>. Passwords and digests are never returned by the API.
+        </p>
+        <div class="admin-users-toolbar">
+          <input type="search" data-action="admin-users-search" placeholder="Filter by username, name, email…"
+            value="${esc(adminUsersQuery)}" aria-label="Filter users" ${busy ? "disabled" : ""} />
+          <span class="muted small">${esc(String(list.length))}${adminUsersQuery.trim() ? ` / ${adminUsers.length}` : ""} user${list.length === 1 ? "" : "s"}</span>
+        </div>
+        ${adminUsersError && adminUsers.length > 0 ? `<p class="flash flash-error" style="margin:0.75rem 0">${esc(adminUsersError)}</p>` : ""}
+        <div class="contacts-table-wrap admin-table-placeholder">
+          <table class="contacts-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th class="hide-sm">Display name</th>
+                <th class="hide-sm">Email</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </section>
+      ${renderAdminUserDetailPanel()}
+      ${renderAdminUserCreateModal()}
+      ${renderAdminUserEditModal()}
+      ${renderAdminUserDeleteModal()}
+      ${adminClassicFallbackCard({
+        title: "Classic fallback",
+        body: "Classic Web Admin remains available if you need the Formal forms or nested per-user calendars/address books before Phase 6.",
+        primaryHref: "/admin/?/users",
+        primaryLabel: "Open classic Users",
+        extraLinks: [{ href: "/admin/", label: "Classic dashboard" }],
+      })}`;
+  }
+
+  function renderAdminSettingsShell(): string {
+    const meta = adminPageMeta("settings");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("settings");
+    }
+    if (adminSystemSettingsLoading && !adminSystemSettings) {
+      return `<section class="card"><p class="muted">Loading system settings…</p></section>`;
+    }
+    if (adminSystemSettingsError && !adminSystemSettings) {
+      return `<section class="card">
+        <p class="flash flash-error">${esc(adminSystemSettingsError)}</p>
+        <button type="button" class="btn btn-ghost" data-action="admin-settings-refresh">Retry</button>
+        <a class="btn btn-primary" href="/admin/?/settings/standard">Open classic System Settings</a>
+      </section>`;
+    }
+    const s = adminSystemSettings;
+    if (!s) {
+      return `<section class="card"><p class="muted">No settings loaded.</p></section>`;
+    }
+    const check = (name: string, on: boolean, label: string) =>
+      `<label class="check-row"><input type="checkbox" name="${esc(name)}" ${on ? "checked" : ""} ${busy || s.writable === false ? "disabled" : ""} /> ${esc(label)}</label>`;
+    const num = (name: string, val: number | undefined, label: string, help = "") =>
+      `<label>${esc(label)}
+        <input type="number" name="${esc(name)}" value="${esc(String(val ?? 0))}" ${busy || s.writable === false ? "disabled" : ""} />
+        ${help ? `<span class="muted small">${esc(help)}</span>` : ""}
+      </label>`;
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("System settings", "admin-settings")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-settings-refresh" ${busy ? "disabled" : ""}>Reload</button>
+          </div>
+        </div>
+        <p class="muted small">
+          Writes <span class="mono">config/baikal.yaml</span> atomically. Changing
+          <strong>session timeout</strong> affects both portal and classic admin idle cookies.
+          ${s.writable === false ? '<span class="flash flash-error">Config is not writable by PHP.</span>' : ""}
+        </p>
+        <form class="stack admin-settings-form" data-form="admin-settings">
+          <h3 class="admin-subsection-title">DAV services</h3>
+          ${check("cal_enabled", !!s.cal_enabled, "Enable CalDAV")}
+          ${check("card_enabled", !!s.card_enabled, "Enable CardDAV")}
+          ${check("tasks_enabled", !!s.tasks_enabled, "Enable Tasks (VTODO)")}
+          ${check("notes_enabled", !!s.notes_enabled, "Enable Notes (VJOURNAL)")}
+          <label>WebDAV authentication type
+            <select name="dav_auth_type" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["Digest", "Basic", "Apache"]
+                .map(
+                  (t) =>
+                    `<option value="${t}" ${s.dav_auth_type === t ? "selected" : ""}>${t}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>Server timezone
+            <input type="text" name="timezone" required value="${esc(s.timezone || "UTC")}" list="tz-hints" ${busy || s.writable === false ? "disabled" : ""} />
+            <datalist id="tz-hints"><option value="UTC"><option value="America/Toronto"><option value="Europe/Paris"><option value="America/New_York"></datalist>
+          </label>
+          <label>Email invite sender
+            <input type="text" name="invite_from" value="${esc(s.invite_from || "")}" placeholder="noreply@example.com" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <h3 class="admin-subsection-title">WebDAV files</h3>
+          ${check("files_enabled", !!s.files_enabled, "Enable WebDAV file storage")}
+          <label>Storage path
+            <input type="text" name="files_storage_path" value="${esc(s.files_storage_path || "")}" placeholder="empty = Specific/files" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          ${num("files_max_upload_mb", s.files_max_upload_mb, "Max file size (MB)")}
+          ${num("files_quota_mb", s.files_quota_mb, "Quota per user (MB)", "0 = unlimited")}
+          ${num("files_quarantine_days", s.files_quarantine_days, "Deleted user file retention (days)")}
+
+          <h3 class="admin-subsection-title">Session & portal</h3>
+          ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal + classic admin")}
+          <label>Portal log level
+            <select name="portal_log_level" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["off", "error", "warn", "info", "debug"]
+                .map(
+                  (l) =>
+                    `<option value="${l}" ${(s.portal_log_level || "off") === l ? "selected" : ""}>${l}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          ${check("portal_admin_ui_enabled", s.portal_admin_ui_enabled !== false, "Portal Administration UI enabled")}
+          <label>Portal admin users (comma-separated)
+            <input type="text" name="portal_admin_users" value="${esc(
+              Array.isArray(s.portal_admin_users)
+                ? s.portal_admin_users.join(", ")
+                : String(s.portal_admin_users || ""),
+            )}" placeholder="empty = DAV user admin" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <h3 class="admin-subsection-title">WebDAV-Push</h3>
+          ${check("push_enabled", !!s.push_enabled, "Enable WebDAV-Push")}
+          <label>Push external URL (HTTPS)
+            <input type="url" name="push_external_url" value="${esc(s.push_external_url || "")}" placeholder="https://dav.example.com/dav.php/" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          <label>Push log level
+            <select name="push_log_level" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["off", "error", "warn", "info", "debug"]
+                .map(
+                  (l) =>
+                    `<option value="${l}" ${(s.push_log_level || "off") === l ? "selected" : ""}>${l}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+
+          <h3 class="admin-subsection-title">Classic admin password</h3>
+          <p class="muted small">${s.hasAdminPassword ? "Leave blank to keep the current password." : "No password set yet."}</p>
+          <label>New admin password
+            <input type="password" name="admin_password" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          <label>Confirm admin password
+            <input type="password" name="admin_password_confirm" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <div class="form-actions-row" style="margin-top:1rem">
+            <button type="submit" class="btn btn-primary" ${busy || s.writable === false ? "disabled" : ""}>Save settings</button>
+            <a class="btn btn-ghost" href="/admin/?/settings/standard">Open classic settings</a>
+          </div>
+        </form>
+      </section>
+      ${adminClassicFallbackCard({
+        title: "Classic fallback",
+        body: "Formal forms remain available under classic Web Admin if you prefer them.",
+        primaryHref: "/admin/?/settings/standard",
+        primaryLabel: "Open classic System Settings",
+      })}`;
+  }
+
+  function renderAdminDatabaseShell(): string {
+    const meta = adminPageMeta("database");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("database");
+    }
+    if (adminDatabaseSettingsLoading && !adminDatabaseSettings) {
+      return `<section class="card"><p class="muted">Loading database settings…</p></section>`;
+    }
+    if (adminDatabaseSettingsError && !adminDatabaseSettings) {
+      return `<section class="card">
+        <p class="flash flash-error">${esc(adminDatabaseSettingsError)}</p>
+        <button type="button" class="btn btn-ghost" data-action="admin-database-refresh">Retry</button>
+        <a class="btn btn-primary" href="/admin/?/settings/database">Open classic Database settings</a>
+      </section>`;
+    }
+    const d = adminDatabaseSettings;
+    if (!d) {
+      return `<section class="card"><p class="muted">No database settings loaded.</p></section>`;
+    }
+    const backend = (d.backend || "unknown").toLowerCase();
+    const backendLabel =
+      backend === "sqlite" ? "SQLite" : backend === "pgsql" ? "PostgreSQL" : esc(d.backend || "—");
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("Database", "admin-database")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <span class="badge badge-off">Write: classic only</span>
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-database-refresh" ${busy ? "disabled" : ""}>Refresh</button>
+          </div>
+        </div>
+        <p class="flash flash-info" style="margin-bottom:1rem">${esc(d.warning)}</p>
+        <dl class="admin-dl">
+          <div><dt>Backend</dt><dd><span class="badge badge-admin">${backendLabel}</span></dd></div>
+          ${
+            backend === "sqlite" || d.sqlite_file
+              ? `<div><dt>SQLite file</dt><dd class="mono">${esc(d.sqlite_file || "—")}</dd></div>`
+              : ""
+          }
+          ${
+            backend === "pgsql" || d.pgsql_host || d.pgsql_dbname
+              ? `<div><dt>PostgreSQL host</dt><dd class="mono">${esc(d.pgsql_host || "—")}</dd></div>
+          <div><dt>Database name</dt><dd class="mono">${esc(d.pgsql_dbname || "—")}</dd></div>
+          <div><dt>Username</dt><dd class="mono">${esc(d.pgsql_username || "—")}</dd></div>
+          <div><dt>Password</dt><dd>${d.hasPassword ? '<span class="badge badge-ok">Set</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd></div>`
+              : ""
+          }
+          <div><dt>Encryption key</dt><dd>${d.hasEncryptionKey ? '<span class="badge badge-ok">Configured</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd></div>
+        </dl>
+        <p class="muted small">
+          Portal write is <strong>disabled by design</strong> (Phase 8 product decision).
+          Wrong values can brick the instance; edit only via classic Web Admin with a backup of
+          <span class="mono">config/baikal.yaml</span>.
+        </p>
+      </section>
+      ${adminClassicFallbackCard({
+        title: "Change database settings",
+        body: "Use classic Web Admin for any backend or credential change. Confirm you have a recovery path before saving.",
+        primaryHref: d.classicUrl || "/admin/?/settings/database",
+        primaryLabel: "Open classic Database settings",
+        extraLinks: [{ href: "/admin/", label: "Classic dashboard" }],
+      })}`;
+  }
+
+  /** Admin-only Administration shell (opened from the user menu). */
   function renderAdminSection(): string {
     if (!userIsAdmin()) {
       return `<div class="card"><p class="muted">You do not have permission to view Administration.</p></div>`;
     }
+    if (!adminUiEnabled()) {
+      const href = esc(adminCapabilities?.classicAdminUrl || "/admin/");
+      return `<div class="portal-grid portal-grid-admin">
+        <section class="card admin-coming-soon-card">
+          <div class="admin-coming-soon-head">
+            <span class="badge badge-off">Disabled</span>
+            <h2 class="admin-coming-soon-title">Portal Administration</h2>
+          </div>
+          <p class="muted">
+            The in-portal Administration UI is turned off
+            (<span class="mono">system.portal_admin_ui_enabled</span>).
+            Use classic Web Admin for all server management.
+          </p>
+          <div class="admin-link-grid">
+            <a class="btn btn-primary" href="${href}">Open classic Web Admin</a>
+          </div>
+        </section>
+      </div>`;
+    }
+    const pageBody =
+      adminPage === "users"
+        ? renderAdminUsersShell()
+        : adminPage === "settings"
+          ? renderAdminSettingsShell()
+          : adminPage === "database"
+            ? renderAdminDatabaseShell()
+            : renderAdminOverview();
+
     return `<div class="portal-grid portal-grid-admin">
-      <section class="card admin-section">
-        ${infoTitle("Server administration", "administration")}
-        <p class="muted">
-          Manage DAV users, calendars, address books, and system settings in the classic Web Admin.
-          That UI uses the separate <strong>admin</strong> password (not your DAV credentials), unless you already have an admin session open.
-        </p>
-        <div class="admin-link-grid">
-          <a class="btn btn-primary" href="/admin/">Open Admin Dashboard</a>
-          <a class="btn btn-ghost" href="/admin/?/users">Users and resources</a>
-          <a class="btn btn-ghost" href="/admin/?/settings/standard">System Settings</a>
-          <a class="btn btn-ghost" href="/admin/?/settings/database">Database settings</a>
-        </div>
-        <p class="muted small" style="margin-top:1.25rem">
-          Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
-          with role <span class="badge badge-admin">Admin</span>.
-        </p>
-      </section>
+      <div class="admin-shell-nav card">
+        ${adminSubnav()}
+      </div>
+      ${pageBody}
     </div>`;
   }
 
@@ -4200,6 +5868,47 @@ export function mountApp(root: HTMLElement): void {
         })();
       }, 250);
     });
+    const adminUsersSearch = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-users-search"]',
+    );
+    adminUsersSearch?.addEventListener("input", () => {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        adminUsersQuery = adminUsersSearch.value;
+        render();
+      }, 150);
+    });
+    const adminCreateForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-user-create"]',
+    );
+    adminCreateForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminUserCreate(adminCreateForm);
+    });
+    const adminEditForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-user-edit"]',
+    );
+    adminEditForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminUserEdit(adminEditForm);
+    });
+    const adminCalForm = root.querySelector<HTMLFormElement>('[data-form="admin-cal"]');
+    adminCalForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminCalSave(adminCalForm);
+    });
+    const adminAbForm = root.querySelector<HTMLFormElement>('[data-form="admin-ab"]');
+    adminAbForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminAbSave(adminAbForm);
+    });
+    const adminSettingsForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-settings"]',
+    );
+    adminSettingsForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminSettingsSave(adminSettingsForm);
+    });
     const noteSearchInput = root.querySelector<HTMLInputElement>('input[data-action="note-search"]');
     noteSearchInput?.addEventListener("input", () => {
       if (searchTimer) clearTimeout(searchTimer);
@@ -4528,9 +6237,35 @@ export function mountApp(root: HTMLElement): void {
       applyPortalUi(res.ui);
       log.event("login.ok", { username: user?.username ?? username });
       bumpSessionIdleTimer();
+      if (userIsAdmin()) {
+        try {
+          await loadAdminCapabilities();
+        } catch (e) {
+          log.warn("admin.capabilities login", e instanceof Error ? e.message : e);
+        }
+      }
       normalizeActiveTab();
-      persistTab(activeTab);
+      persistTab(activeTab, adminPage);
       await loadHome();
+      if (activeTab === "admin" && userIsAdmin() && adminUiEnabled()) {
+        try {
+          if (adminPage === "overview" && adminPageMeta("overview")?.available !== false) {
+            await loadAdminDashboard();
+          } else if (adminPage === "users" && adminPageMeta("users")?.available !== false) {
+            await loadAdminUsers();
+            if (adminSelectedUsername) {
+              await loadAdminUserDetail(adminSelectedUsername);
+              await loadAdminUserResources(adminSelectedUsername);
+            }
+          } else if (adminPage === "settings" && adminPageMeta("settings")?.available !== false) {
+            await loadAdminSystemSettings();
+          } else if (adminPage === "database" && adminPageMeta("database")?.available !== false) {
+            await loadAdminDatabaseSettings();
+          }
+        } catch (e) {
+          log.warn("admin login load", e instanceof Error ? e.message : e);
+        }
+      }
       setFlash("success", "Signed in");
     } catch (e) {
       log.warn("login.failed", e instanceof Error ? e.message : e);
@@ -5413,7 +7148,305 @@ export function mountApp(root: HTMLElement): void {
     if (action === "tab") {
       const tab = parseTabId(t.dataset.tab);
       if (tab) {
+        if (tab === "admin") {
+          // User menu → Administration: land on Overview
+          adminPage = "overview";
+        }
         await activateTab(tab);
+      }
+      return;
+    }
+    if (action === "admin-page") {
+      const page = parseAdminPageId(t.dataset.adminPage);
+      if (page) {
+        await activateAdminPage(page);
+      }
+      return;
+    }
+    if (action === "admin-refresh") {
+      if (!userIsAdmin() || activeTab !== "admin") return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminDashboard();
+        setFlash("success", "Overview refreshed");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-users-refresh") {
+      if (!userIsAdmin() || activeTab !== "admin") return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminUsers();
+        if (adminSelectedUsername) {
+          await loadAdminUserDetail(adminSelectedUsername);
+        }
+        setFlash("success", "Users refreshed");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-view") {
+      const username = t.dataset.username ?? "";
+      if (!username || !userIsAdmin()) return;
+      busy = true;
+      clearFlash();
+      adminSelectedUsername = username;
+      adminPage = "users";
+      persistTab("admin", "users", username);
+      render();
+      try {
+        await loadAdminUserDetail(username);
+        await loadAdminUserResources(username);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Failed to load user");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-close") {
+      adminSelectedUsername = null;
+      adminUserDetail = null;
+      adminUserDetailError = null;
+      adminUserEditOpen = false;
+      persistTab("admin", "users", null);
+      render();
+      return;
+    }
+    if (action === "admin-user-create-open") {
+      if (!userIsAdmin()) return;
+      adminUserCreateOpen = true;
+      adminUserEditOpen = false;
+      adminUserDeleteUsername = null;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-user-create-close") {
+      adminUserCreateOpen = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-edit-open") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminSelectedUsername ?? "";
+      if (!username) return;
+      busy = true;
+      clearFlash();
+      adminUserCreateOpen = false;
+      adminUserDeleteUsername = null;
+      adminSelectedUsername = username;
+      adminPage = "users";
+      persistTab("admin", "users", username);
+      render();
+      try {
+        if (!adminUserDetail || adminUserDetail.username.toLowerCase() !== username.toLowerCase()) {
+          await loadAdminUserDetail(username);
+        }
+        adminUserEditOpen = true;
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Failed to load user");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-edit-close") {
+      adminUserEditOpen = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-open") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminSelectedUsername ?? "";
+      if (!username) return;
+      adminUserDeleteUsername = username;
+      adminUserDeleteConfirmChecked = false;
+      adminUserCreateOpen = false;
+      adminUserEditOpen = false;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-close") {
+      adminUserDeleteUsername = null;
+      adminUserDeleteConfirmChecked = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-toggle") {
+      const cb = t as HTMLInputElement;
+      adminUserDeleteConfirmChecked = !!cb.checked;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-confirm") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminUserDeleteUsername ?? "";
+      if (!username || !adminUserDeleteConfirmChecked) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await api.adminDeleteUser(username, true);
+        log.event("admin.user.delete", { username });
+        adminUserDeleteUsername = null;
+        adminUserDeleteConfirmChecked = false;
+        adminUserEditOpen = false;
+        if (adminSelectedUsername?.toLowerCase() === username.toLowerCase()) {
+          adminSelectedUsername = null;
+          adminUserDetail = null;
+          adminUserCalendars = [];
+          adminUserAddressBooks = [];
+          persistTab("admin", "users", null);
+        }
+        await loadAdminUsers();
+        setFlash("success", `Deleted user “${username}”`);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-cal-create") {
+      adminCalModal = "create";
+      adminCalEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-cal-edit") {
+      adminCalModal = "edit";
+      adminCalEditId = Number(t.dataset.id);
+      render();
+      return;
+    }
+    if (action === "admin-cal-close") {
+      adminCalModal = null;
+      adminCalEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-cal-delete") {
+      adminResourceDelete = {
+        kind: "calendar",
+        id: Number(t.dataset.id),
+        label: t.dataset.label ?? "calendar",
+      };
+      render();
+      return;
+    }
+    if (action === "admin-ab-create") {
+      adminAbModal = "create";
+      adminAbEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-ab-edit") {
+      adminAbModal = "edit";
+      adminAbEditId = Number(t.dataset.id);
+      render();
+      return;
+    }
+    if (action === "admin-ab-close") {
+      adminAbModal = null;
+      adminAbEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-ab-delete") {
+      adminResourceDelete = {
+        kind: "addressbook",
+        id: Number(t.dataset.id),
+        label: t.dataset.label ?? "address book",
+        force: false,
+      };
+      render();
+      return;
+    }
+    if (action === "admin-ab-force-toggle") {
+      if (adminResourceDelete?.kind === "addressbook") {
+        adminResourceDelete = {
+          ...adminResourceDelete,
+          force: !!(t as HTMLInputElement).checked,
+        };
+        render();
+      }
+      return;
+    }
+    if (action === "admin-resource-delete-close") {
+      adminResourceDelete = null;
+      render();
+      return;
+    }
+    if (action === "admin-resource-delete-confirm") {
+      if (!adminSelectedUsername || !adminResourceDelete) return;
+      const uname = adminSelectedUsername;
+      const del = adminResourceDelete;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        if (del.kind === "calendar") {
+          await api.adminDeleteUserCalendar(uname, del.id, true);
+        } else {
+          await api.adminDeleteUserAddressBook(uname, del.id, true, !!del.force);
+        }
+        adminResourceDelete = null;
+        await loadAdminUserResources(uname);
+        await loadAdminUserDetail(uname);
+        setFlash("success", "Deleted");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-settings-refresh") {
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminSystemSettings();
+        setFlash("success", "Settings reloaded");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reload failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-database-refresh") {
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminDatabaseSettings();
+        setFlash("success", "Database settings reloaded");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reload failed");
+      } finally {
+        busy = false;
+        render();
       }
       return;
     }

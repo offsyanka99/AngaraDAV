@@ -107,20 +107,23 @@ Entrypoint also logs mount warnings at container start (`25-check-baikal-persist
 | `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload/download/rename/delete) |
 | `/cal.php/` | CalDAV only |
 | `/card.php/` | CardDAV only |
-| `/admin/` | Web admin |
+| `/admin/` | Classic Web Admin (server-rendered; admin password) |
+| `/admin/install/` | Installer / upgrade wizard (stays on classic stack) |
 
 ## User portal
 
-Modern UI (TypeScript SPA, dark theme aligned with bookmarks-sync admin style) for **end users**.  
-Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes**. Section help is under **(i)** icons.
+Modern UI (TypeScript SPA, dark theme aligned with bookmarks-sync admin style) for **end users** and, for designated operators, **day-to-day administration**.  
+Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Section help is under **(i)** icons. Operators with the **Admin role** also get **Administration** in the user menu.
 
 | Step | Action |
 |------|--------|
 | 1 | Open `http://NAS-IP:31088/portal/` |
-| 2 | Sign in with a **DAV user** (created in Admin → Users), not the admin password |
+| 2 | Sign in with a **DAV user** (created in Admin → Users), not the classic admin password |
 | 3 | **Calendar:** owned list (Edit / Delete), month grid with create/edit/delete events (RRULE), holidays/read-only; details, share, import/export `.ics`; **select shared calendars** (read-only or full access) to view/edit events; **Add calendar → Import .ics**; large imports show **live %** (chunked SQLite txs keep NAS imports fast) |
 | 4 | **Contacts:** address books (delete confirm), contact search/CRUD, photos, birthday/special dates, custom fields, book + single-contact `.vcf` export (progress dialog with **live %** of cards + result) |
 | 5 | **Tasks / Notes:** CalDAV `VTODO` / `VJOURNAL` on writable calendars (bulk actions on tasks) |
+| 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`) |
+| 7 | **Administration** (Admin role only): Overview, Users CRUD, per-user calendars/address books, System settings; Database is **read-only** in the portal |
 
 ### Screenshots
 
@@ -161,6 +164,103 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes**. Section help is un
   - **Server:** all portal request tracing → `Specific/portal_debug.log` (never nginx `[error]`)
   - If Docker logs show `FastCGI sent in stderr: "PHP message: AngaraDAV portal: ..."`, request tracing was routed to stderr unexpectedly. Current images write portal traces to `Specific/portal_debug.log`.
   - Public `GET /api/ui` returns prefs (including log level and `sessionIdleSeconds`) without a session
+
+### Portal Administration (parallel with classic `/admin/`)
+
+AngaraDAV runs **two admin UIs** against the same database and `config/baikal.yaml`:
+
+| Surface | Auth | URL |
+|---------|------|-----|
+| **Portal Administration** | DAV user session + **Admin role** (not the classic admin password) | `/portal/` → user menu → **Administration** (`#admin`, …) |
+| **Classic Web Admin** | Fixed username `admin` + `system.admin_passwordhash` | `/admin/` |
+| **Installer / upgrade** | Classic stack only | `/admin/install/` |
+
+**Last write wins** if both UIs change the same setting or user. Prefer one UI for a given change.
+
+#### How the portal Admin role is granted
+
+1. **Env (highest priority):** `PORTAL_ADMIN_USERS` or `BAIKAL_PORTAL_ADMIN_USERS` — comma- or space-separated **DAV usernames**.
+2. **YAML:** `system.portal_admin_users` — list or comma-separated string in `baikal.yaml`.
+3. **Default if neither is set:** DAV user named **`admin`** (case-insensitive).
+
+Examples:
+
+```yaml
+# config/baikal.yaml
+system:
+  portal_admin_users: "alice, bob"   # or YAML list: [alice, bob]
+  portal_admin_ui_enabled: true      # false hides in-portal shell; APIs still exist
+```
+
+```yaml
+# compose / TrueNAS environment
+PORTAL_ADMIN_USERS: "alice,bob"
+# BAIKAL_PORTAL_ADMIN_USERS: "alice"   # alias
+```
+
+- Env **overrides** YAML.
+- This is **independent** of the classic `/admin/` password. A DAV user can be a portal Admin without knowing that password, and the classic `admin` password does **not** log you into `/portal/`.
+- Every `/api/admin/*` call requires a portal session **and** Admin role (anonymous → **401**, non-admin → **403**). Hiding the menu is not enough; the API enforces the role.
+- `system.portal_admin_ui_enabled` (default **true**): set `false` to hide the Administration UI in the SPA (menu becomes a link to classic Web Admin). Routes under `/api/admin/*` remain; capability map is still `GET /api/admin/capabilities`.
+
+#### Feature matrix (portal vs classic)
+
+| Capability | Portal Administration | Classic `/admin/` |
+|------------|----------------------|-------------------|
+| Dashboard / Overview stats | Yes (read-only) | Yes |
+| Users list / create / edit / delete | Yes (full CRUD; digesta1 never returned) | Yes |
+| Per-user calendars & address books | Yes (under Users → user detail) | Yes |
+| System settings (`baikal.yaml` system) | Yes (incl. services, files, push, session, admin password) | Yes |
+| Database settings (backend, credentials) | **Read-only** (password never shown) | **Read + write** |
+| Installer / version upgrade | No | Yes (`/admin/install/`) |
+
+Incomplete or classic-only areas always keep an **Open classic …** link in the portal. Security review notes: [`portal-admin-security-checklist.md`](portal-admin-security-checklist.md). Program scope: [`portal-admin-integration-scope.txt`](portal-admin-integration-scope.txt).
+
+#### Admin audit log
+
+Mutations under `/api/admin/*` append to **`Specific/portal_debug.log`** (never nginx/docker error streams):
+
+| Result | Log level required | Line tag |
+|--------|--------------------|----------|
+| Success (`result=ok`) | `info` or `debug` | `[INFO]` |
+| Failure (`result=error:…`) | **`warn`**, `info`, or `debug` | `[WARN]` |
+
+```text
+admin audit actor={user} action={verb} target={id} result={ok|error:…} [keys=…|msg=…]
+```
+
+Examples:
+
+```text
+[INFO] AngaraDAV portal: admin audit actor=alice action=update-system-settings target=system result=ok keys=files_enabled,session_max_age_minutes
+[WARN] AngaraDAV portal: admin audit actor=alice action=update-system-settings target=system result=error:503 msg=Config_file_is_not_writable
+[WARN] AngaraDAV portal: admin settings save failed user=alice status=503 error=Config file is not writable
+```
+
+Passwords and hashes are never logged. Grep:
+
+```bash
+# Host bind of Specific/ or docker exec:
+grep 'admin audit' /path/to/Specific/portal_debug.log
+grep 'admin settings save' /path/to/Specific/portal_debug.log
+docker exec angaradav tail -n 50 /var/www/baikal/Specific/portal_debug.log
+```
+
+#### Observability: diagnose a failed portal settings save
+
+1. **UI message** — portal flashes the API `error` string (e.g. “Config file is not writable”).
+2. **Enable logging temporarily** — set `PORTAL_LOG_LEVEL=warn` (failures only) or `info` (success + failures) in compose / `system.portal_log_level`, recreate or wait for next request.
+3. **Read `Specific/portal_debug.log`** — look for `update-system-settings` or `admin settings save failed` (see samples above). HTTP status is in `result=error:NNN` / `status=`.
+4. **Check mounts (unchanged public endpoints)** — `curl -sS http://host/health.php` still reports only liveness fields (`status`, `configWritable`, `specificWritable`, mount hints). **Do not** expect admin audit data on `/health.php` or `/info.php` (no secrets, schema unchanged).
+5. **Common causes**
+   - `configWritable: false` / 503 “not writable” → host path ownership (uid **101**), or config not a real bind mount
+   - 400 with field name → validation (push URL must be HTTPS, bad timezone, forbidden mass-assignment keys)
+   - 429 on admin password change → rate limit (`Specific/portal_admin_password_rate.json`)
+   - 403 on `/api/admin/*` → user lacks portal Admin role (`PORTAL_ADMIN_USERS` / `portal_admin_users`)
+6. **Turn logging back to `off`** after troubleshooting.
+
+`/health.php` and `/info.php` remain **unchanged** for orchestrators: no new required fields, no admin-session data.
+
 - Large calendar/contact **import**: progress streams as NDJSON; nginx `/api` allows **900s** FastCGI read. Writes use **chunked SQLite transactions** (every 200 objects) so bulk imports on TrueNAS/ZFS finish in seconds rather than minutes. **Add calendar → Import .ics** creates a calendar and imports in one step.
 - Portal static caching (nginx): `/portal/` HTML shell is `no-cache` so new image builds pick up hashed JS; `/portal/assets/*` may be cached long-term (content-hashed filenames).
 
@@ -169,8 +269,22 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes**. Section help is un
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/ui` | Public portal prefs (`timeFormat`, `weekStart`, `logLevel`, `sessionIdleSeconds`) |
-| POST | `/api/login` | DAV user session (+ `ui` prefs) |
-| GET | `/api/me` | Session profile + `ui` prefs |
+| POST | `/api/login` | DAV user session (+ `ui` prefs; profile includes `isAdmin` / `role`) |
+| GET | `/api/me` | Session profile + `ui` prefs (`isAdmin` / `role`) |
+| GET | `/api/admin/ping` | Admin authz smoke check → `{ ok: true, user }` (Admin only) |
+| GET | `/api/admin/dashboard` | Read-only dashboard stats → `{ data: { users, calendars, events, addressBooks, contacts, nbusers…, services, links } }` (Admin only) |
+| GET | `/api/admin/capabilities` | Admin UI feature matrix → `{ data: { uiEnabled, classicAdminUrl, pages[] } }` (Admin only) |
+| GET | `/api/admin/users` | List DAV users → `{ users: [{ username, displayname, email, principal }] }` (Admin only; no digesta1) |
+| POST | `/api/admin/users` | Create user (Admin + CSRF); seeds default calendar + address book |
+| GET | `/api/admin/users/{username}` | User detail + resource counts (Admin only; **404** if missing) |
+| PATCH | `/api/admin/users/{username}` | Update displayname/email/password (Admin + CSRF; empty password = leave unchanged) |
+| DELETE | `/api/admin/users/{username}` | Delete user (Admin + CSRF; requires `confirm: true`; file home quarantine when model path available) |
+| GET/POST | `/api/admin/users/{u}/calendars` | List / create calendars for user `u` (Admin) |
+| GET/PATCH/DELETE | `/api/admin/users/{u}/calendars/{id}` | Get / update / delete calendar instance (DELETE needs `confirm`) |
+| GET/POST | `/api/admin/users/{u}/addressbooks` | List / create address books |
+| GET/PATCH/DELETE | `/api/admin/users/{u}/addressbooks/{id}` | Get / update / delete (`force` for non-empty) |
+| GET/PATCH | `/api/admin/settings/system` | Read / update system settings (never returns password hash; use `admin_password` + confirm to change) |
+| GET | `/api/admin/settings/database` | Read-only DB summary (backend, sqlite path or pgsql host/dbname/user; **never** password). Writes: classic only (**403** on mutating methods) |
 | GET | `/api/calendars` | List calendars |
 | POST | `/api/calendars` | Create (`displayname`, `color?`, `description?`, `holidays?`, `holidayCountry?`, `readOnly?`) |
 | PATCH | `/api/calendars/{id}` | Update name / color / description |
@@ -228,11 +342,13 @@ exposure use TLS and consider Basic over HTTPS (see auth notes below).
 
 ## Authentication
 
-### Admin UI
+### Admin UI (classic `/admin/`)
+
+Classic Web Admin remains the recovery path and the only place for **database credential writes** and the **installer**. Day-to-day admin can use the [portal Administration](#portal-administration-parallel-with-classic-admin) UI instead when you grant the portal Admin role.
 
 - Password stored with PHP `password_hash()` (bcrypt/argon depending on PHP).
 - Legacy SHA-256 / old MD5 admin hashes are accepted once and upgraded on login.
-- Rolling idle session (default **15 minutes**, configurable as **Admin session timeout**).
+- Rolling idle session (default **15 minutes**, configurable as **Admin session timeout** — same knob as portal idle).
 - Failed login rate limit: **10 attempts / 15 minutes / IP** (file under `Specific/`).
 - Optional Fail2Ban via `failed_access_message` syslog lines.
 
@@ -289,11 +405,13 @@ allowed to modify that calendar.
 | `BAIKAL_DAV_MAX_BODY_SIZE` | `1G` | Nginx request-body ceiling; nginx size syntax such as `512M` or `2G` |
 | `TIME_FORMAT` / `BAIKAL_PORTAL_TIME_FORMAT` | `auto` (default), `12h`, `24h` | Portal time display |
 | `BAIKAL_PORTAL_WEEK_START` | `auto` (default), `monday`, `sunday` | Portal calendar week start |
-| `PORTAL_LOG_LEVEL` / `BAIKAL_PORTAL_LOG_LEVEL` | `off` (default), `error`, `warn`, `info`, `debug` | Portal debug: browser console + `Specific/portal_debug.log` |
+| `PORTAL_LOG_LEVEL` / `BAIKAL_PORTAL_LOG_LEVEL` | `off` (default), `error`, `warn`, `info`, `debug` | Portal debug: browser console + `Specific/portal_debug.log` (includes admin audit at info+) |
+| `PORTAL_ADMIN_USERS` / `BAIKAL_PORTAL_ADMIN_USERS` | comma/space list of DAV usernames | Portal Admin role for `/api/admin/*` (overrides `system.portal_admin_users`; default if unset: DAV user `admin`) |
+| — | YAML `system.portal_admin_ui_enabled` | `true` (default) / `false` — hide in-portal Administration shell only; classic `/admin/` unchanged |
 | `PUSH_LOG_LEVEL` / `BAIKAL_PUSH_LOG_LEVEL` | `off` (default), `error`, `warn`, `info`, `debug` | WebDAV-Push debug: `Specific/push_debug.log` |
 | `BAIKAL_PUSH_EXTERNAL_URL` | e.g. `https://dav.example.com/dav.php/` | Canonical client-reachable HTTPS DAV base URL for Push registration URLs |
 
-YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `push_external_url`, and `push_log_level`. **Env overrides YAML.** (`TZ` is the one exception: it only seeds the installer's initial `timezone` default and is not read again afterward.)
+YAML equivalents under `system.*` in `baikal.yaml`: `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, `portal_admin_ui_enabled`, `push_external_url`, and `push_log_level`. **Env overrides YAML** (except `portal_admin_ui_enabled`, which is YAML/UI-only today). (`TZ` is the one exception for timezone: it only seeds the installer's initial `timezone` default and is not read again afterward.)
 
 Leave `PORTAL_LOG_LEVEL` at `off` in production; use `debug` only while troubleshooting (verbose UI/API lines; no passwords). Request traces go to **`Specific/portal_debug.log`**, not nginx/docker error streams.
 
@@ -585,7 +703,21 @@ Open http://127.0.0.1:8080/ and complete setup.
 composer install
 # post-install applies patches/ (calendar-timezone, …)
 php tests/php/CalendarTimeZoneResolveTest.php   # optional smoke check
+php tests/php/AdminAuthTest.php                 # portal Admin role + requireAdmin
+php tests/php/AdminDashboardServiceTest.php     # admin dashboard stats service
+php tests/php/AdminAuditTest.php                # admin mutation audit log lines
+php tests/php/AdminCapabilitiesServiceTest.php  # admin UI feature gating matrix
+php tests/php/AdminUserServiceTest.php          # admin users list/detail (no digesta1)
+php tests/php/AdminUserResourceServiceTest.php  # per-user calendars / address books
+php tests/php/AdminSettingsServiceTest.php      # system settings YAML read/write
+php tests/php/AdminSecurityReviewTest.php       # Phase 9.1 authz/mass-assignment guards
 ```
+
+Security review checklist for `/api/admin/*` PRs:
+[`docs/portal-admin-security-checklist.md`](portal-admin-security-checklist.md).
+
+Portal Admin operator guide (this file):
+[Portal Administration (parallel with classic `/admin/`)](#portal-administration-parallel-with-classic-admin).
 
 Requires the `patch` command on `PATH`. Re-run after `composer update` if you
 upgrade `sabre/dav` and the patch still applies; refresh

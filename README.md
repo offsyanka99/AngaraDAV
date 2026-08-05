@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `1.0.10`
+**Version:** `2.0.0`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -24,9 +24,11 @@ AngaraDAV includes:
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
   - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
+  - **Administration** (Admin-role DAV users): Overview, Users CRUD, per-user calendars/address books, System settings; Database **read-only** in portal. Runs **in parallel** with classic `/admin/` (classic password unchanged). See [Portal Administration](docs/DEPLOYMENT.md#portal-administration-parallel-with-classic-admin).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
 - `/dav.php/` kept as classic browser and combined CalDAV/CardDAV/WebDAV endpoint
+- Classic **Web Admin** (`/admin/`) remains fully supported during dual-admin operation (installer stays at `/admin/install/`)
 
 Upstream ancestry: [sabre-io/Baikal](https://github.com/sabre-io/Baikal).
 
@@ -59,8 +61,9 @@ Legacy release history
 | `1.0.8` | Unified the Maximum WebDAV file size setting on a single MB standard end to end: `baikal.yaml`'s `files_max_upload_mb` and `BAIKAL_FILES_MAX_UPLOAD_MB` now store MB directly (previously bytes), matching the admin UI; the old byte-based key/env var still work as a one-time upgrade fallback |
 | `1.0.9` | Extended the MB standard to the WebDAV per-user quota setting: `files_quota_mb` / `BAIKAL_FILES_QUOTA_MB` replace the byte-based `files_quota_bytes` / `BAIKAL_FILES_QUOTA_BYTES` (old key/env var still work as a one-time upgrade fallback; `0` still means unlimited) |
 | `1.0.10` | Files tab: bulk delete modal, copy/move destination modals, header select alignment, remove Clear selection; show max upload/quota in MB from app settings |
+| `2.0.0` | **Portal Administration** dual-admin program: `/api/admin/*` (authz, users CRUD, per-user cal/AB, system settings, DB read-only), SPA Administration shell, audit/observability, security checklist; classic `/admin/` remains in parallel |
 
-Image tags: `latest`, `1.0.10`, `sha-…`.
+Image tags: `latest`, `2.0.0`, `sha-…`.
 
 Quick start (Docker)
 --------------------
@@ -86,23 +89,27 @@ Endpoints
 
 | Path | Use |
 |------|-----|
-| `/portal/` | **User portal** — calendars, contacts, tasks, notes, files |
+| `/portal/` | **User portal** — calendars, contacts, tasks, notes, files; **Administration** for Admin-role users |
 | `/dav.php/` | CalDAV + CardDAV (clients + classic WebDAV browser) |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
-| `/admin/` | Web admin |
-| `/api/` | Portal JSON API (session cookie) |
+| `/admin/` | Classic Web Admin (admin password; still the recovery UI) |
+| `/admin/install/` | Installer / upgrade (classic only) |
+| `/api/` | Portal JSON API (session cookie; `/api/admin/*` is Admin-role only) |
 | `/health.php` | Liveness JSON |
 | `/info.php` | Public status JSON |
 
 User portal
 -----------
 
-1. Admin creates DAV users under `/admin/`.
-2. Open **`/portal/`**, sign in with **DAV** credentials.
+1. Create DAV users under classic **`/admin/`** (or portal **Administration → Users** once you have an Admin-role account).
+2. Open **`/portal/`**, sign in with **DAV** credentials (not the classic admin password).
 3. **Calendar:** owned list, month view, create/edit events (repeat rules), Edit modal (details, share, import/export `.ics`).
 4. **Contacts:** address books, contact search/CRUD, photos, birthday/special dates, custom fields, import/export `.vcf`.
 5. **Tasks** / **Notes:** manage `VTODO` / `VJOURNAL` on your calendars.
 6. **Files:** browse your private WebDAV file home (when **Enable WebDAV file storage** is on). Desktop clients still use `/dav.php/files/{username}/`.
+7. **Administration** (Admin role only — user menu): Overview, Users, System settings; Database is read-only in the portal. Classic `/admin/` remains available in parallel.
+
+**Portal Admin role:** env `PORTAL_ADMIN_USERS` / `BAIKAL_PORTAL_ADMIN_USERS`, or YAML `system.portal_admin_users`; if unset, DAV user `admin` is Admin. Details and portal-vs-classic matrix: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#portal-administration-parallel-with-classic-admin).
 
 ![User portal — Calendar](docs/images/portal-my-calendars.jpg)
 
