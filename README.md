@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.0.1`
+**Version:** `2.0.2`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
@@ -63,8 +63,9 @@ Legacy release history
 | `1.0.10` | Files tab: bulk delete modal, copy/move destination modals, header select alignment, remove Clear selection; show max upload/quota in MB from app settings |
 | `2.0.0` | **Portal Administration**: `/api/admin/*` + SPA shell (users, settings, DB with CONFIRM, install at `/portal/install/`); classic Formal `/admin/` UI removed (redirects to portal) |
 | `2.0.1` | WebDAV-Push fan-out for **shared calendars**: content updates notify every calendar instance (owner + sharees) with the correct path/topic so DAVx⁵ on sharee devices wakes without waiting for the poll interval |
+| `2.0.2` | Portal upgrade-required login banner + JSON 503 API gate; version base compare and `2.0.x+sha` display (no `git.`); multi-select calendars on the month grid |
 
-Image tags: `latest`, `2.0.1`, `sha-…`.
+Image tags: `latest`, `2.0.2`, `sha-…`.
 
 Quick start (Docker)
 --------------------

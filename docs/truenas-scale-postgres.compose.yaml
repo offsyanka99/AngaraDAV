@@ -108,9 +108,9 @@ services:
         max-file: "3"
 
   angaradav:
-    # See docs/truenas-scale.compose.yaml for tag naming (2.0.1, release-2.0.0-portal-admin, …)
+    # See docs/truenas-scale.compose.yaml for tag naming (2.0.2, release-2.0.0-portal-admin, …)
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.0.1
+    # image: ghcr.io/offsyanka99/angaradav:2.0.2
     # image: ghcr.io/offsyanka99/angaradav:release-2.0.0-portal-admin
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
