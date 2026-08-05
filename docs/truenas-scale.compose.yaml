@@ -100,10 +100,21 @@
 
 services:
   angaradav:
-    # --- Track the current AngaraDAV main image -------------------------
+    # --- Image tags (GHCR: ghcr.io/offsyanka99/angaradav) ----------------
+    # latest          = main branch (stable day-to-day; may lag a feature branch)
+    # 2.0.1           = product release tag v2.0.1 (preferred pin)
+    # release-2.0.0-portal-admin
+    #                 = continuous builds from branch release/2.0.0-portal-admin
+    #                   (slash in branch name becomes hyphen in the image tag)
+    # sha-<7+ hex>    = exact git commit (e.g. sha-fef872a)
+    #
+    # There is NO tag "release-2.0.1-portal-admin" — version is not part of the
+    # branch name; use 2.0.1 or release-2.0.0-portal-admin instead.
     image: ghcr.io/offsyanka99/angaradav:latest
-    # Or pin a tested commit:
-    # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
+    # Portal-admin / 2.0.x line (shared-calendar Push fan-out, etc.):
+    # image: ghcr.io/offsyanka99/angaradav:2.0.1
+    # image: ghcr.io/offsyanka99/angaradav:release-2.0.0-portal-admin
+    # image: ghcr.io/offsyanka99/angaradav:sha-fef872a
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------
     # build:
