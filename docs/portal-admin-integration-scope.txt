@@ -662,7 +662,8 @@ Step 10.2 — If ever migrated
     [ ] Classic /admin/ still works (or intentionally disabled with flag)
     [ ] Documentation updated for operators (TrueNAS compose notes if needed)
     [ ] At least one production-like dual-run period with no P0 regressions
-    [ ] Deprecation announcement prepared for classic UI (if desired)
+    [x] Deprecation announcement prepared for classic UI (draft in
+        docs/portal-admin-classic-deprecation-plan.md; publish only when §3 green)
 
 --------------------------------------------------------------------------------
 11. Suggested first implementation milestone (MVP)
