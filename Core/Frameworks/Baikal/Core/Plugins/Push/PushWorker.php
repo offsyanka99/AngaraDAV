@@ -146,19 +146,46 @@ class PushWorker {
 
         $uri = rawurldecode($parts[2]);
         if ($parts[0] === 'calendars') {
+            // Prefer exact instance path (owner or sharee view of this collection).
             $stmt = $this->pdo->prepare(
                 'SELECT COUNT(*) FROM calendarinstances WHERE principaluri = ? AND uri = ?'
             );
-        } elseif ($parts[0] === 'addressbooks') {
+            $stmt->execute([$principal, $uri]);
+            if ((int) $stmt->fetchColumn() > 0) {
+                return true;
+            }
+            // Fallback: principal still has any instance of the same underlying calendar
+            // (covers edge cases if resource_uri and subscription uri tokens diverge).
+            try {
+                $stmt = $this->pdo->prepare(
+                    'SELECT calendarid FROM calendarinstances WHERE principaluri = ? AND uri = ? LIMIT 1'
+                );
+                // Path owner segment may not match $principal; resolve calendar via path owner.
+                $stmt->execute([$ownerPrincipal, $uri]);
+                $calendarId = $stmt->fetchColumn();
+                if ($calendarId === false || $calendarId === null) {
+                    return false;
+                }
+                $stmt = $this->pdo->prepare(
+                    'SELECT COUNT(*) FROM calendarinstances WHERE principaluri = ? AND calendarid = ?'
+                );
+                $stmt->execute([$principal, (int) $calendarId]);
+
+                return (int) $stmt->fetchColumn() > 0;
+            } catch (\Throwable $e) {
+                return false;
+            }
+        }
+        if ($parts[0] === 'addressbooks') {
             $stmt = $this->pdo->prepare(
                 'SELECT COUNT(*) FROM addressbooks WHERE principaluri = ? AND uri = ?'
             );
-        } else {
-            return false;
-        }
-        $stmt->execute([$principal, $uri]);
+            $stmt->execute([$principal, $uri]);
 
-        return (int) $stmt->fetchColumn() > 0;
+            return (int) $stmt->fetchColumn() > 0;
+        }
+
+        return false;
     }
 
     private function buildMessage(

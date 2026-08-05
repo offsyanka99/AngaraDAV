@@ -10,6 +10,10 @@ use Symfony\Component\Yaml\Yaml;
  *
  * Failures are logged and swallowed so a misconfigured Push setup never breaks
  * calendar/contact CRUD.
+ *
+ * Shared calendars: Sabre stores one calendar row and multiple calendarinstances
+ * (owner + sharees), each under a different DAV path. Clients register push on
+ * their own path, so content updates fan out to every instance path (and topic).
  */
 class ChangeNotifier {
     private const SYNCTOKEN_PREFIX = 'http://sabre.io/ns/sync/';
@@ -33,6 +37,83 @@ class ChangeNotifier {
             $syncToken = self::calendarSyncToken($pdo, (int) $calendarId);
         }
         self::enqueue($pdo, $resource, $syncToken);
+    }
+
+    /**
+     * DAV collection paths that should receive a content-update for $resourceUri.
+     *
+     * For calendars/{user}/{uri}, returns every calendarinstance of the same
+     * calendarid (owner + sharees). Other paths are returned as a single entry.
+     *
+     * @return list<string>
+     */
+    public static function expandContentResourceUris(\PDO $pdo, string $resourceUri): array {
+        $resourceUri = trim($resourceUri, '/');
+        if ($resourceUri === '') {
+            return [];
+        }
+
+        $parts = explode('/', $resourceUri);
+        if (count($parts) !== 3 || $parts[0] !== 'calendars') {
+            return [$resourceUri];
+        }
+
+        $username = rawurldecode($parts[1]);
+        $uri = rawurldecode($parts[2]);
+        if ($username === '' || $uri === '') {
+            return [$resourceUri];
+        }
+
+        try {
+            $principal = 'principals/' . $username;
+            $stmt = $pdo->prepare(
+                'SELECT calendarid FROM calendarinstances WHERE principaluri = ? AND uri = ? LIMIT 1'
+            );
+            $stmt->execute([$principal, $uri]);
+            $calendarId = $stmt->fetchColumn();
+            if ($calendarId === false || $calendarId === null || $calendarId === '') {
+                return [$resourceUri];
+            }
+
+            $stmt = $pdo->prepare(
+                'SELECT principaluri, uri FROM calendarinstances WHERE calendarid = ?'
+            );
+            $stmt->execute([(int) $calendarId]);
+            $paths = [];
+            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $p = (string) ($row['principaluri'] ?? '');
+                $instanceUri = (string) ($row['uri'] ?? '');
+                if ($instanceUri === '' || !str_starts_with($p, 'principals/')) {
+                    continue;
+                }
+                $user = substr($p, strlen('principals/'));
+                if ($user === '') {
+                    continue;
+                }
+                $paths[] = 'calendars/' . $user . '/' . $instanceUri;
+            }
+
+            if ($paths === []) {
+                return [$resourceUri];
+            }
+
+            $paths = array_values(array_unique($paths));
+            // Keep the triggering path first for stable logs / sync-token preference.
+            usort($paths, static function (string $a, string $b) use ($resourceUri): int {
+                if ($a === $resourceUri) {
+                    return -1;
+                }
+                if ($b === $resourceUri) {
+                    return 1;
+                }
+
+                return strcmp($a, $b);
+            });
+
+            return $paths;
+        } catch (\Throwable $e) {
+            return [$resourceUri];
+        }
     }
 
     /**
@@ -80,18 +161,25 @@ class ChangeNotifier {
         try {
             SchemaManager::ensure($pdo);
             $queue = new QueueStorage($pdo);
-            $queue->enqueue(
-                $resourceUri,
-                self::topic($resourceUri),
-                true,
-                false,
-                $syncToken,
-                []
-            );
-            self::logger()->info('content notification enqueued', [
-                'resource' => $resourceUri,
-                'source'   => 'portal',
-            ]);
+            $paths = self::expandContentResourceUris($pdo, $resourceUri);
+            if ($paths === []) {
+                $paths = [$resourceUri];
+            }
+            foreach ($paths as $path) {
+                $queue->enqueue(
+                    $path,
+                    self::topic($path),
+                    true,
+                    false,
+                    $syncToken,
+                    []
+                );
+                self::logger()->info('content notification enqueued', [
+                    'resource' => $path,
+                    'source'   => 'portal',
+                    'trigger'  => $resourceUri,
+                ]);
+            }
         } catch (\Throwable $e) {
             self::logger()->error('portal enqueue failed', [
                 'resource' => $resourceUri,

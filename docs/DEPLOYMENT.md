@@ -604,7 +604,7 @@ services:
 Notification flow:
 
 1. The CalDAV/CardDAV client registers its public Push endpoint while connected to the LAN.
-2. A DAV change creates a local database queue job.
+2. A DAV (or portal) change creates local database queue job(s). For **shared calendars**, one content update fans out to every sharee/owner instance path so each client’s registered topic is notified (2.0.1+).
 3. The AngaraDAV worker sends an encrypted notification outbound over HTTPS port 443 to the public Push provider.
 4. The client receives the hint and connects directly to `https://angaradav.home.arpa/dav.php/` to synchronize.
 
@@ -673,6 +673,7 @@ Only one worker should run against a given `Specific/` directory; a mode-`0600` 
 5. If registrations are rejected, verify the endpoint uses public HTTPS port 443, its DNS records contain no private/reserved addresses, and its host is in `push_allowed_hosts` when an allowlist is configured.
 6. **Portal vs DAV:** changes made in `/portal/` (or `/api/`) write the calendar/contact DB directly. They update CalDAV/CardDAV sync tokens, and (when Push is enabled) enqueue the same WebDAV-Push jobs as `/dav.php/` writes. Older images only enqueued Push for SabreDAV (`/dav.php/`) mutations — portal creates would not wake DAVx5 until the next poll.
 7. **`registration rejected {"condition":"no-trigger-supported"}`:** older images rejected DAVx5 registrations that omit `<trigger>` (DAVx5 often sends only subscription + expires). Current images default omitted triggers to the collection’s supported content/property depths. Redeploy, then in DAVx5 disable/enable UnifiedPush or refresh collections so subscriptions re-register. Expect `subscription registered` in `Specific/push_debug.log`.
+8. **Shared calendar, second phone never wakes:** before **2.0.1**, content-update jobs used only the changed DAV path (usually the owner’s `calendars/{owner}/{uri}`). Sharees register push on their own instance path (`calendars/{sharee}/…`) with a different topic, so they only learned of changes on the next DAVx5 poll. From **2.0.1**, calendar content updates fan out to **every** `calendarinstances` row for that `calendarid` (owner + sharees), each with its own `resource_uri` and topic. Confirm with `push_log_level: info` that one write produces multiple `content notification enqueued` lines (`trigger` = original path, `resource` = each instance). Restart the push worker after upgrade.
 
 Keep normal client polling enabled at a reduced frequency. The experimental specification explicitly requires clients not to rely solely on Push.
 
@@ -730,6 +731,16 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.0.1
+
+- **WebDAV-Push shared-calendar fan-out:** when a calendar’s contents change (DAV or portal), enqueue a content-update job for **every** `calendarinstances` path that points at the same `calendarid` (owner + sharees), each with its own topic. Sharee DAVx⁵ clients now receive push instead of waiting for the scheduled poll only.
+- Tests cover path expansion and dual queue jobs for owner/sharee URIs.
+
+### 2.0.0
+
+- **Portal Administration:** `/api/admin/*` + SPA shell (users, settings, database with CONFIRM, installer at `/portal/install/`)
+- Classic Formal `/admin/` UI removed (redirects to portal)
 
 ### 1.0.0
 
