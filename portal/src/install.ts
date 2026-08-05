@@ -286,7 +286,10 @@ function render(): void {
     <div class="install-shell">
       <header class="install-header">
         <div>
-          <p class="install-kicker">AngaraDAV</p>
+          <p class="install-kicker">
+            <img class="brand-logo" src="/logo.png" width="28" height="28" alt="" aria-hidden="true" />
+            <span class="brand-text">Angara<span class="brand-dav">DAV</span></span>
+          </p>
           <h1>Setup wizard</h1>
           <p class="muted small">Product version <span class="mono">${esc(status?.productVersion || "…")}</span>
             ${status?.configuredVersion ? ` · configured <span class="mono">${esc(String(status.configuredVersion))}</span>` : ""}

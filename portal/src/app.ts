@@ -2598,9 +2598,13 @@ export function mountApp(root: HTMLElement): void {
     const brandLabel = inAdmin
       ? "AngaraDAV Administration Portal"
       : "AngaraDAV User Portal";
+    // Logo + brand wordmark: “DAV” uses primary button blue
+    const brandText = brandLabel.startsWith("AngaraDAV")
+      ? `Angara<span class="brand-dav">DAV</span>${esc(brandLabel.slice("AngaraDAV".length))}`
+      : esc(brandLabel);
     const brand = `
-      <span class="brand-mark" aria-hidden="true">A</span>
-      <span>${brandLabel}</span>`;
+      <img class="brand-logo" src="/logo.png" width="28" height="28" alt="" aria-hidden="true" />
+      <span class="brand-text">${brandText}</span>`;
     const displayName = user ? esc(user.displayname || user.username) : "";
     const adminMenuItem = adminUiEnabled()
       ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">

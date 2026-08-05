@@ -102,9 +102,20 @@ a:hover {
   display: block;
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
   border-radius: 7px;
-  object-fit: cover;
+  object-fit: contain;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.brand-text {
+  display: inline;
+  line-height: 1.2;
+}
+
+/* “DAV” segment of AngaraDAV — same blue as primary buttons */
+.brand-dav {
+  color: var(--primary);
 }
 
 .topnav-right {
@@ -1506,11 +1517,14 @@ body.layout-install {
 
 .install-kicker {
   margin: 0;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text);
+  font-weight: 700;
 }
 
 .install-footer {
@@ -1519,20 +1533,6 @@ body.layout-install {
 }
 
 /* --- AngaraDAV portal extras --- */
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 800;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
 .portal-grid {
   display: grid;
   /* Left column ~20% wider than before (340 → 408) */
