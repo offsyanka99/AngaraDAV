@@ -2,6 +2,7 @@
 
 namespace Baikal\Portal\Admin;
 
+use Baikal\Portal\AdminAuth;
 use Baikal\Portal\ApiException;
 
 /**
@@ -12,6 +13,12 @@ use Baikal\Portal\ApiException;
  * model destroy() path when Flake DB is available so file-home quarantine runs.
  */
 class AdminUserService {
+    /** Max DAV user password changes per IP per window. */
+    private const PASSWORD_RATE_MAX = 10;
+
+    /** Rate-limit window for user password changes (seconds). */
+    private const PASSWORD_RATE_WINDOW = 900;
+
     /** @var \PDO */
     private $pdo;
 
@@ -245,6 +252,9 @@ class AdminUserService {
             if ($password !== $passwordConfirm) {
                 throw new ApiException('Password confirmation does not match', 400);
             }
+            if ($this->isUserPasswordChangeRateLimited()) {
+                throw new ApiException('Too many password change attempts. Please try again later.', 429);
+            }
         }
 
         if (!$hasDisplay && !$hasEmail && !$changePassword) {
@@ -292,6 +302,9 @@ class AdminUserService {
             }
 
             $this->pdo->commit();
+            if ($changePassword) {
+                $this->registerUserPasswordChangeAttempt();
+            }
         } catch (ApiException $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -329,6 +342,13 @@ class AdminUserService {
         $count = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
         if ($count <= 1) {
             throw new ApiException('Cannot delete the last remaining user account', 400);
+        }
+        // Prevent removing the last portal Admin (env list / YAML / default "admin")
+        if (AdminAuth::userIsAdmin($username, $this->config) && $this->countAdminUsers() <= 1) {
+            throw new ApiException(
+                'Cannot delete the last user with the portal Admin role. Grant Admin to another user first (PORTAL_ADMIN_USERS or system.portal_admin_users).',
+                400
+            );
         }
         $userId = $this->userIdForUsername($username);
 
@@ -504,6 +524,109 @@ class AdminUserService {
         }
 
         return implode(',', $components);
+    }
+
+    /** How many DAV users currently hold the portal Admin role. */
+    private function countAdminUsers(): int {
+        try {
+            $stmt = $this->pdo->query('SELECT username FROM users');
+        } catch (\Throwable $e) {
+            return 0;
+        }
+        if ($stmt === false) {
+            return 0;
+        }
+        $n = 0;
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $u = (string) ($row['username'] ?? '');
+            if ($u !== '' && AdminAuth::userIsAdmin($u, $this->config)) {
+                ++$n;
+            }
+        }
+
+        return $n;
+    }
+
+    private function clientIp(): string {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+        return is_string($ip) && $ip !== '' ? $ip : '0.0.0.0';
+    }
+
+    private function userPasswordRatePath(): string {
+        $dir = defined('PROJECT_PATH_SPECIFIC')
+            ? PROJECT_PATH_SPECIFIC
+            : (defined('PROJECT_PATH_ROOT') ? PROJECT_PATH_ROOT . 'Specific/' : sys_get_temp_dir() . '/');
+
+        return rtrim($dir, '/') . '/portal_admin_user_password_rate.json';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadUserPasswordRateData(): array {
+        $path = $this->userPasswordRatePath();
+        if (!is_readable($path)) {
+            return [];
+        }
+        $raw = file_get_contents($path);
+        if ($raw === false || trim($raw) === '') {
+            return [];
+        }
+        $data = json_decode($raw, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function saveUserPasswordRateData(array $data): void {
+        $path = $this->userPasswordRatePath();
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        @file_put_contents($path, $json . "\n", LOCK_EX);
+    }
+
+    private function isUserPasswordChangeRateLimited(): bool {
+        $ip = $this->clientIp();
+        $data = $this->loadUserPasswordRateData();
+        $now = time();
+        $row = $data[$ip] ?? null;
+        if (!is_array($row)) {
+            return false;
+        }
+        $start = (int) ($row['start'] ?? 0);
+        $count = (int) ($row['count'] ?? 0);
+        if ($start <= 0 || ($now - $start) > self::PASSWORD_RATE_WINDOW) {
+            return false;
+        }
+
+        return $count >= self::PASSWORD_RATE_MAX;
+    }
+
+    private function registerUserPasswordChangeAttempt(): void {
+        $ip = $this->clientIp();
+        $data = $this->loadUserPasswordRateData();
+        $now = time();
+        $row = $data[$ip] ?? null;
+        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > self::PASSWORD_RATE_WINDOW) {
+            $data[$ip] = ['start' => $now, 'count' => 1];
+        } else {
+            $data[$ip]['count'] = (int) ($row['count'] ?? 0) + 1;
+        }
+        foreach ($data as $k => $v) {
+            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > self::PASSWORD_RATE_WINDOW * 2) {
+                unset($data[$k]);
+            }
+        }
+        $this->saveUserPasswordRateData($data);
     }
 
     /**

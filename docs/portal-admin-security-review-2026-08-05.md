@@ -231,14 +231,14 @@ Severity: **Critical / High / Medium / Low / Info**
 
 ## 7. Recommended follow-up engineering
 
-| Priority | Item |
-|----------|------|
-| P1 | Optional “test DB connection” before YAML write |
-| P1 | Re-prompt password on install database step (avoid session plaintext) |
-| P2 | Block deleting the last user who holds Admin role (env list aware) |
-| P2 | Rate-limit admin user password resets |
-| P3 | Require re-auth (password) for Reset to Default |
-| P3 | Content-Security-Policy already on nginx — keep `connect-src 'self'` |
+| Priority | Item | Status |
+|----------|------|--------|
+| P1 | Optional “test DB connection” before YAML write | **Done** — `POST /admin/settings/database/test` + auto-probe before CONFIRM save |
+| P1 | Re-prompt password on install database step (avoid session plaintext) | **Done** — password required on database step; no longer stored across steps |
+| P2 | Block deleting the last user who holds Admin role (env list aware) | **Done** — `AdminUserService::deleteUser` + env/YAML/default admin |
+| P2 | Rate-limit admin user password resets | **Done** — IP rate limit on DAV user password change (10/15m) |
+| P3 | Require re-auth (password) for Reset to Default | **Done** — `password` required; verified via digesta1 |
+| P3 | Content-Security-Policy already on nginx — keep `connect-src 'self'` | Already in place |
 
 ---
 

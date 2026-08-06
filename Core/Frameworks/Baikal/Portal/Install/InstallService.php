@@ -193,8 +193,8 @@ class InstallService {
         // portal_admin_users is not on Config\Standard morphology; write via YAML merge
         $this->ensurePortalAdminUsersYaml();
 
-        // Keep password for database step → create DAV user "admin" for /portal/ login
-        $this->storeBootstrapAdminPassword($password);
+        // Do not keep plaintext password in the session across steps (re-prompt on database step)
+        $this->clearBootstrapAdminPassword();
 
         // Legacy pre-0.7 cleanup (same as classic Initialize)
         if (is_file($this->specificDir . '/INSTALL_DISABLED')) {
@@ -221,7 +221,8 @@ class InstallService {
         $out = $this->status();
         $out['portalUser'] = self::PORTAL_ADMIN_USERNAME;
         $out['message'] = 'Server settings saved. Next: configure the database. '
-            . 'DAV user “' . self::PORTAL_ADMIN_USERNAME . '” will be created with this password for /portal/ login.';
+            . 'Re-enter the admin password on the next step — it creates DAV user “'
+            . self::PORTAL_ADMIN_USERNAME . '” for /portal/ login (password is not kept in the session).';
 
         return $out;
     }
@@ -238,6 +239,30 @@ class InstallService {
         if (($status['step'] ?? '') !== 'database') {
             throw new ApiException('Database step is not available (current step: ' . (string) ($status['step'] ?? '?') . ')', 409);
         }
+
+        // Re-prompt admin password (do not rely on session plaintext)
+        $password = (string) ($body['admin_password'] ?? '');
+        $passwordConfirm = (string) ($body['admin_password_confirm'] ?? $body['admin_passwordConfirm'] ?? '');
+        if ($password === '' && $passwordConfirm === '') {
+            // One-release fallback for in-flight installs that still have a session password
+            $fallback = $this->bootstrapAdminPassword();
+            if ($fallback !== null) {
+                $password = $fallback;
+                $passwordConfirm = $fallback;
+            }
+        }
+        if ($password === '' || $passwordConfirm === '') {
+            throw new ApiException('Re-enter admin password and confirmation to create the portal admin user', 400);
+        }
+        if ($password !== $passwordConfirm) {
+            throw new ApiException('Admin password confirmation does not match', 400);
+        }
+        if (strlen($password) < 8) {
+            throw new ApiException('Admin password must be at least 8 characters', 400);
+        }
+        // Prefer re-entered password for DAV user creation
+        $body['admin_password'] = $password;
+        $body['admin_password_confirm'] = $passwordConfirm;
 
         $backend = strtolower(trim((string) ($body['backend'] ?? 'sqlite')));
         if (!in_array($backend, ['sqlite', 'pgsql'], true)) {
@@ -256,9 +281,13 @@ class InstallService {
         }
 
         // Create DAV user "admin" so the install password works on /portal/
-        $portalUserCreated = $this->ensurePortalAdminUser($backend === 'sqlite'
-            ? trim((string) ($body['sqlite_file'] ?? ($this->specificDir . '/db/db.sqlite')))
-            : null, $body);
+        $portalUserCreated = $this->ensurePortalAdminUser(
+            $backend === 'sqlite'
+                ? trim((string) ($body['sqlite_file'] ?? ($this->specificDir . '/db/db.sqlite')))
+                : null,
+            $body,
+            $password
+        );
 
         @touch($this->installDisabledPath());
         $this->registerRateAttempt();
@@ -303,13 +332,19 @@ class InstallService {
     }
 
     /**
-     * Create or update DAV user "admin" with the bootstrap password (same as classic admin password).
+     * Create or update DAV user "admin" with the password re-entered on the database step.
      *
      * @param array<string, mixed> $body Database step body (pgsql credentials when needed)
      */
-    private function ensurePortalAdminUser(?string $sqliteFile, array $body): bool {
-        $password = $this->bootstrapAdminPassword();
-        if ($password === null || $password === '') {
+    private function ensurePortalAdminUser(?string $sqliteFile, array $body, string $password = ''): bool {
+        if ($password === '') {
+            $password = (string) ($body['admin_password'] ?? '');
+        }
+        if ($password === '') {
+            $fallback = $this->bootstrapAdminPassword();
+            $password = $fallback ?? '';
+        }
+        if ($password === '') {
             return false;
         }
 

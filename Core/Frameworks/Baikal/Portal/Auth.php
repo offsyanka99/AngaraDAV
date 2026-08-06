@@ -98,6 +98,37 @@ class Auth {
     }
 
     /**
+     * Verify DAV credentials without creating a session (re-auth for dangerous admin actions).
+     * Uses the same digesta1 scheme as login. Failed attempts count toward login rate limit.
+     */
+    public function verifyPassword(string $username, string $password): bool {
+        $username = trim($username);
+        if ($username === '' || $password === '') {
+            return false;
+        }
+        if ($this->isRateLimited()) {
+            throw new ApiException('Too many authentication attempts. Please try again later.', 429);
+        }
+        $stmt = $this->pdo->prepare('SELECT username, digesta1 FROM users WHERE username = ?');
+        $stmt->execute([$username]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$row) {
+            $this->registerFailedAttempt();
+
+            return false;
+        }
+        $hash = md5($username . ':' . $this->authRealm . ':' . $password);
+        if (!hash_equals((string) $row['digesta1'], $hash)) {
+            $this->registerFailedAttempt();
+
+            return false;
+        }
+        $this->clearFailedAttempts();
+
+        return true;
+    }
+
+    /**
      * @return array{username: string, displayname: string, email: string, principal: string, csrfToken: string}
      */
     public function login(string $username, string $password): array {

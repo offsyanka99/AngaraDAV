@@ -416,6 +416,7 @@ export function mountApp(root: HTMLElement): void {
   /** Reset-to-default confirmation modal (factory reset → installer) */
   let adminResetModalOpen = false;
   let adminResetConfirmChecked = false;
+  let adminResetPassword = "";
   /** Database settings (Phase 8 / 8.2 write with CONFIRM) */
   let adminDatabaseSettings: AdminDatabaseSettings | null = null;
   let adminDatabaseSettingsLoading = false;
@@ -667,6 +668,7 @@ export function mountApp(root: HTMLElement): void {
     adminSystemSettingsError = null;
     adminResetModalOpen = false;
     adminResetConfirmChecked = false;
+    adminResetPassword = "";
     adminDatabaseSettings = null;
     adminDatabaseSettingsLoading = false;
     adminDatabaseSettingsError = null;
@@ -1093,7 +1095,7 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
-  function onAdminDatabaseFormSubmit(form: HTMLFormElement): void {
+  function collectAdminDatabaseFormBody(form: HTMLFormElement): Record<string, unknown> {
     const fd = new FormData(form);
     const backend = String(fd.get("backend") ?? adminDbFormBackend).toLowerCase() === "pgsql" ? "pgsql" : "sqlite";
     const body: Record<string, unknown> = { backend };
@@ -1105,11 +1107,40 @@ export function mountApp(root: HTMLElement): void {
       body.pgsql_username = String(fd.get("pgsql_username") ?? "").trim();
       body.pgsql_password = String(fd.get("pgsql_password") ?? "");
     }
-    adminDbPendingBody = body;
+    return body;
+  }
+
+  function onAdminDatabaseFormSubmit(form: HTMLFormElement): void {
+    adminDbPendingBody = collectAdminDatabaseFormBody(form);
     adminDbConfirmText = "";
     adminDbConfirmOpen = true;
     clearFlash();
     render();
+  }
+
+  async function onAdminDatabaseTest(form: HTMLFormElement | null): Promise<void> {
+    if (!form) {
+      form = root.querySelector<HTMLFormElement>('[data-form="admin-database"]');
+    }
+    if (!form) {
+      setFlash("error", "Database form not found");
+      render();
+      return;
+    }
+    const body = collectAdminDatabaseFormBody(form);
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminTestDatabaseConnection(body);
+      setFlash("success", res.message || "Connection successful");
+      log.event("admin.database.test", { backend: res.backend });
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Connection test failed");
+    } finally {
+      busy = false;
+      render();
+    }
   }
 
   async function onAdminSettingsSave(form: HTMLFormElement): Promise<void> {
@@ -5099,14 +5130,18 @@ export function mountApp(root: HTMLElement): void {
             checked: adminResetConfirmChecked,
             disabled: busy,
             style: "admin",
-          })}`,
+          })}
+          <label style="margin-top:1rem">Your portal password
+            <input type="password" data-action="admin-reset-password" value="${esc(adminResetPassword)}"
+              autocomplete="current-password" placeholder="Re-enter password to confirm" ${busy ? "disabled" : ""} />
+          </label>`,
       footer: [
         { label: "Cancel", action: "admin-reset-close", variant: "ghost", disabled: busy },
         {
           label: "Reset and open installer",
           action: "admin-reset-confirm",
           variant: "danger",
-          disabled: busy || !adminResetConfirmChecked,
+          disabled: busy || !adminResetConfirmChecked || adminResetPassword.trim() === "",
         },
       ],
     });
@@ -5203,6 +5238,7 @@ export function mountApp(root: HTMLElement): void {
             </label>
           </div>
           <div class="form-actions-row" style="margin-top:1rem">
+            <button type="button" class="btn btn-ghost" data-action="admin-db-test" ${busy || notWritable ? "disabled" : ""}>Test connection</button>
             <button type="submit" class="btn btn-primary" ${busy || notWritable ? "disabled" : ""}>Save database settings…</button>
           </div>
         </form>
@@ -6114,6 +6150,17 @@ export function mountApp(root: HTMLElement): void {
       const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-db-confirm-save"]');
       if (btn) {
         btn.disabled = busy || adminDbConfirmText.trim() !== "CONFIRM";
+      }
+    });
+    const adminResetPw = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-reset-password"]',
+    );
+    adminResetPw?.addEventListener("input", () => {
+      adminResetPassword = adminResetPw.value;
+      const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-reset-confirm"]');
+      if (btn) {
+        btn.disabled =
+          busy || !adminResetConfirmChecked || adminResetPassword.trim() === "";
       }
     });
     const noteSearchInput = root.querySelector<HTMLInputElement>('input[data-action="note-search"]');
@@ -7658,6 +7705,7 @@ export function mountApp(root: HTMLElement): void {
     if (action === "admin-reset-open") {
       adminResetModalOpen = true;
       adminResetConfirmChecked = false;
+      adminResetPassword = "";
       clearFlash();
       render();
       return;
@@ -7665,6 +7713,7 @@ export function mountApp(root: HTMLElement): void {
     if (action === "admin-reset-close") {
       adminResetModalOpen = false;
       adminResetConfirmChecked = false;
+      adminResetPassword = "";
       render();
       return;
     }
@@ -7674,16 +7723,33 @@ export function mountApp(root: HTMLElement): void {
       render();
       return;
     }
+    if (action === "admin-reset-password") {
+      adminResetPassword = (t as HTMLInputElement).value;
+      // Avoid full re-render on every keystroke; enable button via live value next confirm
+      const btn = root.querySelector<HTMLButtonElement>(
+        '[data-action="admin-reset-confirm"]',
+      );
+      if (btn) {
+        btn.disabled = busy || !adminResetConfirmChecked || adminResetPassword.trim() === "";
+      }
+      return;
+    }
     if (action === "admin-reset-confirm") {
       if (!adminResetConfirmChecked) return;
+      if (adminResetPassword.trim() === "") {
+        setFlash("error", "Re-enter your password to confirm Reset to Default");
+        render();
+        return;
+      }
       busy = true;
       clearFlash();
       render();
       try {
-        const res = await api.adminResetToDefault(true);
+        const res = await api.adminResetToDefault(true, adminResetPassword);
         log.event("admin.settings.reset-to-default");
         adminResetModalOpen = false;
         adminResetConfirmChecked = false;
+        adminResetPassword = "";
         const dest =
           res.redirectUrl && res.redirectUrl.startsWith("/")
             ? res.redirectUrl
@@ -7716,6 +7782,11 @@ export function mountApp(root: HTMLElement): void {
       const sel = t as HTMLSelectElement;
       adminDbFormBackend = sel.value === "pgsql" ? "pgsql" : "sqlite";
       render();
+      return;
+    }
+    if (action === "admin-db-test") {
+      const form = t.closest("form") as HTMLFormElement | null;
+      void onAdminDatabaseTest(form);
       return;
     }
     if (action === "admin-db-confirm-close") {

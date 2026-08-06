@@ -939,18 +939,24 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  /** Factory reset: remove baikal.yaml + INSTALL_DISABLED; then open installer. */
-  adminResetToDefault: (confirm = true) =>
+  /** Factory reset: remove baikal.yaml + INSTALL_DISABLED; then open installer. Requires current password. */
+  adminResetToDefault: (confirm = true, password = "") =>
     request<{ ok: boolean; redirectUrl: string; backupPath?: string | null }>(
       "/admin/settings/reset-to-default",
       {
         method: "POST",
-        body: JSON.stringify({ confirm }),
+        body: JSON.stringify({ confirm, password }),
       },
     ),
   /** Database connection summary (never password). */
   adminDatabaseSettings: () =>
     request<{ data: AdminDatabaseSettings }>("/admin/settings/database"),
+  /** Live connection probe without writing YAML. */
+  adminTestDatabaseConnection: (body: Record<string, unknown>) =>
+    request<{ ok: boolean; backend: string; message: string }>(
+      "/admin/settings/database/test",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   /** Update database settings — body must include confirm: "CONFIRM". */
   adminUpdateDatabaseSettings: (body: Record<string, unknown>) =>
     request<{ data: AdminDatabaseSettings }>("/admin/settings/database", {

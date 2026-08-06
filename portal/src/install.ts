@@ -212,6 +212,14 @@ function renderDatabase(): string {
           <input type="password" name="pgsql_password" autocomplete="new-password" ${busy ? "disabled" : ""} />
         </label>
       </div>
+      <h3 class="admin-subsection-title">Confirm admin password</h3>
+      <p class="muted small">Re-enter the admin password from step 1. It is not stored in the browser session; it creates DAV user <span class="mono">admin</span> for portal login.</p>
+      <label>Admin password
+        <input type="password" name="admin_password" required autocomplete="new-password" minlength="8" ${busy ? "disabled" : ""} />
+      </label>
+      <label>Confirm admin password
+        <input type="password" name="admin_password_confirm" required autocomplete="new-password" minlength="8" ${busy ? "disabled" : ""} />
+      </label>
       <div class="form-actions-row" style="margin-top:1rem">
         <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create database and finish</button>
       </div>
@@ -395,7 +403,11 @@ async function onInitialize(form: HTMLFormElement): Promise<void> {
 async function onDatabase(form: HTMLFormElement): Promise<void> {
   const fd = new FormData(form);
   const be = String(fd.get("backend") ?? backend);
-  const body: Record<string, unknown> = { backend: be };
+  const body: Record<string, unknown> = {
+    backend: be,
+    admin_password: String(fd.get("admin_password") ?? ""),
+    admin_password_confirm: String(fd.get("admin_password_confirm") ?? ""),
+  };
   if (be === "sqlite") {
     body.sqlite_file = String(fd.get("sqlite_file") ?? "").trim();
   } else {

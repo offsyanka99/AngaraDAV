@@ -233,6 +233,55 @@ try {
     assert_true($e->getStatus() === 400, 'delete last user → 400');
 }
 
+// --- Last Admin role user (default: username "admin") ---
+$pdoAdmin = fresh_pdo();
+$svcAdmin = new AdminUserService($pdoAdmin, ['system' => ['auth_realm' => 'BaikalDAV']]);
+$svcAdmin->createUser([
+    'username'        => 'admin',
+    'displayname'     => 'Admin',
+    'email'           => 'admin@example.com',
+    'password'        => 'secret',
+    'passwordConfirm' => 'secret',
+]);
+$svcAdmin->createUser([
+    'username'        => 'alice',
+    'displayname'     => 'Alice',
+    'email'           => 'alice@example.com',
+    'password'        => 'secret',
+    'passwordConfirm' => 'secret',
+]);
+try {
+    $svcAdmin->deleteUser('admin', true);
+    assert_true(false, 'delete sole Admin role user should fail');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400 && str_contains($e->getMessage(), 'Admin'), 'delete last Admin → 400');
+}
+// alice is not Admin by default — can be deleted while admin remains
+$svcAdmin->deleteUser('alice', true);
+assert_true((int) $pdoAdmin->query("SELECT COUNT(*) FROM users WHERE username='alice'")->fetchColumn() === 0, 'non-admin deleted');
+
+// Env list: only bob is Admin — deleting bob blocked even with other users
+putenv('PORTAL_ADMIN_USERS=bob');
+$pdoEnv = fresh_pdo();
+$svcEnv = new AdminUserService($pdoEnv, ['system' => ['auth_realm' => 'BaikalDAV']]);
+$svcEnv->createUser([
+    'username' => 'bob', 'displayname' => 'Bob', 'email' => 'bob@example.com',
+    'password' => 'secret', 'passwordConfirm' => 'secret',
+]);
+$svcEnv->createUser([
+    'username' => 'carol', 'displayname' => 'Carol', 'email' => 'carol@example.com',
+    'password' => 'secret', 'passwordConfirm' => 'secret',
+]);
+try {
+    $svcEnv->deleteUser('bob', true);
+    assert_true(false, 'delete last env Admin should fail');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400 && str_contains($e->getMessage(), 'Admin'), 'env last Admin → 400');
+}
+$svcEnv->deleteUser('carol', true);
+assert_true((int) $pdoEnv->query("SELECT COUNT(*) FROM users")->fetchColumn() === 1, 'non-admin carol deleted under env list');
+putenv('PORTAL_ADMIN_USERS'); // clear
+
 if ($failures > 0) {
     echo "\n$failures failure(s)\n";
     exit(1);

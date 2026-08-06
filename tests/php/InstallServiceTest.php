@@ -103,9 +103,20 @@ try {
     assert_true(!empty($raw['database']['encryption_key']), 'encryption key set');
 
     $sqlite = $specific . '/db/db.sqlite';
+    try {
+        $svc->configureDatabase([
+            'backend'     => 'sqlite',
+            'sqlite_file' => $sqlite,
+        ]);
+        assert_true(false, 'database without re-entered password should fail');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'database without password → 400');
+    }
     $st3 = $svc->configureDatabase([
-        'backend'     => 'sqlite',
-        'sqlite_file' => $sqlite,
+        'backend'                 => 'sqlite',
+        'sqlite_file'             => $sqlite,
+        'admin_password'          => 'test-admin-pass',
+        'admin_password_confirm'  => 'test-admin-pass',
     ]);
     assert_true(!empty($st3['completed']) || ($st3['step'] ?? '') === 'done', 'after database → done');
     assert_true(is_file($specific . '/INSTALL_DISABLED'), 'INSTALL_DISABLED created');

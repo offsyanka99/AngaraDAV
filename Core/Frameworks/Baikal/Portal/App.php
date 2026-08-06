@@ -829,6 +829,13 @@ class App {
             if ($method === 'POST') {
                 $body = $this->jsonBody();
                 $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
+                $reauthPassword = (string) ($body['password'] ?? $body['admin_password'] ?? '');
+                if ($reauthPassword === '') {
+                    throw new ApiException('Re-enter your password to confirm Reset to Default', 400);
+                }
+                if (!$this->auth->verifyPassword($adminUser, $reauthPassword)) {
+                    throw new ApiException('Password verification failed', 401);
+                }
                 try {
                     $result = $this->adminSettings->resetToDefault($confirm);
                     $this->adminAudit->mutation(
@@ -861,6 +868,24 @@ class App {
                     );
                     throw $e;
                 }
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Optional live connection probe (no YAML write)
+        if ($adminPath === '/admin/settings/database/test' || $adminPath === '/admin/settings/database/test/') {
+            if ($method === 'POST') {
+                $body = $this->jsonBody();
+                $result = $this->adminSettings->testDatabaseConnection($body);
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'test-database-connection',
+                    'database',
+                    'ok',
+                    ['backend' => $result['backend'] ?? null]
+                );
+
+                return $result;
             }
             throw new ApiException('Method not allowed', 405);
         }

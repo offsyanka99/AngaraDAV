@@ -158,6 +158,22 @@ try {
     } catch (ApiException $e) {
         assert_true($e->getStatus() === 400, 'db write without CONFIRM → 400');
     }
+    // Optional connection test (sqlite dir/file probe)
+    $testOk = $svcDb->testDatabaseConnection([
+        'backend'     => 'sqlite',
+        'sqlite_file' => '/tmp/portal-admin-db-test.sqlite',
+    ]);
+    assert_true(($testOk['ok'] ?? false) === true, 'test connection ok');
+    try {
+        $svcDb->testDatabaseConnection([
+            'backend'     => 'sqlite',
+            'sqlite_file' => 'relative/not-absolute.sqlite',
+        ]);
+        assert_true(false, 'relative sqlite path should fail test');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'bad sqlite path test → 400');
+    }
+
     $svcDb->updateDatabaseSettings([
         'backend'     => 'sqlite',
         'sqlite_file' => '/tmp/portal-admin-db.sqlite',

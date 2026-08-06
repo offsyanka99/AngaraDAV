@@ -456,6 +456,32 @@ class AdminSettingsService {
      *
      * @return array<string, mixed>
      */
+    /**
+     * Probe DB connectivity without writing YAML.
+     * Empty pgsql_password uses the currently stored password when present.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array{ok: true, backend: string, message: string}
+     */
+    public function testDatabaseConnection(array $body): array {
+        $this->assertNoForbiddenBodyKeys($body);
+        if (array_key_exists('encryption_key', $body) || array_key_exists('encryptionKey', $body)) {
+            throw new ApiException('Refusing to accept encryption_key in request body', 400);
+        }
+        $this->document = $this->loadDocument();
+        $merged = $this->mergeDatabaseBody($body);
+        $this->assertDatabaseReachable($merged);
+
+        return [
+            'ok'      => true,
+            'backend' => (string) $merged['backend'],
+            'message' => $merged['backend'] === 'sqlite'
+                ? 'SQLite path is reachable and writable.'
+                : 'PostgreSQL connection succeeded.',
+        ];
+    }
+
     public function updateDatabaseSettings(array $body): array {
         if (!$this->isWritable()) {
             throw new ApiException('Config file is not writable', 503);
@@ -480,41 +506,20 @@ class AdminSettingsService {
             $this->document['database'] = [];
         }
         $db = &$this->document['database'];
+        $merged = $this->mergeDatabaseBody($body);
 
-        $backend = strtolower(trim((string) ($body['backend'] ?? ($db['backend'] ?? 'sqlite'))));
-        if (!in_array($backend, ['sqlite', 'pgsql'], true)) {
-            throw new ApiException('Backend must be sqlite or pgsql', 400);
-        }
-        $db['backend'] = $backend;
+        // Live connection test before writing (prevents bricking with unreachable DSN)
+        $this->assertDatabaseReachable($merged);
 
-        if ($backend === 'sqlite') {
-            $sqlite = trim((string) ($body['sqlite_file'] ?? ($db['sqlite_file'] ?? '')));
-            if ($sqlite === '') {
-                throw new ApiException('SQLite file path is required', 400);
-            }
-            if ($sqlite[0] !== '/') {
-                throw new ApiException('SQLite file path must be absolute', 400);
-            }
-            if (str_contains($sqlite, "\0") || preg_match('#/\.\.(/|$)#', $sqlite)) {
-                throw new ApiException('Invalid SQLite path', 400);
-            }
-            $db['sqlite_file'] = $sqlite;
+        $db['backend'] = $merged['backend'];
+        if ($merged['backend'] === 'sqlite') {
+            $db['sqlite_file'] = $merged['sqlite_file'];
         } else {
-            $host = trim((string) ($body['pgsql_host'] ?? ''));
-            $dbname = trim((string) ($body['pgsql_dbname'] ?? ''));
-            $username = trim((string) ($body['pgsql_username'] ?? ''));
-            if ($host === '' || $dbname === '') {
-                throw new ApiException('PostgreSQL host and database name are required', 400);
-            }
-            $db['pgsql_host'] = $host;
-            $db['pgsql_dbname'] = $dbname;
-            $db['pgsql_username'] = $username;
-            if (array_key_exists('pgsql_password', $body)) {
-                $pw = (string) $body['pgsql_password'];
-                // Empty string = keep existing password
-                if ($pw !== '') {
-                    $db['pgsql_password'] = $pw;
-                }
+            $db['pgsql_host'] = $merged['pgsql_host'];
+            $db['pgsql_dbname'] = $merged['pgsql_dbname'];
+            $db['pgsql_username'] = $merged['pgsql_username'];
+            if (array_key_exists('pgsql_password', $merged)) {
+                $db['pgsql_password'] = $merged['pgsql_password'];
             }
         }
 
@@ -526,6 +531,106 @@ class AdminSettingsService {
         $this->writeDocument($this->document);
 
         return $this->getDatabaseSettings();
+    }
+
+    /**
+     * Build candidate database settings from request body + current document.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    private function mergeDatabaseBody(array $body): array {
+        $current = is_array($this->document['database'] ?? null) ? $this->document['database'] : [];
+        $backend = strtolower(trim((string) ($body['backend'] ?? ($current['backend'] ?? 'sqlite'))));
+        if (!in_array($backend, ['sqlite', 'pgsql'], true)) {
+            throw new ApiException('Backend must be sqlite or pgsql', 400);
+        }
+        $out = ['backend' => $backend];
+        if ($backend === 'sqlite') {
+            $sqlite = trim((string) ($body['sqlite_file'] ?? ($current['sqlite_file'] ?? '')));
+            if ($sqlite === '') {
+                throw new ApiException('SQLite file path is required', 400);
+            }
+            if ($sqlite[0] !== '/') {
+                throw new ApiException('SQLite file path must be absolute', 400);
+            }
+            if (str_contains($sqlite, "\0") || preg_match('#/\.\.(/|$)#', $sqlite)) {
+                throw new ApiException('Invalid SQLite path', 400);
+            }
+            $out['sqlite_file'] = $sqlite;
+        } else {
+            $host = trim((string) ($body['pgsql_host'] ?? ($current['pgsql_host'] ?? '')));
+            $dbname = trim((string) ($body['pgsql_dbname'] ?? ($current['pgsql_dbname'] ?? '')));
+            $username = trim((string) ($body['pgsql_username'] ?? ($current['pgsql_username'] ?? '')));
+            if ($host === '' || $dbname === '') {
+                throw new ApiException('PostgreSQL host and database name are required', 400);
+            }
+            $out['pgsql_host'] = $host;
+            $out['pgsql_dbname'] = $dbname;
+            $out['pgsql_username'] = $username;
+            if (array_key_exists('pgsql_password', $body)) {
+                $pw = (string) $body['pgsql_password'];
+                if ($pw !== '') {
+                    $out['pgsql_password'] = $pw;
+                } elseif (isset($current['pgsql_password'])) {
+                    $out['pgsql_password'] = (string) $current['pgsql_password'];
+                } else {
+                    $out['pgsql_password'] = '';
+                }
+            } else {
+                $out['pgsql_password'] = (string) ($current['pgsql_password'] ?? '');
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $db
+     */
+    private function assertDatabaseReachable(array $db): void {
+        $backend = (string) ($db['backend'] ?? 'sqlite');
+        try {
+            if ($backend === 'sqlite') {
+                $file = (string) ($db['sqlite_file'] ?? '');
+                $dir = dirname($file);
+                if (!is_dir($dir)) {
+                    if (!@mkdir($dir, 0755, true) && !is_dir($dir)) {
+                        throw new ApiException('SQLite directory does not exist and could not be created: ' . $dir, 400);
+                    }
+                }
+                if (!is_writable($dir)) {
+                    throw new ApiException('SQLite directory is not writable: ' . $dir, 400);
+                }
+                if (is_file($file) && !is_writable($file)) {
+                    throw new ApiException('SQLite file is not writable: ' . $file, 400);
+                }
+                $pdo = new \PDO('sqlite:' . $file, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+                $pdo->query('SELECT 1');
+            } else {
+                $host = (string) ($db['pgsql_host'] ?? '');
+                $dbname = (string) ($db['pgsql_dbname'] ?? '');
+                $username = (string) ($db['pgsql_username'] ?? '');
+                $password = (string) ($db['pgsql_password'] ?? '');
+                $dsnHost = $host;
+                $port = null;
+                if (preg_match('/^(.+):(\d+)$/', $host, $m)) {
+                    $dsnHost = $m[1];
+                    $port = $m[2];
+                }
+                $dsn = 'pgsql:host=' . $dsnHost . ($port ? ';port=' . $port : '') . ';dbname=' . $dbname;
+                $pdo = new \PDO($dsn, $username, $password, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+                $pdo->query('SELECT 1');
+            }
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new ApiException(
+                'Database connection failed: ' . $e->getMessage(),
+                400
+            );
+        }
     }
 
     /**
