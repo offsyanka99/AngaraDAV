@@ -8521,13 +8521,14 @@ export function mountApp(root: HTMLElement): void {
       render();
       try {
         const { blob, filename } = await api.exportAddressBook(abId);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -8547,13 +8548,14 @@ export function mountApp(root: HTMLElement): void {
           selectedAbId,
           selectedContactUri,
         );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -8595,13 +8597,14 @@ export function mountApp(root: HTMLElement): void {
       render();
       try {
         const { blob, filename } = await api.exportCalendar(calId);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -8609,6 +8612,56 @@ export function mountApp(root: HTMLElement): void {
         render();
       }
     }
+  }
+
+  /**
+   * Save a blob to disk. Prefer the File System Access picker when available
+   * (true cancel detection). Fall back to a temporary object-URL download —
+   * do not revoke the URL immediately or browsers cancel the download.
+   */
+  async function saveBlobAsFile(
+    blob: Blob,
+    filename: string,
+  ): Promise<"saved" | "cancelled" | "started"> {
+    const w = window as Window & {
+      showSaveFilePicker?: (opts: {
+        suggestedName?: string;
+      }) => Promise<FileSystemFileHandle>;
+    };
+    if (typeof w.showSaveFilePicker === "function") {
+      try {
+        const handle = await w.showSaveFilePicker({ suggestedName: filename });
+        const writable = await handle.createWritable();
+        try {
+          await writable.write(blob);
+        } finally {
+          await writable.close();
+        }
+        return "saved";
+      } catch (e) {
+        // User cancelled the save dialog
+        if (e instanceof DOMException && e.name === "AbortError") {
+          return "cancelled";
+        }
+        // No user activation / unsupported context → fall through to <a download>
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    // Keep the blob URL alive until the browser has started reading it.
+    // Immediate revokeObjectURL often aborts the download (looks like Cancel).
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 60_000);
+    return "started";
   }
 
   function bindImportInput() {
