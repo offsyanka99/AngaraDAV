@@ -4,6 +4,7 @@ namespace Baikal\Portal\Install;
 
 use Baikal\Portal\ApiException;
 use Baikal\Portal\Auth;
+use Baikal\Portal\SameOrigin;
 
 /**
  * JSON router for unauthenticated install/upgrade API under /api/install/*.
@@ -141,38 +142,7 @@ class InstallApp {
     }
 
     private function assertSameOrigin(): void {
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        if ($host === '') {
-            return;
-        }
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        if (is_string($origin) && $origin !== '') {
-            $parts = parse_url($origin);
-            $oh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $oh .= ':' . $parts['port'];
-            }
-            if ($oh === '' || strcasecmp($oh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-
-            return;
-        }
-        $referer = $_SERVER['HTTP_REFERER'] ?? '';
-        if (is_string($referer) && $referer !== '') {
-            $parts = parse_url($referer);
-            $rh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $rh .= ':' . $parts['port'];
-            }
-            if ($rh !== '' && strcasecmp($rh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-
-            return;
-        }
-        // Install bootstrap is unauthenticated — require browser origin signals
-        throw new ApiException('Missing Origin or Referer on state-changing request', 403);
+        SameOrigin::assert($_SERVER);
     }
 
     /**

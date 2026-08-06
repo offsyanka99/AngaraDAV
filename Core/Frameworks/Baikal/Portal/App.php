@@ -1520,39 +1520,7 @@ class App {
      * Fail closed when neither Origin nor Referer is present on state-changing calls.
      */
     private function assertSameOrigin(): void {
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        if ($host === '') {
-            return;
-        }
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        if (is_string($origin) && $origin !== '') {
-            $parts = parse_url($origin);
-            $oh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $oh .= ':' . $parts['port'];
-            }
-            if ($oh === '' || strcasecmp($oh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-
-            return;
-        }
-        $referer = $_SERVER['HTTP_REFERER'] ?? '';
-        if (is_string($referer) && $referer !== '') {
-            $parts = parse_url($referer);
-            $rh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $rh .= ':' . $parts['port'];
-            }
-            if ($rh !== '' && strcasecmp($rh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-
-            return;
-        }
-        // No Origin/Referer: non-browser clients or stripped headers — require explicit same-site hint
-        // (browser form/fetch always sends one of these for same-origin POSTs).
-        throw new ApiException('Missing Origin or Referer on state-changing request', 403);
+        SameOrigin::assert($_SERVER);
     }
 
     /** @var string|null Raw php://input (one-shot stream — cache for reuse) */

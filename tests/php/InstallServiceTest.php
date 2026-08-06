@@ -129,6 +129,24 @@ try {
     } catch (ApiException $e) {
         assert_true($e->getStatus() === 409, 'database when done → 409');
     }
+
+    // Version base compare: same base + different build SHA must not force upgrade step
+    $raw = Yaml::parseFile($path);
+    $base = defined('BAIKAL_VERSION_BASE') ? (string) BAIKAL_VERSION_BASE : '2.0.2';
+    $raw['system']['configured_version'] = $base . '+deadbeef';
+    file_put_contents($path, Yaml::dump($raw));
+    $stSameBase = $svc->status();
+    assert_true(
+        ($stSameBase['step'] ?? '') === 'done',
+        'same version base with different +sha stays done (no false upgrade)'
+    );
+
+    // Older base forces upgrade wizard
+    $raw['system']['configured_version'] = '1.0.0';
+    file_put_contents($path, Yaml::dump($raw));
+    $stUpgrade = $svc->status();
+    assert_true(($stUpgrade['step'] ?? '') === 'upgrade', 'older configured_version → upgrade step');
+    assert_true(($stUpgrade['locked'] ?? true) === false, 'upgrade step is not locked');
 } finally {
     // cleanup
     $it = new RecursiveIteratorIterator(

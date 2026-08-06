@@ -737,6 +737,7 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 - **Upgrade gate UX:** portal login shows a clear message when `/portal/install/` upgrade (or first setup) is required; portal `/api/*` returns **JSON 503** (`code: upgrade_required`) instead of an HTML 302 to the installer.
 - **Version compare** uses product **base** only, so image rebuilds that only change the build SHA do not force the wizard. Display format is `2.0.2+<sha>` (no `git.` segment).
 - **Calendar multi-select:** check multiple calendars to show combined events on the month grid (each calendar’s colour).
+- Security: upgrade `guzzlehttp/guzzle` to **7.15.3** (CVE-2026-69245 / CVE-2026-69246). Deduplicate portal/install same-origin checks into `Baikal\Portal\SameOrigin` with unit tests.
 
 ### 2.0.1
 
