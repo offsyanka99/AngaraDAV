@@ -1,7 +1,14 @@
 import os, sys, importlib.util, traceback, mechanicalsoup
-from tests.test_helpers import BASE_URL, ADMIN_PASSWORD
+from tests.test_helpers import BASE_URL, ADMIN_PASSWORD, SkipTest
 
 FAILED = False
+
+# Modules under tests/ that are helpers or pytest-only (not run_tests targets).
+_SKIP_MODULES = {
+    "test_helpers.py",
+    "portal_api_helpers.py",
+    "portal_admin_e2e.py",  # pytest e2e; run separately with pytest
+}
 
 # Keep in sync with tests/test_helpers.py ADMIN_PASSWORD
 TEST_ADMIN_PASSWORD = "secret123"
@@ -58,9 +65,15 @@ def remove_config():
 def load_tests(path):
     files = []
     for r, _, f in os.walk(path):
+        # PHP unit tests live under tests/php/ and are run by the CI job separately.
+        if os.path.basename(r) == "php" or f"{os.sep}php{os.sep}" in (r + os.sep):
+            continue
         for x in f:
-            if x.endswith(".py"):
-                files.append(os.path.join(r, x))
+            if not x.endswith(".py"):
+                continue
+            if x in _SKIP_MODULES or x.startswith("_"):
+                continue
+            files.append(os.path.join(r, x))
     assert files != []
     return sorted(files)
 
@@ -75,7 +88,7 @@ def run_file(path):
     
     try:
         spec.loader.exec_module(mod)
-    except:
+    except Exception:
         print("ERR in import:", path)
         FAILED = True
         traceback.print_exc()
@@ -99,10 +112,15 @@ def run_file(path):
                 setup_function()
             test_function(browser)
             print("[OK]")
-        except:
+        except SkipTest as e:
+            print(f"[SKIP]: {e}")
+        except Exception:
             FAILED = True
             traceback.print_exc()
-            print(browser.get_current_page())
+            try:
+                print(browser.get_current_page())
+            except Exception:
+                pass
             print("[FAIL]: ", path, "::", n, sep = '')
 
 def main():

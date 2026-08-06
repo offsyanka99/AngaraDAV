@@ -8,17 +8,18 @@ ADMIN_PASSWORD = "secret123"
 
 # Classic Formal /admin/ HTML was removed (portal-only admin). These MechanicalSoup
 # helpers expect Formal install + login forms. Rewrite against /portal/install/ +
-# /api/admin/* (see docs/portal-admin-cutover.md) before re-enabling CI.
+# /api/admin/* before re-enabling those flows in run_tests.py.
 CLASSIC_ADMIN_REMOVED = True
+
+
+class SkipTest(Exception):
+    """Raised to skip a MechanicalSoup test without requiring pytest."""
 
 
 def require_classic_admin():
     if CLASSIC_ADMIN_REMOVED:
-        import pytest
-
-        pytest.skip(
-            "Classic Formal /admin/ removed — rewrite suite for portal install/admin "
-            "(docs/portal-admin-cutover.md)"
+        raise SkipTest(
+            "Classic Formal /admin/ removed — rewrite suite for portal install/admin"
         )
 
 def follow_link_containing(browser: mechanicalsoup.StatefulBrowser, text_substring: str):
