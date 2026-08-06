@@ -205,7 +205,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   owned: {
     title: "Owned",
     paragraphs: [
-      "Calendars you own appear here. Select one to edit details, import/export, or share.",
+      "Calendars you own appear here. Check one or more to show events on the month grid. Underlined name is primary for new events.",
+      "Use Export for a full .ics download, Edit for details/share/import, or Delete to remove a calendar.",
       "Badges show ownership, read-only mode, and holiday calendars.",
     ],
   },
@@ -220,8 +221,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   "shared-with-me": {
     title: "Shared with me",
     paragraphs: [
-      "Calendars other users shared with you. Select one to view events in the month grid.",
-      "Read-only shares allow viewing only. Full access also lets you create and edit events (owner still manages name, color, and sharing).",
+      "Calendars other users shared with you. Check one or more to view events in the month grid.",
+      "Export downloads a .ics file of that calendar. Read-only shares allow viewing only; full access also lets you create and edit events (owner still manages name, color, and sharing).",
     ],
   },
   "calendar-details": {
@@ -282,7 +283,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Address books",
     paragraphs: [
       "Address books you own. Select one to manage its contacts.",
-      "You can create, rename, or delete address books here. Deleting a non-empty book requires confirmation.",
+      "Use Export for a multi-vCard .vcf of the whole book, Edit for rename/import, or Delete to remove it. Deleting a non-empty book requires confirmation.",
     ],
   },
   contacts: {
@@ -1959,11 +1960,12 @@ export function mountApp(root: HTMLElement): void {
       </div>`);
     }
 
+    // "Check one or more calendars…" lives under Owned (sidebar); keep only no-calendars / loading here.
     const emptyHint =
       selectedCals.length === 0
         ? calendars.length === 0
           ? `<p class="muted small month-empty-hint">No calendars yet — create one on the left, or wait for someone to share with you.</p>`
-          : `<p class="muted small month-empty-hint">Check one or more calendars on the left to view events.</p>`
+          : ""
         : monthEventsLoading
           ? `<p class="muted small month-empty-hint">Loading events…</p>`
           : "";
@@ -3249,6 +3251,7 @@ export function mountApp(root: HTMLElement): void {
             <span class="muted small mono cal-row-uri">${esc(c.uri)}</span>
           </span>
           <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-cal" data-id="${c.id}" ${busy ? "disabled" : ""} title="Export as .ics">Export</button>
             <button type="button" class="btn btn-small" data-action="edit-cal" data-id="${c.id}" ${busy ? "disabled" : ""}>Edit</button>
             <button type="button" class="btn btn-small btn-danger" data-action="delete-cal" data-id="${c.id}" ${busy ? "disabled" : ""}>Delete</button>
           </span>
@@ -3277,6 +3280,9 @@ export function mountApp(root: HTMLElement): void {
             <span class="cal-row-title">${esc(c.displayname)}</span>
             <span class="cal-row-badges">${accessBadge(c.access)}</span>
             <span class="muted small">${c.access === "readwrite" ? "Shared · full access" : "Shared · read-only"}</span>
+          </span>
+          <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-cal" data-id="${c.id}" ${busy ? "disabled" : ""} title="Export as .ics">Export</button>
           </span>
         </div>`;
       })
@@ -3526,7 +3532,8 @@ export function mountApp(root: HTMLElement): void {
               ${infoTitle("Owned", "owned")}
             </div>
             <p class="muted small" style="margin:0 0 0.65rem">
-              Check calendars to show events on the right. Underlined name is primary for new events.
+              Check one or more calendars to view events.
+              Underlined name is primary for new events.
             </p>
             <div class="cal-list calendars-owned-list">
               ${calRows || '<p class="muted">No calendars yet. Create one below.</p>'}
@@ -3562,6 +3569,7 @@ export function mountApp(root: HTMLElement): void {
             <span class="muted small mono cal-row-uri">${esc(a.uri)}</span>
           </span>
           <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-ab" data-id="${a.id}" ${busy ? "disabled" : ""} title="Export as .vcf">Export</button>
             <button type="button" class="btn btn-small" data-action="edit-ab" data-id="${a.id}" ${busy ? "disabled" : ""}>Edit</button>
             <button type="button" class="btn btn-small btn-danger" data-action="delete-ab" data-id="${a.id}" ${busy ? "disabled" : ""}>Delete</button>
           </span>
@@ -8501,13 +8509,18 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "export-ab") {
-      if (selectedAbId === null) return;
-      abModalOpen = true;
+      ev.stopPropagation();
+      const idRaw = t.dataset.id;
+      const abId =
+        idRaw !== undefined && idRaw !== ""
+          ? Number(idRaw)
+          : selectedAbId;
+      if (abId === null || Number.isNaN(abId)) return;
       busy = true;
       clearFlash();
       render();
       try {
-        const { blob, filename } = await api.exportAddressBook(selectedAbId);
+        const { blob, filename } = await api.exportAddressBook(abId);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -8570,13 +8583,18 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "export-cal") {
-      if (selectedId === null) return;
-      calModalOpen = true;
+      ev.stopPropagation();
+      const idRaw = t.dataset.id;
+      const calId =
+        idRaw !== undefined && idRaw !== ""
+          ? Number(idRaw)
+          : selectedId;
+      if (calId === null || Number.isNaN(calId)) return;
       busy = true;
       clearFlash();
       render();
       try {
-        const { blob, filename } = await api.exportCalendar(selectedId);
+        const { blob, filename } = await api.exportCalendar(calId);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
