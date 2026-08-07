@@ -2,7 +2,8 @@ parameters:
   level: 0
   reportUnmatchedIgnoredErrors: false
   excludePaths:
-    - Core/Frameworks/BaikalAdmin/Resources/GlyphiconsPro/generate-sprite.php
+    # Removed with classic Formal admin; keep optional so phpstan works on main
+    - Core/Frameworks/BaikalAdmin/Resources/GlyphiconsPro/generate-sprite.php (?)
     - Core/Resources/Web/BaikalAdmin/GlyphiconsPro/generate-sprite.php (?)
     - html/res/core/BaikalAdmin/GlyphiconsPro/generate-sprite.php (?)
   ignoreErrors:

@@ -386,8 +386,7 @@ class AdminSettingsService {
         }
         $hash = (string) ($sys['admin_passwordhash'] ?? '');
         $out['hasAdminPassword'] = $hash !== '';
-        // Never include admin_passwordhash
-        unset($out['admin_passwordhash']);
+        // admin_passwordhash is never copied into $out (not in EDITABLE_KEYS)
 
         $out['configured_version'] = (string) ($sys['configured_version'] ?? (defined('BAIKAL_VERSION') ? BAIKAL_VERSION : ''));
         $out['auth_realm'] = (string) ($sys['auth_realm'] ?? 'BaikalDAV');
