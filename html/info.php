@@ -76,7 +76,7 @@ echo json_encode([
         'cal'    => '/cal.php/',
         'card'   => '/card.php/',
         'admin'  => '/portal/#admin',
-        'install'=> '/portal/install/',
+        'install' => '/portal/install/',
         'health' => '/health.php',
     ],
 ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . "\n";

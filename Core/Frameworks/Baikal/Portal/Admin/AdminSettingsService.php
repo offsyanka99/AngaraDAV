@@ -124,19 +124,13 @@ class AdminSettingsService {
      */
     public function resetToDefault(bool $confirm): array {
         if (!$confirm) {
-            throw new ApiException(
-                'Confirmation required: set confirm to true after acknowledging the reset',
-                400
-            );
+            throw new ApiException('Confirmation required: set confirm to true after acknowledging the reset', 400);
         }
 
         $forceLock = getenv('BAIKAL_LOCK_INSTALL') === '1';
         $allowReinstall = getenv('BAIKAL_ALLOW_REINSTALL') === '1';
         if ($forceLock && !$allowReinstall) {
-            throw new ApiException(
-                'Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to allow reset to default.',
-                403
-            );
+            throw new ApiException('Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to allow reset to default.', 403);
         }
 
         // Fresh read so we know DB + files paths before deleting yaml
@@ -219,6 +213,7 @@ class AdminSettingsService {
                     $wiped[] = basename($f);
                 }
             }
+
             // Empty default db directory is fine to keep
             return;
         }
@@ -488,10 +483,7 @@ class AdminSettingsService {
 
         $confirm = trim((string) ($body['confirm'] ?? ''));
         if ($confirm !== 'CONFIRM') {
-            throw new ApiException(
-                'Type CONFIRM exactly to change database settings',
-                400
-            );
+            throw new ApiException('Type CONFIRM exactly to change database settings', 400);
         }
 
         $this->assertNoForbiddenBodyKeys($body);
@@ -625,10 +617,7 @@ class AdminSettingsService {
         } catch (ApiException $e) {
             throw $e;
         } catch (\Throwable $e) {
-            throw new ApiException(
-                'Database connection failed: ' . $e->getMessage(),
-                400
-            );
+            throw new ApiException('Database connection failed: ' . $e->getMessage(), 400);
         }
     }
 
@@ -703,10 +692,7 @@ class AdminSettingsService {
     private function assertNoForbiddenBodyKeys(array $body): void {
         foreach (self::FORBIDDEN_BODY_KEYS as $key) {
             if (array_key_exists($key, $body)) {
-                throw new ApiException(
-                    'Refusing to accept secret or internal field "' . $key . '" in request body',
-                    400
-                );
+                throw new ApiException('Refusing to accept secret or internal field "' . $key . '" in request body', 400);
             }
         }
     }

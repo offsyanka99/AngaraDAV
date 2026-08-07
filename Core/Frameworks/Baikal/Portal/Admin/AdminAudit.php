@@ -126,6 +126,7 @@ class AdminAudit {
         if ($value === '') {
             return '-';
         }
+
         // Avoid breaking key=value parsing
         return str_replace([' ', '='], ['_', '_'], $value);
     }

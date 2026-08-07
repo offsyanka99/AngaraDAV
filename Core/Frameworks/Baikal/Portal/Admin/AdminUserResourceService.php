@@ -354,10 +354,7 @@ class AdminUserResourceService {
             $count = 0;
         }
         if ($count > 0 && !$force) {
-            throw new ApiException(
-                'Address book is not empty (' . $count . ' contacts). Pass force=true to delete anyway.',
-                409
-            );
+            throw new ApiException('Address book is not empty (' . $count . ' contacts). Pass force=true to delete anyway.', 409);
         }
 
         try {
@@ -490,7 +487,7 @@ class AdminUserResourceService {
             'uri'         => $uri,
             'displayname' => (string) ($row['displayname'] ?? ''),
             'description' => (string) ($row['description'] ?? ''),
-            'contactCount'=> $contacts,
+            'contactCount' => $contacts,
             'davUri'      => '/dav.php/addressbooks/' . rawurlencode($username) . '/' . rawurlencode($uri) . '/',
         ];
     }

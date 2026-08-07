@@ -52,6 +52,7 @@ function baikal_version_base(string $version): string {
     if ($plus !== false) {
         $version = substr($version, 0, $plus);
     }
+
     // Historical "2.0.1-git.xxx" style (unlikely) — keep only before first non-semver junk
     return trim($version);
 }

@@ -192,7 +192,7 @@ try {
         'backend'     => 'sqlite',
         'sqlite_file' => '/data/db.sqlite',
         'pgsql_host'  => '',
-        'pgsql_dbname'=> '',
+        'pgsql_dbname' => '',
         'pgsql_username' => '',
         'pgsql_password' => '',
         'encryption_key' => 'enc-key-secret',

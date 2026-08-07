@@ -112,9 +112,12 @@ def run_file(path):
                 setup_function()
             test_function(browser)
             print("[OK]")
-        except SkipTest as e:
-            print(f"[SKIP]: {e}")
-        except Exception:
+        except Exception as e:
+            # SkipTest may come from either `tests.test_helpers` or `test_helpers`
+            # (same file loaded under two module names via sys.path in run_file).
+            if isinstance(e, SkipTest) or type(e).__name__ == "SkipTest":
+                print(f"[SKIP]: {e}")
+                continue
             FAILED = True
             traceback.print_exc()
             try:

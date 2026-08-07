@@ -500,10 +500,7 @@ class InstallService {
         $isLegacyMysql = !empty($config['database']['mysql']);
         $isMysqlBackend = ($config['database']['backend'] ?? '') === 'mysql';
         if ($isLegacyMysql || $isMysqlBackend) {
-            throw new ApiException(
-                'MySQL is no longer supported. Migrate to PostgreSQL or SQLite before upgrading.',
-                400
-            );
+            throw new ApiException('MySQL is no longer supported. Migrate to PostgreSQL or SQLite before upgrading.', 400);
         }
 
         // Ensure DB is available for schema migrations
@@ -520,10 +517,7 @@ class InstallService {
         $this->registerRateAttempt();
 
         if (!$result['ok']) {
-            throw new ApiException(
-                'Upgrade failed: ' . implode('; ', $result['errors'] !== [] ? $result['errors'] : ['unknown error']),
-                500
-            );
+            throw new ApiException('Upgrade failed: ' . implode('; ', $result['errors'] !== [] ? $result['errors'] : ['unknown error']), 500);
         }
 
         return [
@@ -602,10 +596,7 @@ class InstallService {
 
     private function assertNotHardLockedForMutations(): void {
         if ($this->isEnvHardLocked()) {
-            throw new ApiException(
-                'Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to re-open.',
-                403
-            );
+            throw new ApiException('Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to re-open.', 403);
         }
     }
 
@@ -726,11 +717,7 @@ class InstallService {
             throw new ApiException('Unable to inspect database schema', 500);
         }
         if (count($required) !== count($missing)) {
-            throw new ApiException(
-                'Database is not structurally complete. Missing tables: ' . implode(', ', $missing)
-                . '. See Core/Resources/Db/' . $kind . '/db.sql',
-                400
-            );
+            throw new ApiException('Database is not structurally complete. Missing tables: ' . implode(', ', $missing) . '. See Core/Resources/Db/' . $kind . '/db.sql', 400);
         }
 
         $sqlPath = (defined('PROJECT_PATH_CORERESOURCES')

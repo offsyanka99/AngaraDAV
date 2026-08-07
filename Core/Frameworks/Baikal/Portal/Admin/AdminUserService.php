@@ -345,10 +345,7 @@ class AdminUserService {
         }
         // Prevent removing the last portal Admin (env list / YAML / default "admin")
         if (AdminAuth::userIsAdmin($username, $this->config) && $this->countAdminUsers() <= 1) {
-            throw new ApiException(
-                'Cannot delete the last user with the portal Admin role. Grant Admin to another user first (PORTAL_ADMIN_USERS or system.portal_admin_users).',
-                400
-            );
+            throw new ApiException('Cannot delete the last user with the portal Admin role. Grant Admin to another user first (PORTAL_ADMIN_USERS or system.portal_admin_users).', 400);
         }
         $userId = $this->userIdForUsername($username);
 
@@ -464,10 +461,7 @@ class AdminUserService {
     private function assertNoSecretMassAssignment(array $body): void {
         foreach (['digesta1', 'password_hash', 'passwordhash', 'hash'] as $key) {
             if (array_key_exists($key, $body)) {
-                throw new ApiException(
-                    'Refusing to accept secret field "' . $key . '" in request body',
-                    400
-                );
+                throw new ApiException('Refusing to accept secret field "' . $key . '" in request body', 400);
             }
         }
     }
