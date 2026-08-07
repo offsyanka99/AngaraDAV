@@ -9,6 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
+| `ghcr.io/offsyanka99/angaradav:2.1.0` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -743,6 +744,15 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.1.0
+
+- **Product version** `2.1.0` (upgrade wizard compares version base only; rebuilds that only change the build SHA do not force upgrade).
+- **Portal Administration** is the day-to-day admin path on `main` (classic Formal `/admin/` removed; redirects to `/portal/`).
+- **Files — Copy/Move:** destination **folder tree** (Home + lazy expand); no need to type a path.
+- **Files — copy naming:** same-folder copies get a unique ` (copy)` name; **cross-folder** copies keep the original filename when free (only add ` (copy)` on name conflict).
+- **Calendar:** empty-state hint under **Owned**; list **Export** for calendars and address books; export download revoke-race fixed (honest cancel messaging).
+- **CI:** PHP CS-Fixer / PHPStan clean after admin cutover; MechanicalSoup Formal-admin browser tests correctly `[SKIP]` without pytest.
 
 ### 2.0.3
 

@@ -6,8 +6,8 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.0.3`
-**Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [Migration](docs/MIGRATION_FROM_BAIKAL.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
+**Version:** `2.1.0`
+**Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 AngaraDAV includes:
 
@@ -65,8 +65,9 @@ Legacy release history
 | `2.0.1` | WebDAV-Push fan-out for **shared calendars**: content updates notify every calendar instance (owner + sharees) with the correct path/topic so DAVx⁵ on sharee devices wakes without waiting for the poll interval |
 | `2.0.2` | Portal upgrade-required login banner + JSON 503 API gate; version base compare and `2.0.x+sha` display (no `git.`); multi-select calendars on the month grid |
 | `2.0.3` | Security P1–P3: DB connection test, install password re-prompt, last-Admin delete block, user password rate-limit, Reset-to-Default re-auth; Files Copy/Move folder tree; same-folder-only ` (copy)` naming |
+| `2.1.0` | **Mainline 2.1:** portal Administration cutover on `main`; Files Copy/Move destination **folder tree**; cross-folder copy keeps original filename; export download fix; calendar Owned empty-hint + list Export; CI skips for classic Formal admin browser tests |
 
-Image tags: `latest`, `2.0.3`, `sha-…`.
+Image tags: `latest`, `2.1.0`, `sha-…`.
 
 Quick start (Docker)
 --------------------

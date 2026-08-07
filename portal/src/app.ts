@@ -52,7 +52,7 @@ const TAB_STORAGE_KEY = "angaradav-portal-tab";
 const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "2.0.0";
+const APP_VERSION_FALLBACK = "2.1.0";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {

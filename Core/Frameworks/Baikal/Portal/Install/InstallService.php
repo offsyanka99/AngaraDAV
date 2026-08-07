@@ -186,7 +186,7 @@ class InstallService {
         $std->set('invite_from', trim((string) ($body['invite_from'] ?? '')));
         $std->set('dav_auth_type', $davAuth);
         $std->set('session_max_age_minutes', max(1, min(10080, (int) ($body['session_max_age_minutes'] ?? 15))));
-        $std->set('configured_version', defined('BAIKAL_VERSION') ? BAIKAL_VERSION : '2.0.3');
+        $std->set('configured_version', defined('BAIKAL_VERSION') ? BAIKAL_VERSION : '2.1.0');
         $std->set('admin_passwordhash', $password);
         $std->persist();
 
