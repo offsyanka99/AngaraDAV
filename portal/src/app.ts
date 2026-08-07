@@ -276,6 +276,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
       "Upload, download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
+      "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
       "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
     ],
   },
@@ -630,7 +631,7 @@ export function mountApp(root: HTMLElement): void {
     filesLoading = false;
     filesRenamePath = null;
     filesDeletePaths = null;
-    filesTransfer = null;
+    resetFilesTransferTree();
     filesMkdirOpen = false;
     checkedFilePaths = [];
     photoPreview = null;
@@ -1342,6 +1343,146 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
+  /** True when dest is a source path or inside a source folder (invalid for copy/move). */
+  function isBlockedTransferDest(dest: string, sources: string[]): boolean {
+    for (const src of sources) {
+      if (!src) continue;
+      if (dest === src || dest.startsWith(`${src}/`)) return true;
+    }
+    return false;
+  }
+
+  function resetFilesTransferTree(): void {
+    filesTransfer = null;
+    filesTransferDest = "";
+    filesTreeChildren = {};
+    filesTreeExpanded = [];
+  }
+
+  /**
+   * Open copy/move modal with a destination folder tree.
+   * Prefills selection to the current folder and expands ancestors so the tree is oriented.
+   */
+  async function openFilesTransfer(op: "copy" | "move", paths: string[]): Promise<void> {
+    if (paths.length === 0) return;
+    filesTransfer = { op, paths: [...paths] };
+    filesTransferDest = filesPath;
+    filesTreeChildren = {};
+    // Expand Home + every ancestor of the current folder (and the folder itself if it is a dir path)
+    const expanded = new Set<string>([""]);
+    if (filesPath) {
+      const parts = filesPath.split("/").filter(Boolean);
+      let acc = "";
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part;
+        expanded.add(acc);
+      }
+    }
+    filesTreeExpanded = [...expanded];
+    filesRenamePath = null;
+    filesDeletePaths = null;
+    filesMkdirOpen = false;
+    clearFlash();
+    render();
+    // Load children for every expanded path so the tree is usable immediately
+    await Promise.all([...expanded].map((p) => ensureFilesTreeChildren(p)));
+  }
+
+  async function ensureFilesTreeChildren(parentPath: string): Promise<void> {
+    const cached = filesTreeChildren[parentPath];
+    if (cached && cached !== "error") return;
+    filesTreeChildren = { ...filesTreeChildren, [parentPath]: "loading" };
+    render();
+    try {
+      const list = await api.filesList(parentPath);
+      const dirs = list.entries
+        .filter((e) => e.type === "dir")
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      // Ignore stale loads if the modal was closed
+      if (!filesTransfer) return;
+      filesTreeChildren = { ...filesTreeChildren, [parentPath]: dirs };
+    } catch (e) {
+      if (!filesTransfer) return;
+      filesTreeChildren = { ...filesTreeChildren, [parentPath]: "error" };
+      log.warn("files.tree", {
+        path: parentPath || "/",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+    render();
+  }
+
+  function renderFilesFolderTree(): string {
+    if (!filesTransfer) return "";
+    const sources = filesTransfer.paths;
+    const lines: string[] = [];
+
+    const walk = (path: string, depth: number): void => {
+      const selected = filesTransferDest === path;
+      const blocked = isBlockedTransferDest(path, sources);
+      const expanded = filesTreeExpanded.includes(path);
+      const children = filesTreeChildren[path];
+      const hasLoadedKids = Array.isArray(children);
+      // Root and unloaded nodes show a chevron so the user can expand; empty leaves hide it after load.
+      const showToggle =
+        path === "" ||
+        children === "loading" ||
+        children === "error" ||
+        !hasLoadedKids ||
+        (children as FileEntry[]).length > 0;
+      const label = path === "" ? "Home" : basenamePath(path);
+      const title = blocked
+        ? "Cannot use a selected item (or a folder inside it) as the destination"
+        : path === ""
+          ? "File home root"
+          : path;
+      const chevron = expanded ? "▾" : "▸";
+      lines.push(`<div class="files-tree-row${selected ? " is-selected" : ""}${blocked ? " is-blocked" : ""}" style="--depth:${depth}" role="treeitem" aria-selected="${selected}" aria-expanded="${expanded}" aria-disabled="${blocked}">
+        ${
+          showToggle
+            ? `<button type="button" class="files-tree-toggle" data-action="files-tree-toggle" data-path="${esc(path)}"
+                aria-label="${expanded ? "Collapse" : "Expand"} ${esc(label)}" ${busy ? "disabled" : ""}>${chevron}</button>`
+            : `<span class="files-tree-toggle-spacer" aria-hidden="true"></span>`
+        }
+        <button type="button" class="files-tree-select${selected ? " is-selected" : ""}" data-action="files-tree-select" data-path="${esc(path)}"
+          title="${esc(title)}" ${busy || blocked ? "disabled" : ""}>
+          <span class="files-icon" aria-hidden="true">📁</span>
+          <span class="files-tree-label">${esc(label)}</span>
+        </button>
+      </div>`);
+
+      if (!expanded) return;
+      if (children === "loading") {
+        lines.push(
+          `<div class="files-tree-status muted small" style="--depth:${depth + 1}">Loading…</div>`,
+        );
+        return;
+      }
+      if (children === "error") {
+        lines.push(
+          `<div class="files-tree-status muted small" style="--depth:${depth + 1}">Could not load folders.
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-tree-retry" data-path="${esc(path)}" ${busy ? "disabled" : ""}>Retry</button>
+          </div>`,
+        );
+        return;
+      }
+      if (hasLoadedKids) {
+        for (const dir of children as FileEntry[]) {
+          walk(dir.path, depth + 1);
+        }
+        if ((children as FileEntry[]).length === 0 && path === "") {
+          lines.push(
+            `<div class="files-tree-status muted small" style="--depth:${depth + 1}">No subfolders yet — destination will be Home.</div>`,
+          );
+        }
+      }
+    };
+
+    walk("", 0);
+    return `<div class="files-folder-tree" role="tree" aria-label="Destination folder">${lines.join("")}</div>`;
+  }
+
   /**
    * Session lost (idle timeout or server 401). Leave dashboard and show login
    * with a clear message — do not leave calendars/contacts in the DOM.
@@ -1400,6 +1541,15 @@ export function mountApp(root: HTMLElement): void {
   let filesDeletePaths: string[] | null = null;
   /** Copy/move destination modal (one or more source paths). */
   let filesTransfer: { op: "copy" | "move"; paths: string[] } | null = null;
+  /** Selected destination folder path in the transfer tree ("" = Home). */
+  let filesTransferDest = "";
+  /**
+   * Lazy folder-tree cache for copy/move: parent path → child dirs,
+   * or "loading" / "error" while fetching.
+   */
+  let filesTreeChildren: Record<string, FileEntry[] | "loading" | "error"> = {};
+  /** Expanded folder paths in the transfer tree ("" = Home). */
+  let filesTreeExpanded: string[] = [];
   /** New-folder modal open. */
   let filesMkdirOpen = false;
   /** Selected entry paths in the current folder (multi-select). */
@@ -4251,13 +4401,15 @@ export function mountApp(root: HTMLElement): void {
             const title = multi
               ? `${op === "copy" ? "Copy" : "Move"} ${paths.length} items`
               : `${op === "copy" ? "Copy" : "Move"} ${first?.type === "dir" ? "folder" : "file"}`;
-            const defaultDest = filesPath;
+            const destLabel =
+              filesTransferDest === "" ? "Home" : filesTransferDest;
+            const destBlocked = isBlockedTransferDest(filesTransferDest, paths);
             return renderModal({
               id: "files-transfer-modal",
               title,
               titleId: "files-transfer-title",
               closeAction: "files-transfer-close",
-              size: "sm",
+              size: "md",
               form: true,
               formAttrs: 'data-form="files-transfer"',
               body: `
@@ -4266,14 +4418,17 @@ export function mountApp(root: HTMLElement): void {
                         ? `<p class="muted small" style="margin:0 0 0.75rem">${paths.length} items will be ${op === "copy" ? "copied" : "moved"} into the destination folder (original names kept).</p>`
                         : `<p class="muted small" style="margin:0 0 0.75rem"><span class="mono">${esc(defaultName)}</span></p>`
                     }
-                    <label>Destination folder
-                      <input type="text" name="toPath" value="${esc(defaultDest)}" maxlength="1024"
-                        placeholder="Leave empty for Home (root)" autocomplete="off"
-                        aria-describedby="files-transfer-dest-hint" />
-                    </label>
-                    <p id="files-transfer-dest-hint" class="muted small" style="margin:0.35rem 0 0">
-                      Path relative to your file home. Examples: empty = Home, <span class="mono">docs</span>, <span class="mono">archive/2026</span>
-                    </p>
+                    <input type="hidden" name="toPath" value="${esc(filesTransferDest)}" />
+                    <div class="files-transfer-dest">
+                      <div class="files-transfer-dest-head">
+                        <span class="files-transfer-dest-label">Destination folder</span>
+                        <span class="muted small mono files-transfer-dest-value" title="${esc(destLabel)}">${esc(destLabel)}</span>
+                      </div>
+                      ${renderFilesFolderTree()}
+                      <p id="files-transfer-dest-hint" class="muted small" style="margin:0.5rem 0 0">
+                        Click a folder to select it. Use ▸ to expand. Home is the root of your file storage.
+                      </p>
+                    </div>
                     ${
                       !multi
                         ? `<label style="margin-top:0.85rem">New name <span class="muted">(optional)</span>
@@ -4294,7 +4449,7 @@ export function mountApp(root: HTMLElement): void {
                   label: op === "copy" ? "Copy" : "Move",
                   type: "submit",
                   variant: "primary",
-                  disabled: busy,
+                  disabled: busy || destBlocked,
                 },
               ],
             });
@@ -5885,7 +6040,7 @@ export function mountApp(root: HTMLElement): void {
         ) {
           filesRenamePath = null;
           filesDeletePaths = null;
-          filesTransfer = null;
+          resetFilesTransferTree();
           filesMkdirOpen = false;
           render();
           return;
@@ -6592,11 +6747,19 @@ export function mountApp(root: HTMLElement): void {
   async function onFilesTransfer(form: HTMLFormElement) {
     if (!filesTransfer || filesTransfer.paths.length === 0) return;
     const fd = new FormData(form);
-    const toPath = String(fd.get("toPath") ?? "").trim().replace(/^\/+|\/+$/g, "");
+    // Prefer the tree selection (state); hidden input is the form fallback.
+    const toPath = (filesTransferDest || String(fd.get("toPath") ?? ""))
+      .trim()
+      .replace(/^\/+|\/+$/g, "");
     const newNameRaw = String(fd.get("newName") ?? "").trim();
     const op = filesTransfer.op;
     const paths = [...filesTransfer.paths];
     const multi = paths.length > 1;
+    if (isBlockedTransferDest(toPath, paths)) {
+      setFlash("error", "Choose a different destination folder");
+      render();
+      return;
+    }
     busy = true;
     clearFlash();
     render();
@@ -6628,7 +6791,7 @@ export function mountApp(root: HTMLElement): void {
           errors.push(`${basenamePath(path)}: ${e instanceof Error ? e.message : "failed"}`);
         }
       }
-      filesTransfer = null;
+      resetFilesTransferTree();
       checkedFilePaths = [];
       await loadFiles();
       const verb = op === "copy" ? "Copied" : "Moved";
@@ -7887,39 +8050,63 @@ export function mountApp(root: HTMLElement): void {
     if (action === "files-copy") {
       const path = t.dataset.path ?? "";
       if (!path) return;
-      filesTransfer = { op: "copy", paths: [path] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("copy", [path]);
       return;
     }
     if (action === "files-move") {
       const path = t.dataset.path ?? "";
       if (!path) return;
-      filesTransfer = { op: "move", paths: [path] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("move", [path]);
       return;
     }
     if (action === "files-bulk-copy") {
       if (checkedFilePaths.length === 0) return;
-      filesTransfer = { op: "copy", paths: [...checkedFilePaths] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("copy", [...checkedFilePaths]);
       return;
     }
     if (action === "files-bulk-move") {
       if (checkedFilePaths.length === 0) return;
-      filesTransfer = { op: "move", paths: [...checkedFilePaths] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
+      void openFilesTransfer("move", [...checkedFilePaths]);
+      return;
+    }
+    if (action === "files-tree-select") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!filesTransfer) return;
+      // dataset.path is "" for Home — do not treat empty as missing
+      const path = t.dataset.path ?? "";
+      if (isBlockedTransferDest(path, filesTransfer.paths)) return;
+      filesTransferDest = path;
       render();
       return;
     }
+    if (action === "files-tree-toggle" || action === "files-tree-retry") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!filesTransfer) return;
+      const path = t.dataset.path ?? "";
+      if (action === "files-tree-retry") {
+        const next = { ...filesTreeChildren };
+        delete next[path];
+        filesTreeChildren = next;
+        if (!filesTreeExpanded.includes(path)) {
+          filesTreeExpanded = [...filesTreeExpanded, path];
+        }
+        void ensureFilesTreeChildren(path);
+        return;
+      }
+      const isOpen = filesTreeExpanded.includes(path);
+      if (isOpen) {
+        filesTreeExpanded = filesTreeExpanded.filter((p) => p !== path);
+        render();
+      } else {
+        filesTreeExpanded = [...filesTreeExpanded, path];
+        void ensureFilesTreeChildren(path);
+      }
+      return;
+    }
     if (action === "files-transfer-close") {
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -7927,7 +8114,7 @@ export function mountApp(root: HTMLElement): void {
       if (checkedFilePaths.length === 0) return;
       filesDeletePaths = [...checkedFilePaths];
       filesRenamePath = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -7950,7 +8137,7 @@ export function mountApp(root: HTMLElement): void {
       filesMkdirOpen = true;
       filesRenamePath = null;
       filesDeletePaths = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       clearFlash();
       render();
       return;
@@ -7963,7 +8150,7 @@ export function mountApp(root: HTMLElement): void {
     if (action === "files-rename-open") {
       filesRenamePath = t.dataset.path ?? null;
       filesDeletePaths = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -7976,7 +8163,7 @@ export function mountApp(root: HTMLElement): void {
       const path = t.dataset.path ?? "";
       filesDeletePaths = path ? [path] : null;
       filesRenamePath = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }

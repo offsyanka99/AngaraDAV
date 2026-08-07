@@ -886,6 +886,127 @@ body.layout-files .files-table-wrap {
   flex-shrink: 0;
 }
 
+/* Copy / Move destination folder tree */
+.files-transfer-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.files-transfer-dest-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.files-transfer-dest-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.files-transfer-dest-value {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-folder-tree {
+  max-height: min(40vh, 18rem);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #121820;
+  padding: 0.35rem 0.25rem;
+}
+
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.35rem 0.1rem calc(0.35rem + var(--depth, 0) * 1rem);
+  min-height: 1.85rem;
+}
+
+.files-tree-row.is-selected .files-tree-select {
+  background: rgba(59, 130, 246, 0.18);
+  color: #e2e8f0;
+}
+
+.files-tree-row.is-blocked .files-tree-select {
+  opacity: 0.45;
+}
+
+.files-tree-toggle,
+.files-tree-toggle-spacer {
+  flex: 0 0 1.4rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.files-tree-toggle:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+}
+
+.files-tree-toggle-spacer {
+  cursor: default;
+}
+
+.files-tree-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.files-tree-select:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.files-tree-select:disabled {
+  cursor: not-allowed;
+}
+
+.files-tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-tree-status {
+  padding: 0.25rem 0.5rem 0.35rem calc(0.35rem + var(--depth, 0) * 1rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .btn-danger-text {
   color: #fca5a5 !important;
 }
