@@ -32,20 +32,20 @@
 #
 # After deploy:
 # 1. Open http://NAS-IP:31088  → complete installer (admin password; SQLite OK)
-# 2. Admin:  http://NAS-IP:31088/admin/
-# 3. Portal: http://NAS-IP:31088/portal/   ← calendars + contacts (DAV user login)
-# 4. DAV:    http://NAS-IP:31088/dav.php/  ← clients + classic browser
-# 5. Health: http://NAS-IP:31088/health.php
-# 6. Info:   http://NAS-IP:31088/info.php
+# 2. Portal Administration: http://NAS-IP:31088/portal/  (Admin-role DAV user)
+# 3. Installer (first boot):  http://NAS-IP:31088/portal/install/
+# 3. Portal:             http://NAS-IP:31088/portal/    (DAV user login)
+# 4. DAV:                http://NAS-IP:31088/dav.php/
+# 5. Health / Info:      /health.php · /info.php
 #
 # Portal (user-friendly):
-#   1. Admin creates user1 + user2 under /admin/
-#   2. user1 opens /portal/ , signs in with DAV password
-#   3. Calendar: month view, events (RRULE), Edit modal (share, import/export .ics)
-#      Select owned or shared calendars (read-only / full access) to view events
-#      Add calendar → Import .ics (create + import); large files show live % progress
-#      Bulk imports use chunked SQLite txs (typically seconds, not minutes, on NAS)
-#   4. Contacts: address books, import/export .vcf (progress dialog for large files)
+#   1. Create DAV users under /admin/ (or later: portal Administration → Users)
+#   2. user1 opens /portal/ , signs in with DAV password (not classic admin password)
+#   3. Calendar / Contacts / Tasks / Notes / Files as usual
+#   4. Portal Administration (Admin-role DAV users only): user menu → Administration
+#      Grant Admin: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
+#      Default if unset: DAV user named "admin". Parallel with classic /admin/ (last write wins).
+#      See docs/DEPLOYMENT.md → Portal Administration
 #
 # Bug fixes in 0.11.1-fork.4 (summary): shared calendars selectable; import progress
 #   no longer aborts at start or 5m timeout; skip-chown startup; fast bulk import;
@@ -73,10 +73,15 @@
 #   Admin password uses password_hash(); legacy SHA-256 upgrades on login.
 #
 # Optional env:
-#   BAIKAL_LOCK_INSTALL=1     — refuse /admin/install after deploy
+#   BAIKAL_LOCK_INSTALL=1     — refuse installer reopen after deploy
 #   BAIKAL_ALLOW_REINSTALL=1  — re-open installer intentionally
 #   PORTAL_LOG_LEVEL=debug    — browser console + Specific/portal_debug.log only
 #                              (not docker/nginx; old images wrongly used error_log)
+#   PORTAL_ADMIN_USERS=alice,bob
+#                              — DAV usernames with portal Admin role (/api/admin/*)
+#                                Alias: BAIKAL_PORTAL_ADMIN_USERS
+#                                Overrides system.portal_admin_users in baikal.yaml
+#                                If unset and YAML empty: DAV user "admin" is Admin
 #   TIME_FORMAT=24h           — portal time display (auto|12h|24h)
 #   BAIKAL_PORTAL_WEEK_START=monday
 #   BAIKAL_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
@@ -95,9 +100,20 @@
 
 services:
   angaradav:
-    # --- Track the current AngaraDAV main image -------------------------
+    # --- Image tags (GHCR: ghcr.io/offsyanka99/angaradav) ----------------
+    # latest          = main branch (stable day-to-day; may lag a feature branch)
+    # 2.0.3           = product release tag v2.0.3 (preferred pin)
+    # release-2.0.0-portal-admin
+    #                 = continuous builds from branch release/2.0.0-portal-admin
+    #                   (slash in branch name becomes hyphen in the image tag)
+    # sha-<7+ hex>    = exact git commit
+    #
+    # There is NO tag "release-2.0.3-portal-admin" — version is not part of the
+    # branch name; use 2.0.3 or release-2.0.0-portal-admin instead.
     image: ghcr.io/offsyanka99/angaradav:latest
-    # Or pin a tested commit:
+    # Portal-admin / 2.0.x line:
+    # image: ghcr.io/offsyanka99/angaradav:2.0.3
+    # image: ghcr.io/offsyanka99/angaradav:release-2.0.0-portal-admin
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------
@@ -131,6 +147,8 @@ services:
       BAIKAL_PORTAL_WEEK_START: "monday" # or sunday
       # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
+      # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):
+      # PORTAL_ADMIN_USERS: "alice,bob"  # or BAIKAL_PORTAL_ADMIN_USERS; default DAV user "admin"
       # Required only after enabling WebDAV-Push in baikal.yaml/admin:
       # BAIKAL_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only

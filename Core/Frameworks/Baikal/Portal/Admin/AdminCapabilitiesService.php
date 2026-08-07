@@ -1,0 +1,118 @@
+<?php
+
+namespace Baikal\Portal\Admin;
+
+/**
+ * Capability map for the portal Administration UI (feature gating).
+ *
+ * Status values (parity matrix language):
+ *   full        — portal feature complete
+ *   read-only   — portal read path available
+ *   coming-soon — shell visible; work incomplete
+ *   deferred    — intentionally unavailable for now
+ *
+ * Optional YAML: system.portal_admin_ui_enabled (default true) hides the
+ * in-portal Administration section when false; /api/admin/* routes remain.
+ *
+ * All navigation URLs point at the portal SPA (#admin…), not classic Formal /admin/.
+ */
+class AdminCapabilitiesService {
+    /** @var array<string, mixed> */
+    private $config;
+
+    /**
+     * @param array<string, mixed> $config Full baikal.yaml array (or test fixture)
+     */
+    public function __construct(array $config) {
+        $this->config = $config;
+    }
+
+    /**
+     * @return array{
+     *   uiEnabled: bool,
+     *   portalAdminUrl: string,
+     *   pages: list<array{
+     *     id: string,
+     *     label: string,
+     *     status: string,
+     *     available: bool,
+     *     portalUrl: string,
+     *     portalLabel: string,
+     *     summary: string
+     *   }>
+     * }
+     */
+    public function capabilities(): array {
+        $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
+        $uiEnabled = self::boolFlag($sys, 'portal_admin_ui_enabled', true);
+
+        // UI tab order: Overview → System settings → Users → Database
+        $pages = [
+            [
+                'id'          => 'overview',
+                'label'       => 'Overview',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin',
+                'portalLabel' => 'Overview',
+                'summary'     => 'Live counts and service flags from the portal session.',
+            ],
+            [
+                'id'          => 'settings',
+                'label'       => 'System settings',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/settings',
+                'portalLabel' => 'System settings',
+                'summary'     => 'Edit system flags and admin password; writes baikal.yaml atomically.',
+            ],
+            [
+                'id'          => 'users',
+                'label'       => 'Users',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/users',
+                'portalLabel' => 'Users',
+                'summary'     => 'Full DAV user CRUD plus per-user calendars and address books.',
+            ],
+            [
+                'id'          => 'database',
+                'label'       => 'Database',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/database',
+                'portalLabel' => 'Database',
+                'summary'     => 'Connection settings; password never returned. Saves require typing CONFIRM.',
+            ],
+        ];
+
+        return [
+            'uiEnabled'      => $uiEnabled,
+            'portalAdminUrl' => '/portal/#admin',
+            'pages'          => $pages,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $sys
+     */
+    private static function boolFlag(array $sys, string $key, bool $default): bool {
+        if (!array_key_exists($key, $sys)) {
+            return $default;
+        }
+        $v = $sys[$key];
+        if (is_bool($v)) {
+            return $v;
+        }
+        if (is_int($v) || is_float($v)) {
+            return (int) $v !== 0;
+        }
+        if (is_string($v)) {
+            $s = strtolower(trim($v));
+
+            return !in_array($s, ['', '0', 'false', 'off', 'no'], true);
+        }
+
+        return (bool) $v;
+    }
+}

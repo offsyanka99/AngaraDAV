@@ -4,6 +4,15 @@ import {
   setOnSessionActivity,
   setOnUnauthorized,
   type AddressBook,
+  type AdminCapabilities,
+  type AdminCapabilityPage,
+  type AdminDashboardStats,
+  type AdminDatabaseSettings,
+  type AdminSystemSettings,
+  type AdminUserAddressBook,
+  type AdminUserCalendar,
+  type AdminUserDetail,
+  type AdminUserSummary,
   type Calendar,
   type CalendarEvent,
   type CalendarEventDetail,
@@ -24,13 +33,26 @@ import {
   type TaskItem,
 } from "./api";
 import { log, setLogLevel } from "./log";
+import { timezoneSelectOptions } from "./timezones";
+import {
+  esc,
+  renderConfirmCheckbox,
+  renderFlash,
+  renderModal,
+  renderModalFooter,
+  type FlashType,
+} from "./ui";
 
 type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 
+/** Nested Administration views: #admin, #admin/users, #admin/settings, #admin/database */
+type AdminPageId = "overview" | "users" | "settings" | "database";
+
 const TAB_STORAGE_KEY = "angaradav-portal-tab";
+const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "1.0.10";
+const APP_VERSION_FALLBACK = "2.0.0";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {
@@ -47,10 +69,55 @@ function parseTabId(raw: string | null | undefined): TabId | null {
   return null;
 }
 
+function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
+  if (
+    raw === "overview" ||
+    raw === "users" ||
+    raw === "settings" ||
+    raw === "database"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+/**
+ * Parse location hash into portal tab + optional admin sub-page + user detail.
+ * Supports #admin, #admin/overview, #admin/users, #admin/users/{username},
+ * #admin/settings, #admin/database.
+ */
+function parseLocationRoute(): {
+  tab: TabId | null;
+  adminPage: AdminPageId | null;
+  adminUsername: string | null;
+} {
+  const raw = (typeof location !== "undefined" ? location.hash : "")
+    .replace(/^#/, "")
+    .split(/[?&]/)[0]
+    .replace(/^\/+/, "");
+  if (!raw) {
+    return { tab: null, adminPage: null, adminUsername: null };
+  }
+  if (raw === "admin" || raw.startsWith("admin/")) {
+    const parts = raw.split("/").filter(Boolean);
+    const sub = parts[1] ?? "overview";
+    const page = parseAdminPageId(sub) ?? "overview";
+    let adminUsername: string | null = null;
+    if (page === "users" && parts[2]) {
+      try {
+        adminUsername = decodeURIComponent(parts[2]);
+      } catch {
+        adminUsername = parts[2];
+      }
+    }
+    return { tab: "admin", adminPage: page, adminUsername };
+  }
+  return { tab: parseTabId(raw), adminPage: null, adminUsername: null };
+}
+
 /** Restore tab after F5: prefer URL hash, then sessionStorage. */
 function readStoredTab(): TabId {
-  const hash = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "").split(/[?&]/)[0];
-  const fromHash = parseTabId(hash);
+  const fromHash = parseLocationRoute().tab;
   if (fromHash) return fromHash;
   try {
     const fromStore = parseTabId(sessionStorage.getItem(TAB_STORAGE_KEY));
@@ -61,28 +128,48 @@ function readStoredTab(): TabId {
   return "calendars";
 }
 
-function persistTab(tab: TabId): void {
+function readStoredAdminPage(): AdminPageId {
+  const fromHash = parseLocationRoute().adminPage;
+  if (fromHash) return fromHash;
+  try {
+    const fromStore = parseAdminPageId(sessionStorage.getItem(ADMIN_PAGE_STORAGE_KEY));
+    if (fromStore) return fromStore;
+  } catch {
+    /* ignore */
+  }
+  return "overview";
+}
+
+function adminHash(page: AdminPageId, adminUsername: string | null = null): string {
+  if (page === "overview") return "#admin";
+  if (page === "users" && adminUsername) {
+    return `#admin/users/${encodeURIComponent(adminUsername)}`;
+  }
+  return `#admin/${page}`;
+}
+
+function persistTab(
+  tab: TabId,
+  adminPage: AdminPageId = "overview",
+  adminUsername: string | null = null,
+): void {
   try {
     sessionStorage.setItem(TAB_STORAGE_KEY, tab);
+    if (tab === "admin") {
+      sessionStorage.setItem(ADMIN_PAGE_STORAGE_KEY, adminPage);
+    }
   } catch {
     /* ignore */
   }
   if (typeof history === "undefined" || typeof location === "undefined") return;
-  const desired = `#${tab}`;
+  const desired =
+    tab === "admin" ? adminHash(adminPage, adminUsername) : `#${tab}`;
   if (location.hash !== desired) {
     history.replaceState(null, "", `${location.pathname}${location.search}${desired}`);
   }
 }
 
-type Flash = { type: "error" | "success" | "info"; message: string } | null;
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+type Flash = { type: FlashType; message: string } | null;
 
 function accessBadge(access: string): string {
   if (access === "readwrite") {
@@ -118,7 +205,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   owned: {
     title: "Owned",
     paragraphs: [
-      "Calendars you own appear here. Select one to edit details, import/export, or share.",
+      "Calendars you own appear here. Check one or more to show events on the month grid. Underlined name is primary for new events.",
+      "Use Export for a full .ics download, Edit for details/share/import, or Delete to remove a calendar.",
       "Badges show ownership, read-only mode, and holiday calendars.",
     ],
   },
@@ -133,8 +221,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   "shared-with-me": {
     title: "Shared with me",
     paragraphs: [
-      "Calendars other users shared with you. Select one to view events in the month grid.",
-      "Read-only shares allow viewing only. Full access also lets you create and edit events (owner still manages name, color, and sharing).",
+      "Calendars other users shared with you. Check one or more to view events in the month grid.",
+      "Export downloads a .ics file of that calendar. Read-only shares allow viewing only; full access also lets you create and edit events (owner still manages name, color, and sharing).",
     ],
   },
   "calendar-details": {
@@ -188,6 +276,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
       "Upload, download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
+      "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
+      "Same-folder copies get a “ (copy)” name so the original is never overwritten. Copies into another folder keep the original filename unless that name is already taken there.",
       "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
     ],
   },
@@ -195,7 +285,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Address books",
     paragraphs: [
       "Address books you own. Select one to manage its contacts.",
-      "You can create, rename, or delete address books here. Deleting a non-empty book requires confirmation.",
+      "Use Export for a multi-vCard .vcf of the whole book, Edit for rename/import, or Delete to remove it. Deleting a non-empty book requires confirmation.",
     ],
   },
   contacts: {
@@ -218,8 +308,38 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
   administration: {
     title: "Administration",
     paragraphs: [
-      "Server administration for AngaraDAV. Open the classic Web Admin for users, system settings, and database configuration.",
-      "The Admin UI uses the separate admin password (not your DAV user password), unless you already have an admin session.",
+      "Server administration for AngaraDAV, available to portal users with the Admin role.",
+      "Overview, users, system settings, and database management for operators with the Admin role.",
+      "Admin API calls use your portal DAV session and require the Admin role server-side.",
+    ],
+  },
+  "admin-overview": {
+    title: "Overview",
+    paragraphs: [
+      "Snapshot of registered users, calendars, events, address books, contacts, and which DAV services are enabled.",
+      "Version and release links help you compare installs. Counts refresh from the dashboard API.",
+    ],
+  },
+  "admin-users": {
+    title: "Users",
+    paragraphs: [
+      "List, create, edit, and delete DAV users from the portal. Password digests are never returned.",
+      "Create seeds a default calendar and address book. Delete removes calendars, contacts, and quarantines file homes when files are enabled.",
+      "Manage users, system settings, and database from these Administration tabs.",
+    ],
+  },
+  "admin-settings": {
+    title: "System settings",
+    paragraphs: [
+      "Edit DAV services, files, push, session timeout, portal admin role list, and admin password.",
+      "Saves write config/baikal.yaml atomically. Session timeout applies to portal idle cookies.",
+    ],
+  },
+  "admin-database": {
+    title: "Database",
+    paragraphs: [
+      "Read-only view of backend type, SQLite path or PostgreSQL host/dbname/username.",
+      "Passwords and encryption keys are never returned. Saving requires typing CONFIRM — wrong values can take the instance offline.",
     ],
   },
 };
@@ -242,7 +362,7 @@ function infoModalHtml(): string {
       <div class="info-modal-card">
         <header class="info-modal-header">
           <h3 id="info-modal-title"></h3>
-          <button type="button" class="info-modal-close" data-action="info-close" aria-label="Close">×</button>
+          <button type="button" class="modal-close info-modal-close" data-action="info-close" aria-label="Close">×</button>
         </header>
         <div class="info-modal-body muted small" id="info-modal-body"></div>
         <footer class="info-modal-footer">
@@ -256,14 +376,80 @@ export function mountApp(root: HTMLElement): void {
   let user: PortalUser | null = null;
   let flash: Flash = null;
   let activeTab: TabId = readStoredTab();
+  /** Nested Administration page when activeTab === "admin" */
+  let adminPage: AdminPageId = readStoredAdminPage();
+  /** Cached Overview stats (null until first successful load) */
+  let adminDashboard: AdminDashboardStats | null = null;
+  let adminDashboardLoading = false;
+  let adminDashboardError: string | null = null;
+  /** Feature gating map from GET /api/admin/capabilities */
+  let adminCapabilities: AdminCapabilities | null = null;
+
+  let adminCapabilitiesError: string | null = null;
+  /** Admin Users list / detail / write modals (Phase 4–5) */
+  let adminUsers: AdminUserSummary[] = [];
+  let adminUsersLoading = false;
+  let adminUsersError: string | null = null;
+  let adminUsersQuery = "";
+  let adminSelectedUsername: string | null =
+    parseLocationRoute().adminUsername ?? null;
+  let adminUserDetail: AdminUserDetail | null = null;
+  let adminUserDetailLoading = false;
+  let adminUserDetailError: string | null = null;
+  let adminUserCreateOpen = false;
+  let adminUserEditOpen = false;
+  let adminUserDeleteUsername: string | null = null;
+  let adminUserDeleteConfirmChecked = false;
+  /** Per-user calendars / address books (Phase 6) */
+  let adminUserCalendars: AdminUserCalendar[] = [];
+  let adminUserAddressBooks: AdminUserAddressBook[] = [];
+  let adminUserResourcesLoading = false;
+  let adminCalModal: "create" | "edit" | null = null;
+  let adminCalEditId: number | null = null;
+  let adminAbModal: "create" | "edit" | null = null;
+  let adminAbEditId: number | null = null;
+  let adminResourceDelete:
+    | { kind: "calendar"; id: number; label: string }
+    | { kind: "addressbook"; id: number; label: string; force?: boolean }
+    | null = null;
+  /** System settings (Phase 7) */
+  let adminSystemSettings: AdminSystemSettings | null = null;
+  let adminSystemSettingsLoading = false;
+  let adminSystemSettingsError: string | null = null;
+  /** Reset-to-default confirmation modal (factory reset → installer) */
+  let adminResetModalOpen = false;
+  let adminResetConfirmChecked = false;
+  let adminResetPassword = "";
+  /** Database settings (Phase 8 / 8.2 write with CONFIRM) */
+  let adminDatabaseSettings: AdminDatabaseSettings | null = null;
+  let adminDatabaseSettingsLoading = false;
+  let adminDatabaseSettingsError: string | null = null;
+  let adminDbFormBackend: "sqlite" | "pgsql" = "sqlite";
+  let adminDbConfirmOpen = false;
+  let adminDbConfirmText = "";
+  let adminDbPendingBody: Record<string, unknown> | null = null;
   /** User-menu dropdown (header name) open state */
   let userMenuOpen = false;
   let userMenuDocClick: ((ev: MouseEvent) => void) | null = null;
   let calendars: Calendar[] = [];
   let directory: DirectoryUser[] = [];
   let holidayCountries: HolidayCountry[] = [];
+  /** Primary calendar (create event, edit modal, shares). */
   let selectedId: number | null = null;
+  /** Calendars visible on the month grid (multi-select). */
+  let selectedIds: number[] = [];
   let shares: Share[] = [];
+  /**
+   * Install/upgrade gate for the login screen.
+   * Populated from GET /api/install/status (and from 503 upgrade_required payloads).
+   */
+  let installGate: {
+    step: string;
+    message: string;
+    installUrl: string;
+    productVersion?: string;
+    configuredVersion?: string | null;
+  } | null = null;
   /** Calendar details + share live in a modal (not the right column). */
   let calModalOpen = false;
   /** Create calendar form lives in its own modal. */
@@ -274,7 +460,8 @@ export function mountApp(root: HTMLElement): void {
   let deleteAbConfirmId: number | null = null;
   /** Month grid cursor (local calendar). */
   let monthCursor = { y: new Date().getFullYear(), m: new Date().getMonth() };
-  let monthEvents: CalendarEvent[] = [];
+  /** Month grid events tagged with source calendar instance. */
+  let monthEvents: Array<CalendarEvent & { instanceId: number }> = [];
   let monthEventsLoading = false;
   /** VEVENT create/edit modal (day cell → new; event chip → edit) */
   let eventModalOpen = false;
@@ -410,6 +597,7 @@ export function mountApp(root: HTMLElement): void {
     calendars = [];
     shares = [];
     selectedId = null;
+    selectedIds = [];
     directory = [];
     addressBooks = [];
     selectedAbId = null;
@@ -444,7 +632,7 @@ export function mountApp(root: HTMLElement): void {
     filesLoading = false;
     filesRenamePath = null;
     filesDeletePaths = null;
-    filesTransfer = null;
+    resetFilesTransferTree();
     filesMkdirOpen = false;
     checkedFilePaths = [];
     photoPreview = null;
@@ -452,11 +640,85 @@ export function mountApp(root: HTMLElement): void {
     removePhotoPending = false;
     busy = false;
     userMenuOpen = false;
+    adminDashboard = null;
+    adminDashboardLoading = false;
+    adminDashboardError = null;
+    adminCapabilities = null;
+
+    adminCapabilitiesError = null;
+    adminUsers = [];
+    adminUsersLoading = false;
+    adminUsersError = null;
+    adminUsersQuery = "";
+    adminSelectedUsername = null;
+    adminUserDetail = null;
+    adminUserDetailLoading = false;
+    adminUserDetailError = null;
+    adminUserCreateOpen = false;
+    adminUserEditOpen = false;
+    adminUserDeleteUsername = null;
+    adminUserDeleteConfirmChecked = false;
+    adminUserCalendars = [];
+    adminUserAddressBooks = [];
+    adminUserResourcesLoading = false;
+    adminCalModal = null;
+    adminCalEditId = null;
+    adminAbModal = null;
+    adminAbEditId = null;
+    adminResourceDelete = null;
+    adminSystemSettings = null;
+    adminSystemSettingsLoading = false;
+    adminSystemSettingsError = null;
+    adminResetModalOpen = false;
+    adminResetConfirmChecked = false;
+    adminResetPassword = "";
+    adminDatabaseSettings = null;
+    adminDatabaseSettingsLoading = false;
+    adminDatabaseSettingsError = null;
+    adminDbFormBackend = "sqlite";
+    adminDbConfirmOpen = false;
+    adminDbConfirmText = "";
+    adminDbPendingBody = null;
     unbindUserMenuOutside();
   }
 
   function userIsAdmin(): boolean {
     return !!(user?.isAdmin || user?.role === "Admin");
+  }
+
+  /** Portal Administration section enabled (YAML portal_admin_ui_enabled). */
+  function adminUiEnabled(): boolean {
+    if (!userIsAdmin()) return false;
+    // Until capabilities load, allow Admin users into the shell (fail open for admins)
+    if (adminCapabilities === null) return true;
+    return adminCapabilities.uiEnabled !== false;
+  }
+
+  function adminPageMeta(pageId: AdminPageId): AdminCapabilityPage | null {
+    const pages = adminCapabilities?.pages;
+    if (!pages) return null;
+    return pages.find((p) => p.id === pageId) ?? null;
+  }
+
+  function adminStatusLabel(status: string): string {
+    switch (status) {
+      case "full":
+        return "Full";
+      case "read-only":
+        return "Read-only";
+      case "coming-soon":
+        return "Coming soon";
+      case "deferred":
+        return "Unavailable";
+      default:
+        return status;
+    }
+  }
+
+  function adminStatusBadgeClass(status: string): string {
+    if (status === "full" || status === "read-only") return "badge-ok";
+    if (status === "deferred") return "badge-off";
+    return "badge-soon";
   }
 
   function unbindUserMenuOutside(): void {
@@ -484,17 +746,533 @@ export function mountApp(root: HTMLElement): void {
     }, 0);
   }
 
-  /** Clamp tab if Administration is restored for a non-admin user. */
+  /** Clamp tab if Administration is restored for a non-admin / disabled UI. */
   function normalizeActiveTab(): void {
-    if (activeTab === "admin" && !userIsAdmin()) {
+    if (activeTab === "admin" && (!userIsAdmin() || !adminUiEnabled())) {
       activeTab = "calendars";
+      adminPage = "overview";
       persistTab(activeTab);
     }
   }
 
+  async function activateAdminPage(
+    page: AdminPageId,
+    opts: { clearFlash?: boolean; username?: string | null } = {},
+  ): Promise<void> {
+    if (!userIsAdmin()) {
+      await activateTab("calendars", opts);
+      return;
+    }
+    activeTab = "admin";
+    adminPage = page;
+    if (page !== "users") {
+      adminSelectedUsername = null;
+      adminUserDetail = null;
+      adminUserDetailError = null;
+    } else if (opts.username !== undefined) {
+      adminSelectedUsername = opts.username;
+      if (!opts.username) {
+        adminUserDetail = null;
+        adminUserDetailError = null;
+      }
+    }
+    userMenuOpen = false;
+    persistTab("admin", page, adminSelectedUsername);
+    log.event("tab", { tab: "admin", adminPage: page, user: adminSelectedUsername });
+    if (opts.clearFlash !== false) clearFlash();
+    busy = true;
+    render();
+    try {
+      await loadAdminCapabilities();
+      if (!adminUiEnabled()) {
+        activeTab = "calendars";
+        persistTab("calendars");
+        setFlash(
+          "info",
+          "Portal Administration UI is disabled.",
+        );
+        return;
+      }
+      const meta = adminPageMeta(page);
+      if (page === "overview" && meta?.available !== false) {
+        await loadAdminDashboard();
+      } else if (page === "users" && meta?.available !== false) {
+        await loadAdminUsers();
+        if (adminSelectedUsername) {
+          await loadAdminUserDetail(adminSelectedUsername);
+          await loadAdminUserResources(adminSelectedUsername);
+        }
+      } else if (page === "settings" && meta?.available !== false) {
+        await loadAdminSystemSettings();
+      } else if (page === "database" && meta?.available !== false) {
+        await loadAdminDatabaseSettings();
+      }
+    } catch (e) {
+      log.warn("admin page load failed", e instanceof Error ? e.message : e);
+      setFlash("error", e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function loadAdminCapabilities(): Promise<void> {
+    adminCapabilitiesError = null;
+    try {
+      const res = await api.adminCapabilities();
+      adminCapabilities = res.data;
+      log.debug("admin.capabilities", {
+        uiEnabled: adminCapabilities.uiEnabled,
+        pages: adminCapabilities.pages?.length ?? 0,
+      });
+    } catch (e) {
+      adminCapabilitiesError = e instanceof Error ? e.message : "Failed to load capabilities";
+      adminCapabilities = {
+        uiEnabled: true,
+        portalAdminUrl: "/portal/#admin",
+        pages: [
+          {
+            id: "overview",
+            label: "Overview",
+            status: "full",
+            available: true,
+            portalUrl: "/portal/#admin",
+            portalLabel: "Overview",
+            summary: "Live counts and service flags.",
+          },
+          {
+            id: "settings",
+            label: "System settings",
+            status: "full",
+            available: true,
+            portalUrl: "/portal/#admin/settings",
+            portalLabel: "System settings",
+            summary: "Edit system flags and admin password in the portal.",
+          },
+          {
+            id: "users",
+            label: "Users",
+            status: "full",
+            available: true,
+            portalUrl: "/portal/#admin/users",
+            portalLabel: "Users",
+            summary: "Full DAV user CRUD plus calendars and address books.",
+          },
+          {
+            id: "database",
+            label: "Database",
+            status: "full",
+            available: true,
+            portalUrl: "/portal/#admin/database",
+            portalLabel: "Database",
+            summary: "Connection settings; saves require typing CONFIRM.",
+          },
+        ],
+      };
+      log.warn("admin.capabilities fallback", adminCapabilitiesError);
+    }
+  }
+
+  async function loadAdminDashboard(): Promise<void> {
+    adminDashboardLoading = true;
+    adminDashboardError = null;
+    try {
+      const res = await api.adminDashboard();
+      adminDashboard = res.data;
+      log.debug("admin.dashboard", {
+        users: adminDashboard.users,
+        calendars: adminDashboard.calendars,
+      });
+    } catch (e) {
+      adminDashboard = null;
+      adminDashboardError = e instanceof Error ? e.message : "Failed to load dashboard";
+      throw e;
+    } finally {
+      adminDashboardLoading = false;
+    }
+  }
+
+  async function loadAdminUsers(): Promise<void> {
+    adminUsersLoading = true;
+    adminUsersError = null;
+    try {
+      const res = await api.adminUsers();
+      adminUsers = res.users ?? [];
+      log.debug("admin.users", { count: adminUsers.length });
+    } catch (e) {
+      adminUsers = [];
+      adminUsersError = e instanceof Error ? e.message : "Failed to load users";
+      throw e;
+    } finally {
+      adminUsersLoading = false;
+    }
+  }
+
+  async function loadAdminUserDetail(username: string): Promise<void> {
+    adminUserDetailLoading = true;
+    adminUserDetailError = null;
+    try {
+      const res = await api.adminUser(username);
+      adminUserDetail = res.user;
+      adminSelectedUsername = res.user.username;
+      log.debug("admin.user", { username: res.user.username });
+    } catch (e) {
+      adminUserDetail = null;
+      adminUserDetailError = e instanceof Error ? e.message : "Failed to load user";
+      throw e;
+    } finally {
+      adminUserDetailLoading = false;
+    }
+  }
+
+  async function loadAdminUserResources(username: string): Promise<void> {
+    adminUserResourcesLoading = true;
+    try {
+      const [cals, abs] = await Promise.all([
+        api.adminUserCalendars(username),
+        api.adminUserAddressBooks(username),
+      ]);
+      adminUserCalendars = cals.calendars ?? [];
+      adminUserAddressBooks = abs.addressbooks ?? [];
+    } catch (e) {
+      adminUserCalendars = [];
+      adminUserAddressBooks = [];
+      throw e;
+    } finally {
+      adminUserResourcesLoading = false;
+    }
+  }
+
+  async function loadAdminSystemSettings(): Promise<void> {
+    adminSystemSettingsLoading = true;
+    adminSystemSettingsError = null;
+    try {
+      const res = await api.adminSystemSettings();
+      adminSystemSettings = res.data;
+    } catch (e) {
+      adminSystemSettings = null;
+      adminSystemSettingsError =
+        e instanceof Error ? e.message : "Failed to load settings";
+      throw e;
+    } finally {
+      adminSystemSettingsLoading = false;
+    }
+  }
+
+  async function loadAdminDatabaseSettings(): Promise<void> {
+    adminDatabaseSettingsLoading = true;
+    adminDatabaseSettingsError = null;
+    try {
+      const res = await api.adminDatabaseSettings();
+      adminDatabaseSettings = res.data;
+      const b = (res.data.backend || "sqlite").toLowerCase();
+      adminDbFormBackend = b === "pgsql" ? "pgsql" : "sqlite";
+    } catch (e) {
+      adminDatabaseSettings = null;
+      adminDatabaseSettingsError =
+        e instanceof Error ? e.message : "Failed to load database settings";
+      throw e;
+    } finally {
+      adminDatabaseSettingsLoading = false;
+    }
+  }
+
+  async function onAdminUserCreate(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const username = String(fd.get("username") ?? "").trim();
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
+    const passwordConfirm = String(fd.get("passwordConfirm") ?? "");
+    if (!username || !displayname || !email || !password) {
+      setFlash("error", "Username, display name, email, and password are required");
+      render();
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setFlash("error", "Password confirmation does not match");
+      render();
+      return;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminCreateUser({
+        username,
+        displayname,
+        email,
+        password,
+        passwordConfirm,
+      });
+      log.event("admin.user.create", { username: res.user.username });
+      adminUserCreateOpen = false;
+      adminSelectedUsername = res.user.username;
+      adminUserDetail = res.user;
+      persistTab("admin", "users", res.user.username);
+      await loadAdminUsers();
+      setFlash("success", `Created user “${res.user.username}”`);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Create failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminCalSave(form: HTMLFormElement): Promise<void> {
+    if (!adminSelectedUsername) return;
+    const uname = adminSelectedUsername;
+    const fd = new FormData(form);
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const description = String(fd.get("description") ?? "").trim();
+    const calendarcolor = String(fd.get("calendarcolor") ?? "").trim();
+    const todos = form.querySelector<HTMLInputElement>('input[name="todos"]')?.checked ?? false;
+    const notes = form.querySelector<HTMLInputElement>('input[name="notes"]')?.checked ?? false;
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      if (adminCalModal === "create") {
+        const uri = String(fd.get("uri") ?? "").trim().toLowerCase();
+        await api.adminCreateUserCalendar(uname, {
+          uri,
+          displayname,
+          description,
+          calendarcolor: calendarcolor || undefined,
+          todos,
+          notes,
+        });
+        setFlash("success", `Created calendar “${displayname}”`);
+      } else {
+        const instanceId = Number(fd.get("instanceId"));
+        await api.adminUpdateUserCalendar(uname, instanceId, {
+          displayname,
+          description,
+          calendarcolor,
+          todos,
+          notes,
+        });
+        setFlash("success", `Updated calendar “${displayname}”`);
+      }
+      adminCalModal = null;
+      adminCalEditId = null;
+      await loadAdminUserResources(uname);
+      await loadAdminUserDetail(uname);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminAbSave(form: HTMLFormElement): Promise<void> {
+    if (!adminSelectedUsername) return;
+    const uname = adminSelectedUsername;
+    const fd = new FormData(form);
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const description = String(fd.get("description") ?? "").trim();
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      if (adminAbModal === "create") {
+        const uri = String(fd.get("uri") ?? "").trim().toLowerCase();
+        await api.adminCreateUserAddressBook(uname, { uri, displayname, description });
+        setFlash("success", `Created address book “${displayname}”`);
+      } else {
+        const id = Number(fd.get("id"));
+        await api.adminUpdateUserAddressBook(uname, id, { displayname, description });
+        setFlash("success", `Updated address book “${displayname}”`);
+      }
+      adminAbModal = null;
+      adminAbEditId = null;
+      await loadAdminUserResources(uname);
+      await loadAdminUserDetail(uname);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  function collectAdminDatabaseFormBody(form: HTMLFormElement): Record<string, unknown> {
+    const fd = new FormData(form);
+    const backend = String(fd.get("backend") ?? adminDbFormBackend).toLowerCase() === "pgsql" ? "pgsql" : "sqlite";
+    const body: Record<string, unknown> = { backend };
+    if (backend === "sqlite") {
+      body.sqlite_file = String(fd.get("sqlite_file") ?? "").trim();
+    } else {
+      body.pgsql_host = String(fd.get("pgsql_host") ?? "").trim();
+      body.pgsql_dbname = String(fd.get("pgsql_dbname") ?? "").trim();
+      body.pgsql_username = String(fd.get("pgsql_username") ?? "").trim();
+      body.pgsql_password = String(fd.get("pgsql_password") ?? "");
+    }
+    return body;
+  }
+
+  function onAdminDatabaseFormSubmit(form: HTMLFormElement): void {
+    adminDbPendingBody = collectAdminDatabaseFormBody(form);
+    adminDbConfirmText = "";
+    adminDbConfirmOpen = true;
+    clearFlash();
+    render();
+  }
+
+  async function onAdminDatabaseTest(form: HTMLFormElement | null): Promise<void> {
+    if (!form) {
+      form = root.querySelector<HTMLFormElement>('[data-form="admin-database"]');
+    }
+    if (!form) {
+      setFlash("error", "Database form not found");
+      render();
+      return;
+    }
+    const body = collectAdminDatabaseFormBody(form);
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminTestDatabaseConnection(body);
+      setFlash("success", res.message || "Connection successful");
+      log.event("admin.database.test", { backend: res.backend });
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Connection test failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminSettingsSave(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const bool = (name: string) =>
+      !!form.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.checked;
+    const body: Record<string, unknown> = {
+      cal_enabled: bool("cal_enabled"),
+      card_enabled: bool("card_enabled"),
+      tasks_enabled: bool("tasks_enabled"),
+      notes_enabled: bool("notes_enabled"),
+      files_enabled: bool("files_enabled"),
+      push_enabled: bool("push_enabled"),
+      portal_admin_ui_enabled: bool("portal_admin_ui_enabled"),
+      timezone: String(fd.get("timezone") ?? "").trim(),
+      invite_from: String(fd.get("invite_from") ?? "").trim(),
+      dav_auth_type: String(fd.get("dav_auth_type") ?? "Digest"),
+      files_storage_path: String(fd.get("files_storage_path") ?? "").trim(),
+      files_max_upload_mb: Number(fd.get("files_max_upload_mb") ?? 0),
+      files_quota_mb: Number(fd.get("files_quota_mb") ?? 0),
+      files_quarantine_days: Number(fd.get("files_quarantine_days") ?? 0),
+      session_max_age_minutes: Number(fd.get("session_max_age_minutes") ?? 15),
+      portal_log_level: String(fd.get("portal_log_level") ?? "off"),
+      portal_admin_users: String(fd.get("portal_admin_users") ?? "").trim(),
+      push_external_url: String(fd.get("push_external_url") ?? "").trim(),
+      push_log_level: String(fd.get("push_log_level") ?? "off"),
+    };
+    const pw = String(fd.get("admin_password") ?? "");
+    const pwc = String(fd.get("admin_password_confirm") ?? "");
+    if (pw !== "" || pwc !== "") {
+      body.admin_password = pw;
+      body.admin_password_confirm = pwc;
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const res = await api.adminUpdateSystemSettings(body);
+      adminSystemSettings = res.data;
+      log.event("admin.settings.save");
+      setFlash("success", "System settings saved");
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  async function onAdminUserEdit(form: HTMLFormElement): Promise<void> {
+    const fd = new FormData(form);
+    const username = String(fd.get("username") ?? "").trim();
+    const displayname = String(fd.get("displayname") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
+    const passwordConfirm = String(fd.get("passwordConfirm") ?? "");
+    if (!username) {
+      setFlash("error", "Username is required");
+      render();
+      return;
+    }
+    if (!displayname || !email) {
+      setFlash("error", "Display name and email are required");
+      render();
+      return;
+    }
+    if (password !== "" || passwordConfirm !== "") {
+      if (password === "" || passwordConfirm === "") {
+        setFlash("error", "Password and confirmation are required to change password");
+        render();
+        return;
+      }
+      if (password !== passwordConfirm) {
+        setFlash("error", "Password confirmation does not match");
+        render();
+        return;
+      }
+    }
+    busy = true;
+    clearFlash();
+    render();
+    try {
+      const body: {
+        displayname: string;
+        email: string;
+        password?: string;
+        passwordConfirm?: string;
+      } = { displayname, email };
+      if (password !== "") {
+        body.password = password;
+        body.passwordConfirm = passwordConfirm;
+      }
+      const res = await api.adminUpdateUser(username, body);
+      log.event("admin.user.update", {
+        username: res.user.username,
+        passwordChanged: password !== "",
+      });
+      adminUserEditOpen = false;
+      adminUserDetail = res.user;
+      adminSelectedUsername = res.user.username;
+      await loadAdminUsers();
+      setFlash(
+        "success",
+        password !== ""
+          ? `Updated “${res.user.username}” (password changed)`
+          : `Updated “${res.user.username}”`,
+      );
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Update failed");
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
   async function activateTab(tab: TabId, opts: { clearFlash?: boolean } = {}): Promise<void> {
-    if (tab === "admin" && !userIsAdmin()) {
+    if (tab === "admin" && (!userIsAdmin() || !adminUiEnabled())) {
+      if (userIsAdmin() && adminCapabilities && !adminCapabilities.uiEnabled) {
+        setFlash("info", "Portal Administration UI is disabled (portal_admin_ui_enabled).");
+      }
       tab = "calendars";
+    }
+    if (tab === "admin") {
+      // Entering Administration from the user menu → Overview (or last hash page)
+      await activateAdminPage(adminPage || "overview", {
+        ...opts,
+        username: adminPage === "users" ? adminSelectedUsername : null,
+      });
+      return;
     }
     activeTab = tab;
     userMenuOpen = false;
@@ -566,6 +1344,146 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
+  /** True when dest is a source path or inside a source folder (invalid for copy/move). */
+  function isBlockedTransferDest(dest: string, sources: string[]): boolean {
+    for (const src of sources) {
+      if (!src) continue;
+      if (dest === src || dest.startsWith(`${src}/`)) return true;
+    }
+    return false;
+  }
+
+  function resetFilesTransferTree(): void {
+    filesTransfer = null;
+    filesTransferDest = "";
+    filesTreeChildren = {};
+    filesTreeExpanded = [];
+  }
+
+  /**
+   * Open copy/move modal with a destination folder tree.
+   * Prefills selection to the current folder and expands ancestors so the tree is oriented.
+   */
+  async function openFilesTransfer(op: "copy" | "move", paths: string[]): Promise<void> {
+    if (paths.length === 0) return;
+    filesTransfer = { op, paths: [...paths] };
+    filesTransferDest = filesPath;
+    filesTreeChildren = {};
+    // Expand Home + every ancestor of the current folder (and the folder itself if it is a dir path)
+    const expanded = new Set<string>([""]);
+    if (filesPath) {
+      const parts = filesPath.split("/").filter(Boolean);
+      let acc = "";
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part;
+        expanded.add(acc);
+      }
+    }
+    filesTreeExpanded = [...expanded];
+    filesRenamePath = null;
+    filesDeletePaths = null;
+    filesMkdirOpen = false;
+    clearFlash();
+    render();
+    // Load children for every expanded path so the tree is usable immediately
+    await Promise.all([...expanded].map((p) => ensureFilesTreeChildren(p)));
+  }
+
+  async function ensureFilesTreeChildren(parentPath: string): Promise<void> {
+    const cached = filesTreeChildren[parentPath];
+    if (cached && cached !== "error") return;
+    filesTreeChildren = { ...filesTreeChildren, [parentPath]: "loading" };
+    render();
+    try {
+      const list = await api.filesList(parentPath);
+      const dirs = list.entries
+        .filter((e) => e.type === "dir")
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      // Ignore stale loads if the modal was closed
+      if (!filesTransfer) return;
+      filesTreeChildren = { ...filesTreeChildren, [parentPath]: dirs };
+    } catch (e) {
+      if (!filesTransfer) return;
+      filesTreeChildren = { ...filesTreeChildren, [parentPath]: "error" };
+      log.warn("files.tree", {
+        path: parentPath || "/",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+    render();
+  }
+
+  function renderFilesFolderTree(): string {
+    if (!filesTransfer) return "";
+    const sources = filesTransfer.paths;
+    const lines: string[] = [];
+
+    const walk = (path: string, depth: number): void => {
+      const selected = filesTransferDest === path;
+      const blocked = isBlockedTransferDest(path, sources);
+      const expanded = filesTreeExpanded.includes(path);
+      const children = filesTreeChildren[path];
+      const hasLoadedKids = Array.isArray(children);
+      // Root and unloaded nodes show a chevron so the user can expand; empty leaves hide it after load.
+      const showToggle =
+        path === "" ||
+        children === "loading" ||
+        children === "error" ||
+        !hasLoadedKids ||
+        (children as FileEntry[]).length > 0;
+      const label = path === "" ? "Home" : basenamePath(path);
+      const title = blocked
+        ? "Cannot use a selected item (or a folder inside it) as the destination"
+        : path === ""
+          ? "File home root"
+          : path;
+      const chevron = expanded ? "▾" : "▸";
+      lines.push(`<div class="files-tree-row${selected ? " is-selected" : ""}${blocked ? " is-blocked" : ""}" style="--depth:${depth}" role="treeitem" aria-selected="${selected}" aria-expanded="${expanded}" aria-disabled="${blocked}">
+        ${
+          showToggle
+            ? `<button type="button" class="files-tree-toggle" data-action="files-tree-toggle" data-path="${esc(path)}"
+                aria-label="${expanded ? "Collapse" : "Expand"} ${esc(label)}" ${busy ? "disabled" : ""}>${chevron}</button>`
+            : `<span class="files-tree-toggle-spacer" aria-hidden="true"></span>`
+        }
+        <button type="button" class="files-tree-select${selected ? " is-selected" : ""}" data-action="files-tree-select" data-path="${esc(path)}"
+          title="${esc(title)}" ${busy || blocked ? "disabled" : ""}>
+          <span class="files-icon" aria-hidden="true">📁</span>
+          <span class="files-tree-label">${esc(label)}</span>
+        </button>
+      </div>`);
+
+      if (!expanded) return;
+      if (children === "loading") {
+        lines.push(
+          `<div class="files-tree-status muted small" style="--depth:${depth + 1}">Loading…</div>`,
+        );
+        return;
+      }
+      if (children === "error") {
+        lines.push(
+          `<div class="files-tree-status muted small" style="--depth:${depth + 1}">Could not load folders.
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-tree-retry" data-path="${esc(path)}" ${busy ? "disabled" : ""}>Retry</button>
+          </div>`,
+        );
+        return;
+      }
+      if (hasLoadedKids) {
+        for (const dir of children as FileEntry[]) {
+          walk(dir.path, depth + 1);
+        }
+        if ((children as FileEntry[]).length === 0 && path === "") {
+          lines.push(
+            `<div class="files-tree-status muted small" style="--depth:${depth + 1}">No subfolders yet — destination will be Home.</div>`,
+          );
+        }
+      }
+    };
+
+    walk("", 0);
+    return `<div class="files-folder-tree" role="tree" aria-label="Destination folder">${lines.join("")}</div>`;
+  }
+
   /**
    * Session lost (idle timeout or server 401). Leave dashboard and show login
    * with a clear message — do not leave calendars/contacts in the DOM.
@@ -624,6 +1542,15 @@ export function mountApp(root: HTMLElement): void {
   let filesDeletePaths: string[] | null = null;
   /** Copy/move destination modal (one or more source paths). */
   let filesTransfer: { op: "copy" | "move"; paths: string[] } | null = null;
+  /** Selected destination folder path in the transfer tree ("" = Home). */
+  let filesTransferDest = "";
+  /**
+   * Lazy folder-tree cache for copy/move: parent path → child dirs,
+   * or "loading" / "error" while fetching.
+   */
+  let filesTreeChildren: Record<string, FileEntry[] | "loading" | "error"> = {};
+  /** Expanded folder paths in the transfer tree ("" = Home). */
+  let filesTreeExpanded: string[] = [];
   /** New-folder modal open. */
   let filesMkdirOpen = false;
   /** Selected entry paths in the current folder (multi-select). */
@@ -644,6 +1571,77 @@ export function mountApp(root: HTMLElement): void {
     suppressErrorFlashAfterExpiry = false;
   }
 
+  function applyInstallGateFromStatus(st: {
+    step?: string;
+    message?: string;
+    installUrl?: string;
+    productVersion?: string;
+    configuredVersion?: string | null;
+  }): void {
+    const step = String(st.step || "");
+    if (
+      step === "upgrade" ||
+      step === "initialize" ||
+      step === "permissions" ||
+      step === "database"
+    ) {
+      installGate = {
+        step,
+        message:
+          st.message ||
+          (step === "upgrade"
+            ? "Complete the upgrade wizard before signing in."
+            : "Complete setup before signing in."),
+        installUrl: st.installUrl || "/portal/install/",
+        productVersion: st.productVersion,
+        configuredVersion: st.configuredVersion ?? null,
+      };
+      if (typeof st.productVersion === "string" && st.productVersion.trim() !== "") {
+        appVersion = st.productVersion.trim();
+      }
+    } else {
+      installGate = null;
+    }
+  }
+
+  function applyInstallGateFromApiError(e: unknown): boolean {
+    if (!(e instanceof ApiError) || e.status !== 503) return false;
+    const code = typeof e.payload.code === "string" ? e.payload.code : "";
+    if (
+      code !== "upgrade_required" &&
+      code !== "not_configured" &&
+      code !== "admin_password_missing"
+    ) {
+      return false;
+    }
+    const step =
+      code === "upgrade_required"
+        ? "upgrade"
+        : code === "admin_password_missing"
+          ? "initialize"
+          : "initialize";
+    installGate = {
+      step,
+      message: e.message,
+      installUrl:
+        typeof e.payload.installUrl === "string"
+          ? e.payload.installUrl
+          : "/portal/install/",
+      productVersion:
+        typeof e.payload.productVersion === "string"
+          ? e.payload.productVersion
+          : undefined,
+      configuredVersion:
+        typeof e.payload.configuredVersion === "string"
+          ? e.payload.configuredVersion
+          : null,
+    };
+    if (installGate.productVersion) {
+      appVersion = installGate.productVersion;
+    }
+    return true;
+  }
+
   async function bootstrap() {
     log.event("bootstrap.start");
     setOnUnauthorized((msg) => {
@@ -656,6 +1654,16 @@ export function mountApp(root: HTMLElement): void {
     setOnSessionActivity(() => {
       bumpSessionIdleTimer();
     });
+    // Install/upgrade status first (works even when /api/ui is blocked by upgrade gate)
+    try {
+      const st = await api.installStatus();
+      applyInstallGateFromStatus(st);
+    } catch (e) {
+      log.debug(
+        "bootstrap: /api/install/status failed",
+        e instanceof Error ? e.message : e,
+      );
+    }
     // Public prefs first so log level works on the login screen
     try {
       const pub = await api.ui();
@@ -665,8 +1673,20 @@ export function mountApp(root: HTMLElement): void {
       } else if (pub.ui && typeof pub.ui.version === "string" && pub.ui.version.trim() !== "") {
         appVersion = pub.ui.version.trim();
       }
+      // /api/ui succeeded → not in upgrade block
+      if (installGate?.step === "upgrade") {
+        // status may still say upgrade if race; keep status as source of truth
+      }
     } catch (e) {
       log.debug("bootstrap: /api/ui failed", e instanceof Error ? e.message : e);
+      applyInstallGateFromApiError(e);
+    }
+    if (installGate && installGate.step !== "done" && installGate.step !== "locked") {
+      // Block session restore until setup/upgrade finishes
+      clearPortalSessionState();
+      log.event("bootstrap.installGate", { step: installGate.step });
+      render();
+      return;
     }
     try {
       const me = await api.me();
@@ -677,9 +1697,35 @@ export function mountApp(root: HTMLElement): void {
       }
       log.event("bootstrap.session", { username: user?.username ?? null });
       bumpSessionIdleTimer();
+      if (userIsAdmin()) {
+        try {
+          await loadAdminCapabilities();
+        } catch (e) {
+          log.warn("admin.capabilities bootstrap", e instanceof Error ? e.message : e);
+        }
+      }
       normalizeActiveTab();
-      persistTab(activeTab);
+      persistTab(activeTab, adminPage);
       await loadHome();
+      if (activeTab === "admin" && userIsAdmin() && adminUiEnabled()) {
+        try {
+          if (adminPage === "overview" && adminPageMeta("overview")?.available !== false) {
+            await loadAdminDashboard();
+          } else if (adminPage === "users" && adminPageMeta("users")?.available !== false) {
+            await loadAdminUsers();
+            if (adminSelectedUsername) {
+              await loadAdminUserDetail(adminSelectedUsername);
+              await loadAdminUserResources(adminSelectedUsername);
+            }
+          } else if (adminPage === "settings" && adminPageMeta("settings")?.available !== false) {
+            await loadAdminSystemSettings();
+          } else if (adminPage === "database" && adminPageMeta("database")?.available !== false) {
+            await loadAdminDatabaseSettings();
+          }
+        } catch (e) {
+          log.warn("admin bootstrap load", e instanceof Error ? e.message : e);
+        }
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         // Anonymous visit or expired cookie on first paint — never keep a stale shell
@@ -719,17 +1765,26 @@ export function mountApp(root: HTMLElement): void {
         holidayCountries = [];
       }
     }
+    // Drop selections for calendars that no longer exist
+    selectedIds = selectedIds.filter((id) => calendars.some((c) => c.id === id));
     if (selectedId !== null && !calendars.some((c) => c.id === selectedId)) {
       selectedId = null;
       shares = [];
       calModalOpen = false;
       deleteConfirmId = null;
     }
-    if (selectedId === null) {
+    if (selectedIds.length === 0) {
       const def = pickDefaultCalendar();
       if (def) {
+        selectedIds = [def.id];
         selectedId = def.id;
+      } else if (calendars.length > 0) {
+        selectedIds = [calendars[0].id];
+        selectedId = calendars[0].id;
       }
+    }
+    if (selectedId === null && selectedIds.length > 0) {
+      selectedId = selectedIds[0];
     }
     if (selectedId !== null && calModalOpen) {
       await loadShares(selectedId);
@@ -889,18 +1944,32 @@ export function mountApp(root: HTMLElement): void {
   }
 
   async function loadMonthEvents() {
-    if (selectedId === null) {
+    const ids = selectedIds.filter((id) => calendars.some((c) => c.id === id));
+    if (ids.length === 0) {
       monthEvents = [];
       return;
     }
     const { from, to } = monthRange(monthCursor.y, monthCursor.m);
     monthEventsLoading = true;
-    log.debug("loadMonthEvents", { selectedId, from, to });
+    log.debug("loadMonthEvents", { selectedIds: ids, from, to });
     try {
-      const res = await api.calendarEvents(selectedId, from, to);
-      monthEvents = res.events;
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await api.calendarEvents(id, from, to);
+          return res.events.map((ev) => ({ ...ev, instanceId: id }));
+        }),
+      );
+      const merged = results.flat();
+      // Stable order: by start, then summary
+      merged.sort((a, b) => {
+        const sa = a.start || "";
+        const sb = b.start || "";
+        if (sa !== sb) return sa < sb ? -1 : 1;
+        return (a.summary || "").localeCompare(b.summary || "");
+      });
+      monthEvents = merged;
       log.event("monthEvents.loaded", {
-        calendarId: selectedId,
+        calendarIds: ids,
         count: monthEvents.length,
         from,
         to,
@@ -913,6 +1982,24 @@ export function mountApp(root: HTMLElement): void {
       );
     } finally {
       monthEventsLoading = false;
+    }
+  }
+
+  function calendarColor(instanceId: number): string {
+    const c = calendars.find((x) => x.id === instanceId);
+    if (!c?.color) return "#3B82F6";
+    return c.color.length >= 7 ? c.color.slice(0, 7) : c.color;
+  }
+
+  function toggleCalendarSelected(id: number): void {
+    if (selectedIds.includes(id)) {
+      selectedIds = selectedIds.filter((x) => x !== id);
+      if (selectedId === id) {
+        selectedId = selectedIds[0] ?? null;
+      }
+    } else {
+      selectedIds = [...selectedIds, id];
+      selectedId = id;
     }
   }
 
@@ -936,13 +2023,13 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function renderMonthGrid(): string {
-    const selected = selectedId !== null ? calendars.find((c) => c.id === selectedId) : null;
-    const calName = selected?.displayname ?? "Calendar";
-    const color = selected?.color
-      ? selected.color.length >= 7
-        ? selected.color.slice(0, 7)
-        : selected.color
-      : "#3B82F6";
+    const selectedCals = calendars.filter((c) => selectedIds.includes(c.id));
+    const calName =
+      selectedCals.length === 0
+        ? "No calendar selected"
+        : selectedCals.length === 1
+          ? selectedCals[0].displayname
+          : `${selectedCals.length} calendars`;
 
     const y = monthCursor.y;
     const m = monthCursor.m;
@@ -990,9 +2077,12 @@ export function mountApp(root: HTMLElement): void {
       const more = dayEvents.length - shown.length;
       const chips = shown
         .map((ev) => {
-          const inst = selectedId ?? 0;
+          const inst = (ev as CalendarEvent & { instanceId: number }).instanceId;
           const label = formatEventChipLabel(ev);
-          return `<button type="button" class="month-event${!ev.allDay ? " is-timed" : ""}" title="${esc(label)}" style="--ev-color:${esc(color)}"
+          const color = calendarColor(inst);
+          const calTitle = calendars.find((c) => c.id === inst)?.displayname || "";
+          const tip = calTitle ? `${label} · ${calTitle}` : label;
+          return `<button type="button" class="month-event${!ev.allDay ? " is-timed" : ""}" title="${esc(tip)}" style="--ev-color:${esc(color)}"
             data-action="open-event" data-instance="${inst}" data-uri="${esc(ev.uri)}" ${busy ? "disabled" : ""}>${esc(label)}</button>`;
         })
         .join("");
@@ -1004,10 +2094,12 @@ export function mountApp(root: HTMLElement): void {
         !inMonth && (dayNum === 1 || i === startPad + daysInMonth)
           ? cellDate.toLocaleString(undefined, { month: "short", day: "numeric" })
           : String(dayNum);
+      const primary =
+        selectedId !== null ? calendars.find((c) => c.id === selectedId) ?? null : null;
       const canCreate = !!(
-        selected &&
-        !selected.readOnly &&
-        (selected.canShare || selected.access === "readwrite")
+        primary &&
+        !primary.readOnly &&
+        (primary.canShare || primary.access === "readwrite")
       );
       cells.push(`<div class="month-cell${inMonth ? "" : " is-outside"}${isToday ? " is-today" : ""}${canCreate ? " is-clickable" : ""}"${
         canCreate
@@ -1019,14 +2111,23 @@ export function mountApp(root: HTMLElement): void {
       </div>`);
     }
 
+    // "Check one or more calendars…" lives under Owned (sidebar); keep only no-calendars / loading here.
     const emptyHint =
-      !selected
+      selectedCals.length === 0
         ? calendars.length === 0
           ? `<p class="muted small month-empty-hint">No calendars yet — create one on the left, or wait for someone to share with you.</p>`
-          : `<p class="muted small month-empty-hint">Select a calendar on the left (owned or shared) to view events.</p>`
+          : ""
         : monthEventsLoading
           ? `<p class="muted small month-empty-hint">Loading events…</p>`
           : "";
+
+    const swatches = selectedCals
+      .slice(0, 6)
+      .map((c) => {
+        const col = c.color && c.color.length >= 7 ? c.color.slice(0, 7) : c.color || "#3B82F6";
+        return `<span class="cal-swatch" style="background:${esc(col)};margin-top:0" title="${esc(c.displayname)}"></span>`;
+      })
+      .join("");
 
     return `<section class="card month-cal-card">
       <div class="month-cal-toolbar">
@@ -1037,7 +2138,7 @@ export function mountApp(root: HTMLElement): void {
         </div>
         <h2 class="month-cal-title">${esc(monthTitle(y, m))}</h2>
         <span class="month-cal-name muted small" title="${esc(calName)}">
-          <span class="cal-swatch" style="background:${esc(color)};margin-top:0"></span>
+          ${swatches}
           ${esc(calName)}
         </span>
       </div>
@@ -1836,16 +2937,29 @@ export function mountApp(root: HTMLElement): void {
     });
   }
 
-  function shell(body: string, opts: { auth?: boolean } = {}): string {
+  function shell(
+    body: string,
+    opts: { auth?: boolean; tabs?: string } = {},
+  ): string {
+    const inAdmin = !!user && activeTab === "admin" && userIsAdmin() && adminUiEnabled();
+    // Logo + wordmark: DAV blue; portal name after · is soft green (user) / soft red (admin)
+    const portalName = inAdmin ? "Administration Portal" : "User Portal";
+    const portalClass = inAdmin ? "brand-portal brand-portal-admin" : "brand-portal brand-portal-user";
     const brand = `
-      <span class="brand-mark" aria-hidden="true">A</span>
-      <span>AngaraDAV User Portal</span>`;
+      <img class="brand-logo" src="/logo.png" width="28" height="28" alt="" aria-hidden="true" />
+      <span class="brand-text">Angara<span class="brand-dav">DAV</span><span class="brand-sep" aria-hidden="true"> · </span><span class="${portalClass}">${esc(portalName)}</span></span>`;
     const displayName = user ? esc(user.displayname || user.username) : "";
-    const adminMenuItem = userIsAdmin()
+    const adminMenuItem = adminUiEnabled()
       ? `<button type="button" class="user-menu-item${activeTab === "admin" ? " is-active" : ""}" role="menuitem" data-action="tab" data-tab="admin">
               Administration
             </button>`
       : "";
+    const userPortalMenuItem =
+      inAdmin
+        ? `<button type="button" class="user-menu-item" role="menuitem" data-action="tab" data-tab="calendars">
+              User portal
+            </button>`
+        : "";
     const userMenu = user
       ? `<div class="user-menu${userMenuOpen ? " is-open" : ""}">
             <button type="button" class="user-menu-trigger" data-action="user-menu-toggle"
@@ -1855,6 +2969,7 @@ export function mountApp(root: HTMLElement): void {
               <span class="user-menu-caret" aria-hidden="true">▾</span>
             </button>
             <div class="user-menu-dropdown" role="menu" ${userMenuOpen ? "" : "hidden"}>
+              ${userPortalMenuItem}
               ${adminMenuItem}
               <button type="button" class="user-menu-item user-menu-item-danger" role="menuitem" data-action="logout">
                 Log out
@@ -1885,14 +3000,22 @@ export function mountApp(root: HTMLElement): void {
     );
     const flashHtml = flashOnMain ? renderFlashBanner() : "";
 
+    // Full-width sticky tab strip under topnav (same height for user + admin)
+    const tabsBar =
+      opts.tabs && opts.tabs.trim() !== ""
+        ? `<div class="tabs-bar" role="presentation">
+        <div class="tabs-bar-inner">
+          ${opts.tabs}
+        </div>
+      </div>`
+        : "";
+
     const footer = `
       <footer class="site-footer">
         <div class="container footer-inner">
           <span>AngaraDAV portal <span class="mono">v${esc(appVersion)}</span></span>
           <span class="footer-sep" aria-hidden="true">·</span>
-          <a href="/dav.php/">Classic DAV browser</a>
-          <span class="footer-sep" aria-hidden="true">·</span>
-          <a href="/admin/">Admin</a>
+          <a href="/dav.php/">DAV browser</a>
           <span class="footer-sep" aria-hidden="true">·</span>
           <a href="${esc(DOCS_URL)}" target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
@@ -1905,7 +3028,12 @@ export function mountApp(root: HTMLElement): void {
       document.body.classList.remove("layout-auth");
     }
 
-    return `${nav}
+    // Single sticky chrome stack (topnav + tabs) so heights match user/admin
+    // and content never scrolls under rounded tab corners.
+    return `<div class="app-chrome">
+      ${nav}
+      ${tabsBar}
+    </div>
       <main class="container">
         ${flashHtml}
         ${body}
@@ -1918,10 +3046,7 @@ export function mountApp(root: HTMLElement): void {
   /** Success/error banner; shown on main page or inside open calendar modal. */
   function renderFlashBanner(): string {
     if (!flash) return "";
-    return `<div class="flash flash-${esc(flash.type)}" role="status">
-      <span class="flash-text">${esc(flash.message)}</span>
-      <button type="button" class="flash-close" data-action="flash-close" aria-label="Dismiss message" title="Dismiss">×</button>
-    </div>`;
+    return renderFlash(flash.type, flash.message, { dismissible: true });
   }
 
   function formatFileSize(bytes: number): string {
@@ -2121,18 +3246,20 @@ export function mountApp(root: HTMLElement): void {
         </p>`;
     } else if (p.phase === "done") {
       body = `
-        <div class="flash flash-success import-result" role="status" style="margin:0 0 1rem">
-          <strong>Success.</strong> ${esc(p.resultMessage || "Import completed.")}
-        </div>
+        ${renderFlash("success", `Success. ${p.resultMessage || "Import completed."}`, {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
         <p class="muted small" style="margin:0">
           File: <span class="mono">${esc(p.fileName)}</span>
           · Took ${esc(formatElapsed(p.elapsedSec))}
         </p>`;
     } else {
       body = `
-        <div class="flash flash-error import-result" role="status" style="margin:0 0 1rem">
-          <strong>Failed.</strong> ${esc(p.resultMessage || "Import failed.")}
-        </div>
+        ${renderFlash("error", `Failed. ${p.resultMessage || "Import failed."}`, {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
         <p class="muted small" style="margin:0">
           File: <span class="mono">${esc(p.fileName)}</span>
           · After ${esc(formatElapsed(p.elapsedSec))}
@@ -2142,25 +3269,23 @@ export function mountApp(root: HTMLElement): void {
 
     const footer = running
       ? `<p class="muted small" style="margin:0">Please wait…</p>`
-      : `<button type="button" class="btn btn-primary" data-action="close-import-progress">Close</button>`;
+      : renderModalFooter([
+          { label: "Close", action: "close-import-progress", variant: "primary" },
+        ]);
 
-    return `
-      <div class="cal-modal import-progress-modal" role="dialog" aria-modal="true"
-        aria-labelledby="import-progress-title" data-import-progress>
-        <div class="cal-modal-backdrop"${running ? "" : ' data-action="close-import-progress"'}></div>
-        <div class="cal-modal-card cal-modal-card-sm import-progress-card">
-          <header class="cal-modal-header">
-            <h3 id="import-progress-title">${esc(title)}</h3>
-            ${
-              running
-                ? ""
-                : `<button type="button" class="info-modal-close" data-action="close-import-progress" aria-label="Close">×</button>`
-            }
-          </header>
-          <div class="cal-modal-body">${body}</div>
-          <footer class="cal-modal-footer">${footer}</footer>
-        </div>
-      </div>`;
+    return renderModal({
+      title,
+      titleId: "import-progress-title",
+      closeAction: "close-import-progress",
+      size: "sm",
+      className: "import-progress-modal",
+      cardClassName: "import-progress-card",
+      rootAttrs: "data-import-progress",
+      hideClose: running,
+      lockBackdrop: running,
+      body,
+      footer,
+    });
   }
 
   function readFileTextWithProgress(
@@ -2184,21 +3309,54 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function renderLogin() {
+    const gate = installGate;
+    const upgrade =
+      gate &&
+      (gate.step === "upgrade" ||
+        gate.step === "initialize" ||
+        gate.step === "permissions" ||
+        gate.step === "database");
+    const installUrl = gate?.installUrl || "/portal/install/";
+    let gateBanner = "";
+    if (upgrade && gate) {
+      const title =
+        gate.step === "upgrade"
+          ? "Server upgrade required"
+          : "Setup incomplete";
+      const versions =
+        gate.step === "upgrade" && (gate.configuredVersion || gate.productVersion)
+          ? `<p class="muted small" style="margin:0.5rem 0 0">Configured <span class="mono">${esc(String(gate.configuredVersion || "—"))}</span>
+              → product <span class="mono">${esc(String(gate.productVersion || "—"))}</span></p>`
+          : "";
+      gateBanner = `
+        <div class="flash flash-error" role="alert" style="margin-bottom:1rem">
+          <span class="flash-text">
+            <strong>${esc(title)}.</strong>
+            ${esc(gate.message || "Complete the installer before signing in.")}
+            ${versions}
+          </span>
+        </div>
+        <p style="margin:0 0 1rem">
+          <a class="btn btn-primary" href="${esc(installUrl)}">Open installer</a>
+        </p>`;
+    }
+    const loginDisabled = busy || !!upgrade;
     root.innerHTML = shell(
       `<div class="auth-wrap">
         <div class="card auth-card">
           <h1>Sign in</h1>
+          ${gateBanner}
           <p class="muted">Use your AngaraDAV <strong>DAV user</strong> credentials (not the admin password).</p>
           <form class="stack" data-form="login">
             <label>
               Username
-              <input type="text" name="username" autocomplete="username" required />
+              <input type="text" name="username" autocomplete="username" required ${loginDisabled ? "disabled" : ""} />
             </label>
             <label>
               Password
-              <input type="password" name="password" autocomplete="current-password" required />
+              <input type="password" name="password" autocomplete="current-password" required ${loginDisabled ? "disabled" : ""} />
             </label>
-            <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Sign in</button>
+            <button type="submit" class="btn btn-primary" ${loginDisabled ? "disabled" : ""}>Sign in</button>
           </form>
           <p class="muted small" style="margin-top:1rem">
             CalDAV/CardDAV clients keep using <span class="mono">/dav.php/</span>. This portal is for calendars, sharing, and contacts.
@@ -2221,7 +3379,9 @@ export function mountApp(root: HTMLElement): void {
 
     const calRows = own
       .map((c) => {
-        const active = c.id === selectedId ? " is-selected" : "";
+        const visible = selectedIds.includes(c.id);
+        const active = visible ? " is-selected" : "";
+        const primary = c.id === selectedId ? " is-primary" : "";
         const color = c.color
           ? `<span class="cal-swatch" style="background:${esc(c.color)}"></span>`
           : `<span class="cal-swatch cal-swatch-empty"></span>`;
@@ -2231,7 +3391,10 @@ export function mountApp(root: HTMLElement): void {
           (c.holidaysCountry
             ? `<span class="badge badge-admin">holidays ${esc(c.holidaysCountry)}</span>`
             : "");
-        return `<div class="cal-row${active}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0">
+        return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="Toggle on the month grid">
+          <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+            <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${busy ? "disabled" : ""} />
+          </label>
           ${color}
           <span class="cal-row-text">
             <span class="cal-row-title">${esc(c.displayname)}</span>
@@ -2239,6 +3402,7 @@ export function mountApp(root: HTMLElement): void {
             <span class="muted small mono cal-row-uri">${esc(c.uri)}</span>
           </span>
           <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-cal" data-id="${c.id}" ${busy ? "disabled" : ""} title="Export as .ics">Export</button>
             <button type="button" class="btn btn-small" data-action="edit-cal" data-id="${c.id}" ${busy ? "disabled" : ""}>Edit</button>
             <button type="button" class="btn btn-small btn-danger" data-action="delete-cal" data-id="${c.id}" ${busy ? "disabled" : ""}>Delete</button>
           </span>
@@ -2248,20 +3412,28 @@ export function mountApp(root: HTMLElement): void {
 
     const sharedRows = sharedWithMe
       .map((c) => {
-        const active = c.id === selectedId ? " is-selected" : "";
+        const visible = selectedIds.includes(c.id);
+        const active = visible ? " is-selected" : "";
+        const primary = c.id === selectedId ? " is-primary" : "";
         const color = c.color
           ? `<span class="cal-swatch" style="background:${esc(c.color)}"></span>`
           : `<span class="cal-swatch cal-swatch-empty"></span>`;
         const accessHint =
           c.access === "readwrite"
-            ? "Shared with you · full access — select to view and edit events"
-            : "Shared with you · read-only — select to view events";
-        return `<div class="cal-row${active}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="${esc(accessHint)}">
+            ? "Shared with you · full access — check to show events; click to set as primary for new events"
+            : "Shared with you · read-only — check to show events";
+        return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="${esc(accessHint)}">
+          <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+            <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${busy ? "disabled" : ""} />
+          </label>
           ${color}
           <span class="cal-row-text">
             <span class="cal-row-title">${esc(c.displayname)}</span>
             <span class="cal-row-badges">${accessBadge(c.access)}</span>
             <span class="muted small">${c.access === "readwrite" ? "Shared · full access" : "Shared · read-only"}</span>
+          </span>
+          <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-cal" data-id="${c.id}" ${busy ? "disabled" : ""} title="Export as .ics">Export</button>
           </span>
         </div>`;
       })
@@ -2302,14 +3474,12 @@ export function mountApp(root: HTMLElement): void {
     const shareReadOnlyForced = !!(selected && selected.readOnly);
     const calModal =
       calModalOpen && selected && selected.canShare
-        ? `<div class="cal-modal" id="cal-edit-modal" role="dialog" aria-modal="true" aria-labelledby="cal-modal-title">
-            <div class="cal-modal-backdrop" data-action="close-cal-modal"></div>
-            <div class="cal-modal-card">
-              <header class="cal-modal-header">
-                <h3 id="cal-modal-title">Calendar details</h3>
-                <button type="button" class="info-modal-close" data-action="close-cal-modal" aria-label="Close">×</button>
-              </header>
-              <div class="cal-modal-body">
+        ? renderModal({
+            id: "cal-edit-modal",
+            title: "Calendar details",
+            titleId: "cal-modal-title",
+            closeAction: "close-cal-modal",
+            body: `
                 ${renderFlashBanner()}
                 <section>
                   <p class="muted small mono" style="margin:0">
@@ -2397,13 +3567,9 @@ export function mountApp(root: HTMLElement): void {
                       <input type="file" accept=".ics,text/calendar,text/plain" data-action="import-cal" ${busy || selected.readOnly ? "disabled" : ""} hidden />
                     </label>
                   </div>
-                </section>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="close-cal-modal">Close</button>
-              </footer>
-            </div>
-          </div>`
+                </section>`,
+            footer: [{ label: "Close", action: "close-cal-modal", variant: "ghost" }],
+          })
         : "";
 
     const deleteTarget =
@@ -2411,40 +3577,44 @@ export function mountApp(root: HTMLElement): void {
         ? calendars.find((c) => c.id === deleteConfirmId && c.canShare) ?? null
         : null;
     const deleteModal = deleteTarget
-      ? `<div class="cal-modal" id="cal-delete-modal" role="dialog" aria-modal="true" aria-labelledby="cal-delete-title">
-          <div class="cal-modal-backdrop" data-action="cancel-delete-cal"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="cal-delete-title">Delete calendar</h3>
-              <button type="button" class="info-modal-close" data-action="cancel-delete-cal" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "cal-delete-modal",
+          title: "Delete calendar",
+          titleId: "cal-delete-title",
+          closeAction: "cancel-delete-cal",
+          size: "sm",
+          body: `
               ${renderFlashBanner()}
               <p>You are about to permanently delete <strong>${esc(deleteTarget.displayname)}</strong>
                 <span class="muted small mono">(${esc(deleteTarget.uri)})</span>.</p>
               <p class="muted small">All events, tasks, and notes in this calendar will be removed. Shares will be revoked. This cannot be undone.</p>
-              <label class="checkbox" style="margin-top:1rem">
-                <input type="checkbox" id="delete-cal-confirm" data-action="toggle-delete-confirm" />
-                I understand and want to permanently delete this calendar
-              </label>
-            </div>
-            <footer class="cal-modal-footer">
-              <button type="button" class="btn btn-ghost" data-action="cancel-delete-cal" ${busy ? "disabled" : ""}>Cancel</button>
-              <button type="button" class="btn btn-danger" data-action="confirm-delete-cal" data-id="${deleteTarget.id}" disabled id="delete-cal-submit">Delete permanently</button>
-            </footer>
-          </div>
-        </div>`
+              ${renderConfirmCheckbox({
+                action: "toggle-delete-confirm",
+                label: "I understand and want to permanently delete this calendar",
+                id: "delete-cal-confirm",
+                style: "checkbox",
+              })}`,
+          footer: [
+            { label: "Cancel", action: "cancel-delete-cal", variant: "ghost", disabled: busy },
+            {
+              label: "Delete permanently",
+              action: "confirm-delete-cal",
+              variant: "danger",
+              disabled: true,
+              id: "delete-cal-submit",
+              attrs: `data-id="${deleteTarget.id}"`,
+            },
+          ],
+        })
       : "";
 
     const createCalModal = createCalModalOpen
-      ? `<div class="cal-modal" id="cal-create-modal" role="dialog" aria-modal="true" aria-labelledby="cal-create-title">
-          <div class="cal-modal-backdrop" data-action="close-create-cal-modal"></div>
-          <div class="cal-modal-card">
-            <header class="cal-modal-header">
-              <h3 id="cal-create-title">Add calendar</h3>
-              <button type="button" class="info-modal-close" data-action="close-create-cal-modal" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "cal-create-modal",
+          title: "Add calendar",
+          titleId: "cal-create-title",
+          closeAction: "close-create-cal-modal",
+          body: `
               ${renderFlashBanner()}
               <p class="muted small" style="margin:0 0 0.75rem">
                 Create a personal calendar, optional holidays feed, or a read-only calendar.
@@ -2501,10 +3671,8 @@ export function mountApp(root: HTMLElement): void {
                 <p class="muted small" style="margin:0.5rem 0 0">
                   <strong>Import .ics</strong> creates the calendar (name above, or the file name), then imports events. Not for holidays/read-only calendars.
                 </p>
-              </form>
-            </div>
-          </div>
-        </div>`
+              </form>`,
+        })
       : "";
 
     const calendarsTab = `
@@ -2514,6 +3682,10 @@ export function mountApp(root: HTMLElement): void {
             <div class="calendars-sidebar-head">
               ${infoTitle("Owned", "owned")}
             </div>
+            <p class="muted small" style="margin:0 0 0.65rem">
+              Check one or more calendars to view events.
+              Underlined name is primary for new events.
+            </p>
             <div class="cal-list calendars-owned-list">
               ${calRows || '<p class="muted">No calendars yet. Create one below.</p>'}
               ${
@@ -2548,6 +3720,7 @@ export function mountApp(root: HTMLElement): void {
             <span class="muted small mono cal-row-uri">${esc(a.uri)}</span>
           </span>
           <span class="cal-row-actions">
+            <button type="button" class="btn btn-small" data-action="export-ab" data-id="${a.id}" ${busy ? "disabled" : ""} title="Export as .vcf">Export</button>
             <button type="button" class="btn btn-small" data-action="edit-ab" data-id="${a.id}" ${busy ? "disabled" : ""}>Edit</button>
             <button type="button" class="btn btn-small btn-danger" data-action="delete-ab" data-id="${a.id}" ${busy ? "disabled" : ""}>Delete</button>
           </span>
@@ -2772,14 +3945,12 @@ export function mountApp(root: HTMLElement): void {
 
     const abModal =
       abModalOpen && selectedAb
-        ? `<div class="cal-modal" id="ab-edit-modal" role="dialog" aria-modal="true" aria-labelledby="ab-modal-title">
-            <div class="cal-modal-backdrop" data-action="close-ab-modal"></div>
-            <div class="cal-modal-card">
-              <header class="cal-modal-header">
-                <h3 id="ab-modal-title">Address book details</h3>
-                <button type="button" class="info-modal-close" data-action="close-ab-modal" aria-label="Close">×</button>
-              </header>
-              <div class="cal-modal-body">
+        ? renderModal({
+            id: "ab-edit-modal",
+            title: "Address book details",
+            titleId: "ab-modal-title",
+            closeAction: "close-ab-modal",
+            body: `
                 ${renderFlashBanner()}
                 <section>
                   <p class="muted small mono" style="margin:0">
@@ -2812,13 +3983,9 @@ export function mountApp(root: HTMLElement): void {
                       </label>
                     </div>
                   </div>
-                </section>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="close-ab-modal">Close</button>
-              </footer>
-            </div>
-          </div>`
+                </section>`,
+            footer: [{ label: "Close", action: "close-ab-modal", variant: "ghost" }],
+          })
         : "";
 
     const deleteAbTarget =
@@ -2826,14 +3993,13 @@ export function mountApp(root: HTMLElement): void {
         ? addressBooks.find((a) => a.id === deleteAbConfirmId) ?? null
         : null;
     const abDeleteModal = deleteAbTarget
-      ? `<div class="cal-modal" id="ab-delete-modal" role="dialog" aria-modal="true" aria-labelledby="ab-delete-title">
-          <div class="cal-modal-backdrop" data-action="cancel-delete-ab"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="ab-delete-title">Delete address book</h3>
-              <button type="button" class="info-modal-close" data-action="cancel-delete-ab" aria-label="Close">×</button>
-            </header>
-            <div class="cal-modal-body">
+      ? renderModal({
+          id: "ab-delete-modal",
+          title: "Delete address book",
+          titleId: "ab-delete-title",
+          closeAction: "cancel-delete-ab",
+          size: "sm",
+          body: `
               ${renderFlashBanner()}
               <p>You are about to permanently delete <strong>${esc(deleteAbTarget.displayname)}</strong>
                 <span class="muted small mono">(${esc(deleteAbTarget.uri)})</span>.</p>
@@ -2842,17 +4008,24 @@ export function mountApp(root: HTMLElement): void {
                   ? `All ${deleteAbTarget.cardCount} contact${deleteAbTarget.cardCount === 1 ? "" : "s"} in this address book will be removed. This cannot be undone.`
                   : "This address book is empty. This cannot be undone."
               }</p>
-              <label class="checkbox" style="margin-top:1rem">
-                <input type="checkbox" id="delete-ab-confirm" data-action="toggle-delete-ab-confirm" />
-                I understand and want to permanently delete this address book
-              </label>
-            </div>
-            <footer class="cal-modal-footer">
-              <button type="button" class="btn btn-ghost" data-action="cancel-delete-ab" ${busy ? "disabled" : ""}>Cancel</button>
-              <button type="button" class="btn btn-danger" data-action="confirm-delete-ab" data-id="${deleteAbTarget.id}" disabled id="delete-ab-submit">Delete permanently</button>
-            </footer>
-          </div>
-        </div>`
+              ${renderConfirmCheckbox({
+                action: "toggle-delete-ab-confirm",
+                label: "I understand and want to permanently delete this address book",
+                id: "delete-ab-confirm",
+                style: "checkbox",
+              })}`,
+          footer: [
+            { label: "Cancel", action: "cancel-delete-ab", variant: "ghost", disabled: busy },
+            {
+              label: "Delete permanently",
+              action: "confirm-delete-ab",
+              variant: "danger",
+              disabled: true,
+              id: "delete-ab-submit",
+              attrs: `data-id="${deleteAbTarget.id}"`,
+            },
+          ],
+        })
       : "";
 
     const contactsTab = `
@@ -2946,10 +4119,23 @@ export function mountApp(root: HTMLElement): void {
                 ? filesTab
                 : adminTab;
 
-    const showMainTabs = activeTab !== "admin";
-    const tabsHeader = showMainTabs
-      ? `<header class="page-header">
-        <div class="tabs" role="tablist" aria-label="Portal sections">
+    const tabsHtml =
+      activeTab === "admin"
+        ? `<div class="tabs" role="tablist" aria-label="Administration sections">
+          ${adminSubnavButtons()}
+          <button type="button" class="info-btn tab-info" data-action="info"
+            data-info="${
+              adminPage === "overview"
+                ? "admin-overview"
+                : adminPage === "users"
+                  ? "admin-users"
+                  : adminPage === "settings"
+                    ? "admin-settings"
+                    : "admin-database"
+            }"
+            aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
+        </div>`
+        : `<div class="tabs" role="tablist" aria-label="Portal sections">
           <button type="button" role="tab" class="tab-btn${activeTab === "calendars" ? " is-active" : ""}"
             data-action="tab" data-tab="calendars" aria-selected="${activeTab === "calendars"}">
             Calendar
@@ -2973,19 +4159,9 @@ export function mountApp(root: HTMLElement): void {
           <button type="button" class="info-btn tab-info" data-action="info"
             data-info="${tabInfoKey}"
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
-        </div>
-      </header>`
-      : `<header class="page-header page-header-admin">
-        ${infoTitle("Administration", "administration", "h1")}
-        <button type="button" class="btn btn-ghost btn-small" data-action="tab" data-tab="calendars"
-          title="Back to portal">← Portal</button>
-      </header>`;
+        </div>`;
 
-    root.innerHTML = shell(`
-      ${tabsHeader}
-
-      ${mainTab}
-    `);
+    root.innerHTML = shell(mainTab, { tabs: tabsHtml });
     document.body.classList.toggle(
       "cal-modal-open",
       calModalOpen ||
@@ -2999,7 +4175,15 @@ export function mountApp(root: HTMLElement): void {
         filesRenamePath !== null ||
         filesDeletePaths !== null ||
         filesTransfer !== null ||
-        filesMkdirOpen,
+        filesMkdirOpen ||
+        adminUserCreateOpen ||
+        adminUserEditOpen ||
+        adminUserDeleteUsername !== null ||
+        adminResetModalOpen ||
+        adminDbConfirmOpen ||
+        adminCalModal !== null ||
+        adminAbModal !== null ||
+        adminResourceDelete !== null,
     );
     document.body.classList.toggle("layout-contacts", activeTab === "contacts");
     document.body.classList.toggle("layout-calendars", activeTab === "calendars");
@@ -3034,22 +4218,6 @@ export function mountApp(root: HTMLElement): void {
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  }
-
-  /**
-   * Format app limits that are configured in MB (BAIKAL_FILES_MAX_UPLOAD_MB /
-   * BAIKAL_FILES_QUOTA_MB). Prefer whole-MB labels so the UI matches env/YAML.
-   */
-  function formatLimitFromBytes(bytes: number): string {
-    if (!Number.isFinite(bytes) || bytes < 0) return "—";
-    if (bytes === 0) return "unlimited";
-    const mb = Math.round(bytes / (1024 * 1024));
-    if (mb <= 0) return formatBytes(bytes);
-    if (mb >= 1024 && mb % 1024 === 0) {
-      const gb = mb / 1024;
-      return gb === 1 ? "1 GB" : `${gb} GB`;
-    }
-    return `${mb} MB`;
   }
 
   function formatMtime(ts: number): string {
@@ -3156,27 +4324,24 @@ export function mountApp(root: HTMLElement): void {
         ? (() => {
             const entry = filesEntries.find((x) => x.path === filesRenamePath);
             const current = entry?.name ?? "";
-            return `<div class="cal-modal" id="files-rename-modal" role="dialog" aria-modal="true" aria-labelledby="files-rename-title">
-              <div class="cal-modal-backdrop" data-action="files-rename-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-rename-title">Rename</h3>
-                  <button type="button" class="info-modal-close" data-action="files-rename-close" aria-label="Close">×</button>
-                </header>
-                <form class="stack" data-form="files-rename" id="files-rename-form">
-                  <div class="cal-modal-body">
+            return renderModal({
+              id: "files-rename-modal",
+              title: "Rename",
+              titleId: "files-rename-title",
+              closeAction: "files-rename-close",
+              size: "sm",
+              form: true,
+              formAttrs: 'data-form="files-rename" id="files-rename-form"',
+              body: `
                     <input type="hidden" name="path" value="${esc(filesRenamePath)}" />
                     <label>New name
                       <input type="text" name="newName" value="${esc(current)}" required maxlength="255" autocomplete="off" />
-                    </label>
-                  </div>
-                  <footer class="cal-modal-footer">
-                    <button type="button" class="btn btn-ghost" data-action="files-rename-close">Cancel</button>
-                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Rename</button>
-                  </footer>
-                </form>
-              </div>
-            </div>`;
+                    </label>`,
+              footer: [
+                { label: "Cancel", action: "files-rename-close", variant: "ghost" },
+                { label: "Rename", type: "submit", variant: "primary", disabled: busy },
+              ],
+            });
           })()
         : "";
 
@@ -3206,22 +4371,23 @@ export function mountApp(root: HTMLElement): void {
                     ? " This removes the folder and everything inside it."
                     : ""
                 }</p>`;
-            return `<div class="cal-modal" id="files-delete-modal" role="dialog" aria-modal="true" aria-labelledby="files-delete-title">
-              <div class="cal-modal-backdrop" data-action="files-delete-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-delete-title">${esc(title)}</h3>
-                  <button type="button" class="info-modal-close" data-action="files-delete-close" aria-label="Close">×</button>
-                </header>
-                <div class="cal-modal-body">
-                  ${body}
-                </div>
-                <footer class="cal-modal-footer">
-                  <button type="button" class="btn btn-ghost" data-action="files-delete-close">Cancel</button>
-                  <button type="button" class="btn btn-danger" data-action="files-delete-confirm" ${busy ? "disabled" : ""}>Delete</button>
-                </footer>
-              </div>
-            </div>`;
+            return renderModal({
+              id: "files-delete-modal",
+              title,
+              titleId: "files-delete-title",
+              closeAction: "files-delete-close",
+              size: "sm",
+              body,
+              footer: [
+                { label: "Cancel", action: "files-delete-close", variant: "ghost" },
+                {
+                  label: "Delete",
+                  action: "files-delete-confirm",
+                  variant: "danger",
+                  disabled: busy,
+                },
+              ],
+            });
           })()
         : "";
 
@@ -3236,29 +4402,34 @@ export function mountApp(root: HTMLElement): void {
             const title = multi
               ? `${op === "copy" ? "Copy" : "Move"} ${paths.length} items`
               : `${op === "copy" ? "Copy" : "Move"} ${first?.type === "dir" ? "folder" : "file"}`;
-            const defaultDest = filesPath;
-            return `<div class="cal-modal" id="files-transfer-modal" role="dialog" aria-modal="true" aria-labelledby="files-transfer-title">
-              <div class="cal-modal-backdrop" data-action="files-transfer-close"></div>
-              <div class="cal-modal-card cal-modal-card-sm">
-                <header class="cal-modal-header">
-                  <h3 id="files-transfer-title">${esc(title)}</h3>
-                  <button type="button" class="info-modal-close" data-action="files-transfer-close" aria-label="Close">×</button>
-                </header>
-                <form class="stack" data-form="files-transfer">
-                  <div class="cal-modal-body">
+            const destLabel =
+              filesTransferDest === "" ? "Home" : filesTransferDest;
+            const destBlocked = isBlockedTransferDest(filesTransferDest, paths);
+            return renderModal({
+              id: "files-transfer-modal",
+              title,
+              titleId: "files-transfer-title",
+              closeAction: "files-transfer-close",
+              size: "md",
+              form: true,
+              formAttrs: 'data-form="files-transfer"',
+              body: `
                     ${
                       multi
                         ? `<p class="muted small" style="margin:0 0 0.75rem">${paths.length} items will be ${op === "copy" ? "copied" : "moved"} into the destination folder (original names kept).</p>`
                         : `<p class="muted small" style="margin:0 0 0.75rem"><span class="mono">${esc(defaultName)}</span></p>`
                     }
-                    <label>Destination folder
-                      <input type="text" name="toPath" value="${esc(defaultDest)}" maxlength="1024"
-                        placeholder="Leave empty for Home (root)" autocomplete="off"
-                        aria-describedby="files-transfer-dest-hint" />
-                    </label>
-                    <p id="files-transfer-dest-hint" class="muted small" style="margin:0.35rem 0 0">
-                      Path relative to your file home. Examples: empty = Home, <span class="mono">docs</span>, <span class="mono">archive/2026</span>
-                    </p>
+                    <input type="hidden" name="toPath" value="${esc(filesTransferDest)}" />
+                    <div class="files-transfer-dest">
+                      <div class="files-transfer-dest-head">
+                        <span class="files-transfer-dest-label">Destination folder</span>
+                        <span class="muted small mono files-transfer-dest-value" title="${esc(destLabel)}">${esc(destLabel)}</span>
+                      </div>
+                      ${renderFilesFolderTree()}
+                      <p id="files-transfer-dest-hint" class="muted small" style="margin:0.5rem 0 0">
+                        Click a folder to select it. Use ▸ to expand. Home is the root of your file storage.
+                      </p>
+                    </div>
                     ${
                       !multi
                         ? `<label style="margin-top:0.85rem">New name <span class="muted">(optional)</span>
@@ -3267,33 +4438,35 @@ export function mountApp(root: HTMLElement): void {
                           <p class="muted small" style="margin:0.35rem 0 0">
                             ${
                               op === "copy"
-                                ? "Leave as-is to keep the name (a “ (copy)” suffix is added if it already exists in the destination)."
+                                ? "Same-folder copies get a “ (copy)” name. Cross-folder copies keep the original name unless it already exists in the destination."
                                 : "Leave as-is to keep the current name."
                             }
                           </p>`
                         : ""
-                    }
-                  </div>
-                  <footer class="cal-modal-footer">
-                    <button type="button" class="btn btn-ghost" data-action="files-transfer-close">Cancel</button>
-                    <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>${op === "copy" ? "Copy" : "Move"}</button>
-                  </footer>
-                </form>
-              </div>
-            </div>`;
+                    }`,
+              footer: [
+                { label: "Cancel", action: "files-transfer-close", variant: "ghost" },
+                {
+                  label: op === "copy" ? "Copy" : "Move",
+                  type: "submit",
+                  variant: "primary",
+                  disabled: busy || destBlocked,
+                },
+              ],
+            });
           })()
         : "";
 
     const mkdirModal = filesMkdirOpen
-      ? `<div class="cal-modal" id="files-mkdir-modal" role="dialog" aria-modal="true" aria-labelledby="files-mkdir-title">
-          <div class="cal-modal-backdrop" data-action="files-mkdir-close"></div>
-          <div class="cal-modal-card cal-modal-card-sm">
-            <header class="cal-modal-header">
-              <h3 id="files-mkdir-title">New folder</h3>
-              <button type="button" class="info-modal-close" data-action="files-mkdir-close" aria-label="Close">×</button>
-            </header>
-            <form class="stack" data-form="files-mkdir">
-              <div class="cal-modal-body">
+      ? renderModal({
+          id: "files-mkdir-modal",
+          title: "New folder",
+          titleId: "files-mkdir-title",
+          closeAction: "files-mkdir-close",
+          size: "sm",
+          form: true,
+          formAttrs: 'data-form="files-mkdir"',
+          body: `
                 <p class="muted small" style="margin:0 0 0.75rem">
                   Create a folder in
                   <span class="mono">${esc(filesPath === "" ? "Home" : filesPath)}</span>
@@ -3301,24 +4474,13 @@ export function mountApp(root: HTMLElement): void {
                 <label>Folder name
                   <input type="text" name="name" value="" required maxlength="255" autocomplete="off"
                     placeholder="e.g. Documents" autofocus />
-                </label>
-              </div>
-              <footer class="cal-modal-footer">
-                <button type="button" class="btn btn-ghost" data-action="files-mkdir-close">Cancel</button>
-                <button type="submit" class="btn btn-primary" ${busy ? "disabled" : ""}>Create</button>
-              </footer>
-            </form>
-          </div>
-        </div>`
+                </label>`,
+          footer: [
+            { label: "Cancel", action: "files-mkdir-close", variant: "ghost" },
+            { label: "Create", type: "submit", variant: "primary", disabled: busy },
+          ],
+        })
       : "";
-
-    const limitsLine = [
-      `DAV clients: <span class="mono">${esc(st.davPath)}</span>`,
-      `max upload ${esc(formatLimitFromBytes(st.maxUploadBytes))}`,
-      st.quotaBytes > 0
-        ? `quota ${esc(formatLimitFromBytes(st.quotaBytes))}`
-        : "quota unlimited",
-    ].join(" · ");
 
     return `<div class="portal-grid portal-grid-files">
       <section class="card files-panel">
@@ -3331,9 +4493,6 @@ export function mountApp(root: HTMLElement): void {
             <span>${esc(quotaLabel)}</span>
           </div>
         </div>
-        <p class="muted small" style="margin:0.5rem 0 0">
-          ${limitsLine}
-        </p>
         <div class="files-toolbar">
           ${filesBreadcrumb(filesPath)}
           <div class="files-toolbar-actions">
@@ -3381,30 +4540,924 @@ export function mountApp(root: HTMLElement): void {
     return parts[parts.length - 1] || path;
   }
 
-  /** Admin-only Administration section (opened from the user menu). */
+  function adminSubnavButtons(): string {
+    /** Fixed UI order: Overview → System settings → Users → Database */
+    const order: AdminPageId[] = ["overview", "settings", "users", "database"];
+    const labels: Record<AdminPageId, string> = {
+      overview: "Overview",
+      settings: "System settings",
+      users: "Users",
+      database: "Database",
+    };
+    const fromApi = adminCapabilities?.pages;
+    const byId = new Map<string, AdminCapabilityPage>();
+    if (fromApi) {
+      for (const p of fromApi) {
+        if (parseAdminPageId(p.id)) byId.set(p.id, p);
+      }
+    }
+
+    return order
+      .map((id) => {
+        const p = byId.get(id);
+        const label = p?.label || labels[id];
+        const status = p?.status ?? (id === "overview" ? "read-only" : "full");
+        const gated = p?.available === false;
+        return `<button type="button" role="tab" class="tab-btn${adminPage === id ? " is-active" : ""}${gated ? " is-gated" : ""}"
+            data-action="admin-page" data-admin-page="${id}"
+            aria-selected="${adminPage === id}"
+            title="${esc(label)}${gated ? " — " + adminStatusLabel(status) : ""}">
+            ${esc(label)}
+          </button>`;
+      })
+      .join("");
+  }
+
+  /**
+   * Banner for incomplete admin pages.
+   */
+  function adminComingSoonBanner(pageId: AdminPageId): string {
+    const meta = adminPageMeta(pageId);
+    const status = meta?.status ?? "coming-soon";
+    const label = meta?.label ?? pageId;
+    const summary =
+      meta?.summary || "This area is not available in portal Administration yet.";
+    const statusText = adminStatusLabel(status);
+
+    return `<section class="card admin-coming-soon-card">
+      <div class="admin-coming-soon-head">
+        <span class="badge ${adminStatusBadgeClass(status)}">${esc(statusText)}</span>
+        <h2 class="admin-coming-soon-title">${esc(label)}</h2>
+      </div>
+      <p class="muted">${esc(summary)}</p>
+    </section>`;
+  }
+
+  function serviceBadge(on: boolean, label: string): string {
+    return `<span class="badge ${on ? "badge-ok" : "badge-off"}">${esc(label)}: ${on ? "On" : "Off"}</span>`;
+  }
+
+  function serviceOnOff(on: boolean): string {
+    return `<span class="badge ${on ? "badge-ok" : "badge-off"}">${on ? "On" : "Off"}</span>`;
+  }
+
+  function adminStatCard(label: string, value: string | number, hint?: string): string {
+    return `<div class="admin-stat-card">
+      <div class="admin-stat-value mono">${esc(String(value))}</div>
+      <div class="admin-stat-label">${esc(label)}</div>
+      ${hint ? `<div class="admin-stat-hint muted small">${esc(hint)}</div>` : ""}
+    </div>`;
+  }
+
+  function renderAdminOverview(): string {
+    const meta = adminPageMeta("overview");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("overview");
+    }
+
+    const roleLine = `<p class="muted small admin-session-line">
+      Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
+      with role <span class="badge badge-admin">Admin</span>.
+    </p>`;
+
+    let aboutBlock = "";
+    let statsBlock = "";
+    if (adminDashboardLoading && !adminDashboard) {
+      statsBlock = `<section class="card"><p class="muted">Loading overview…</p></section>`;
+    } else if (adminDashboardError && !adminDashboard) {
+      statsBlock = `<section class="card">
+        <p class="flash flash-error" style="margin-bottom:0.75rem">${esc(adminDashboardError)}</p>
+        <button type="button" class="btn btn-ghost btn-small" data-action="admin-refresh" ${busy ? "disabled" : ""}>Retry</button>
+      </section>`;
+    } else if (adminDashboard) {
+      const d = adminDashboard;
+      const svc = d.services;
+      const links = d.links ?? {};
+      const statusBadge = meta
+        ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>`
+        : "";
+      const versionLabel = d.version ? esc(d.version) : "—";
+      const gitLabel = d.git ? esc(d.git) : "";
+
+      aboutBlock = `
+        <section class="card admin-about-card">
+          <div class="section-header">
+            ${infoTitle("About this system", "admin-overview")}
+            <div class="section-actions">
+              ${statusBadge}
+              <button type="button" class="btn btn-ghost btn-small" data-action="admin-refresh" ${busy || adminDashboardLoading ? "disabled" : ""}>Refresh</button>
+            </div>
+          </div>
+          <div class="admin-about-grid">
+            <div>
+              <h3 class="admin-subsection-title">Version</h3>
+              <p>
+                AngaraDAV <span class="badge badge-admin">v${versionLabel}</span>
+                ${gitLabel ? `<span class="mono muted small"> (${gitLabel})</span>` : ""}
+              </p>
+              <p class="muted small admin-link-row">
+                ${links.releases ? `<a href="${esc(links.releases)}" target="_blank" rel="noopener noreferrer">Releases</a>` : ""}
+                ${links.docs ? `${links.releases ? `<span class="footer-sep">·</span>` : ""}<a href="${esc(links.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ""}
+              </p>
+            </div>
+            <div>
+              <h3 class="admin-subsection-title">Services</h3>
+              <div class="admin-service-table-wrap">
+                <table class="admin-kv-table">
+                  <tbody>
+                    <tr><td>Administration</td><td>${serviceOnOff(svc.administration !== false && svc.webAdmin !== false)}</td></tr>
+                    <tr><td>CalDAV</td><td>${serviceOnOff(!!svc.caldav)}</td></tr>
+                    <tr><td>CardDAV</td><td>${serviceOnOff(!!svc.carddav)}</td></tr>
+                    <tr><td>Files</td><td>${serviceOnOff(!!svc.files)}</td></tr>
+                    <tr><td>Tasks</td><td>${serviceOnOff(!!svc.tasks)}</td></tr>
+                    <tr><td>Notes</td><td>${serviceOnOff(!!svc.notes)}</td></tr>
+                    <tr><td>Push</td><td>${serviceOnOff(!!svc.push)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          ${roleLine}
+        </section>`;
+
+      const nUsers = d.nbusers ?? d.users;
+      const nCals = d.nbcalendars ?? d.calendars;
+      const nEvents = d.nbevents ?? d.events;
+      const nBooks = d.nbbooks ?? d.addressBooks;
+      const nContacts = d.nbcontacts ?? d.contacts;
+      statsBlock = `
+        <section class="card admin-stats-card">
+          <div class="section-header">
+            <h2>Statistics</h2>
+          </div>
+          <div class="admin-stat-grid">
+            ${adminStatCard("Registered users", nUsers, "Users")}
+            ${adminStatCard("Calendars", nCals, "CalDAV")}
+            ${adminStatCard("Events", nEvents, "CalDAV")}
+            ${adminStatCard("Address books", nBooks, "CardDAV")}
+            ${adminStatCard("Contacts", nContacts, "CardDAV")}
+          </div>
+          <div class="admin-service-row">
+            ${serviceBadge(svc.administration !== false && svc.webAdmin !== false, "Administration")}
+            ${serviceBadge(!!svc.caldav, "CalDAV")}
+            ${serviceBadge(!!svc.carddav, "CardDAV")}
+            ${serviceBadge(!!svc.files, "Files")}
+            ${serviceBadge(!!svc.tasks, "Tasks")}
+            ${serviceBadge(!!svc.notes, "Notes")}
+            ${serviceBadge(!!svc.push, "Push")}
+          </div>
+        </section>`;
+    } else {
+      statsBlock = `<section class="card">
+        ${infoTitle("System snapshot", "admin-overview")}
+        ${roleLine}
+      </section>`;
+    }
+
+    return `${aboutBlock}
+      ${statsBlock}`;
+  }
+
+  function filteredAdminUsers(): AdminUserSummary[] {
+    const q = adminUsersQuery.trim().toLowerCase();
+    if (!q) return adminUsers;
+    return adminUsers.filter((u) => {
+      return (
+        u.username.toLowerCase().includes(q) ||
+        (u.displayname || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q)
+      );
+    });
+  }
+
+  function renderAdminUserCreateModal(): string {
+    if (!adminUserCreateOpen) return "";
+    return renderModal({
+      id: "admin-user-create-modal",
+      title: "Add user",
+      titleId: "admin-user-create-title",
+      closeAction: "admin-user-create-close",
+      size: "sm",
+      form: true,
+      formAttrs: 'data-form="admin-user-create"',
+      body: `
+          <p class="muted small">Creates a DAV account with a default calendar and address book.</p>
+            <label>Username
+              <input type="text" name="username" required maxlength="255" autocomplete="off" placeholder="alice" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Display name
+              <input type="text" name="displayname" required maxlength="255" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Email
+              <input type="email" name="email" required maxlength="255" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Password
+              <input type="password" name="password" required autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Confirm password
+              <input type="password" name="passwordConfirm" required autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-user-create-close", variant: "ghost", disabled: busy },
+        { label: "Create user", type: "submit", variant: "primary", disabled: busy },
+      ],
+    });
+  }
+
+  function renderAdminUserEditModal(): string {
+    if (!adminUserEditOpen || !adminUserDetail) return "";
+    const u = adminUserDetail;
+    return renderModal({
+      id: "admin-user-edit-modal",
+      title: "Edit user",
+      titleId: "admin-user-edit-title",
+      closeAction: "admin-user-edit-close",
+      size: "sm",
+      form: true,
+      formAttrs: 'data-form="admin-user-edit"',
+      body: `
+          <p class="muted small">Username <span class="mono">${esc(u.username)}</span> cannot be changed. Leave password fields empty to keep the current password.</p>
+            <input type="hidden" name="username" value="${esc(u.username)}" />
+            <label>Display name
+              <input type="text" name="displayname" required maxlength="255" value="${esc(u.displayname)}" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Email
+              <input type="email" name="email" required maxlength="255" value="${esc(u.email)}" autocomplete="off" ${busy ? "disabled" : ""} />
+            </label>
+            <label>New password
+              <input type="password" name="password" autocomplete="new-password" placeholder="Leave empty to keep current" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Confirm new password
+              <input type="password" name="passwordConfirm" autocomplete="new-password" ${busy ? "disabled" : ""} />
+            </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-user-edit-close", variant: "ghost", disabled: busy },
+        { label: "Save changes", type: "submit", variant: "primary", disabled: busy },
+      ],
+    });
+  }
+
+  function renderAdminUserDeleteModal(): string {
+    if (!adminUserDeleteUsername) return "";
+    const uname = adminUserDeleteUsername;
+    const u =
+      adminUserDetail && adminUserDetail.username.toLowerCase() === uname.toLowerCase()
+        ? adminUserDetail
+        : adminUsers.find((x) => x.username.toLowerCase() === uname.toLowerCase()) ?? null;
+    const label = u ? `${u.displayname || u.username} (${u.username})` : uname;
+    return renderModal({
+      id: "admin-user-delete-modal",
+      title: "Delete user",
+      titleId: "admin-user-delete-title",
+      closeAction: "admin-user-delete-close",
+      size: "sm",
+      body: `
+          <p>You are about to permanently delete <strong>${esc(label)}</strong>.</p>
+          <ul class="admin-feature-list muted">
+            <li>All calendars, events, tasks, and notes for this user</li>
+            <li>All address books and contacts</li>
+            <li>WebDAV file home (moved to quarantine when files storage is enabled)</li>
+          </ul>
+          <p class="muted small">This cannot be undone from the portal.</p>
+          ${renderConfirmCheckbox({
+            action: "admin-user-delete-toggle",
+            label: "I understand and want to delete this user",
+            checked: adminUserDeleteConfirmChecked,
+            disabled: busy,
+            style: "admin",
+          })}`,
+      footer: [
+        { label: "Cancel", action: "admin-user-delete-close", variant: "ghost", disabled: busy },
+        {
+          label: "Delete permanently",
+          action: "admin-user-delete-confirm",
+          variant: "danger",
+          disabled: busy || !adminUserDeleteConfirmChecked,
+          attrs: `data-username="${esc(uname)}"`,
+        },
+      ],
+    });
+  }
+
+  function renderAdminUserDetailPanel(): string {
+    if (!adminSelectedUsername) return "";
+    if (adminUserDetailLoading && !adminUserDetail) {
+      return `<section class="card admin-user-detail">
+        <p class="muted">Loading user <span class="mono">${esc(adminSelectedUsername)}</span>…</p>
+      </section>`;
+    }
+    if (adminUserDetailError && !adminUserDetail) {
+      return `<section class="card admin-user-detail">
+        <div class="section-header">
+          <h2>User detail</h2>
+          <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-close">Close</button>
+        </div>
+        <p class="flash flash-error">${esc(adminUserDetailError)}</p>
+      </section>`;
+    }
+    if (!adminUserDetail) return "";
+    const u = adminUserDetail;
+    const calRows =
+      adminUserResourcesLoading && adminUserCalendars.length === 0
+        ? `<tr><td colspan="5" class="muted">Loading calendars…</td></tr>`
+        : adminUserCalendars.length === 0
+          ? `<tr><td colspan="5" class="muted">No calendars.</td></tr>`
+          : adminUserCalendars
+              .map(
+                (c) => `<tr>
+          <td class="mono">${esc(c.uri)}</td>
+          <td>${esc(c.displayname)}</td>
+          <td class="hide-sm">${esc(String(c.eventCount))}${c.todos ? ' <span class="badge badge-admin">tasks</span>' : ""}${c.notes ? ' <span class="badge badge-admin">notes</span>' : ""}</td>
+          <td class="hide-sm mono small">${esc(c.davUri)}</td>
+          <td class="admin-user-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-cal-edit" data-id="${c.instanceId}" ${busy ? "disabled" : ""}>Edit</button>
+            <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-cal-delete" data-id="${c.instanceId}" data-label="${esc(c.displayname)}" ${busy ? "disabled" : ""}>Delete</button>
+          </td>
+        </tr>`,
+              )
+              .join("");
+    const abRows =
+      adminUserResourcesLoading && adminUserAddressBooks.length === 0
+        ? `<tr><td colspan="4" class="muted">Loading address books…</td></tr>`
+        : adminUserAddressBooks.length === 0
+          ? `<tr><td colspan="4" class="muted">No address books.</td></tr>`
+          : adminUserAddressBooks
+              .map(
+                (a) => `<tr>
+          <td class="mono">${esc(a.uri)}</td>
+          <td>${esc(a.displayname)}</td>
+          <td class="hide-sm">${esc(String(a.contactCount))}</td>
+          <td class="admin-user-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-ab-edit" data-id="${a.id}" ${busy ? "disabled" : ""}>Edit</button>
+            <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-ab-delete" data-id="${a.id}" data-label="${esc(a.displayname)}" ${busy ? "disabled" : ""}>Delete</button>
+          </td>
+        </tr>`,
+              )
+              .join("");
+
+    const editCal =
+      adminCalEditId !== null
+        ? adminUserCalendars.find((c) => c.instanceId === adminCalEditId) ?? null
+        : null;
+    const editAb =
+      adminAbEditId !== null
+        ? adminUserAddressBooks.find((a) => a.id === adminAbEditId) ?? null
+        : null;
+
+    const calModal =
+      adminCalModal === "create" || (adminCalModal === "edit" && editCal)
+        ? renderModal({
+            title: adminCalModal === "create" ? "Add calendar" : "Edit calendar",
+            closeAction: "admin-cal-close",
+            size: "sm",
+            form: true,
+            formAttrs: 'data-form="admin-cal"',
+            body: `
+            <input type="hidden" name="instanceId" value="${editCal ? editCal.instanceId : ""}" />
+            ${
+              adminCalModal === "create"
+                ? `<label>URI token id
+              <input type="text" name="uri" required pattern="[a-z0-9-]+" placeholder="work" ${busy ? "disabled" : ""} />
+              <span class="muted small">Lowercase letters, digits, dashes.</span>
+            </label>`
+                : `<p class="muted small">URI <span class="mono">${esc(editCal!.uri)}</span> (read-only)</p>`
+            }
+            <label>Display name
+              <input type="text" name="displayname" required value="${esc(editCal?.displayname ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Description
+              <textarea name="description" rows="2" ${busy ? "disabled" : ""}>${esc(editCal?.description ?? "")}</textarea>
+            </label>
+            <label>Color (#RRGGBB)
+              <input type="text" name="calendarcolor" placeholder="#3B82F6" value="${esc(editCal?.calendarcolor ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label class="check-row"><input type="checkbox" name="todos" ${editCal?.todos || adminCalModal === "create" ? "checked" : ""} ${busy ? "disabled" : ""} /> Tasks (VTODO)</label>
+            <label class="check-row"><input type="checkbox" name="notes" ${editCal?.notes ? "checked" : ""} ${busy ? "disabled" : ""} /> Notes (VJOURNAL)</label>`,
+            footer: [
+              { label: "Cancel", action: "admin-cal-close", variant: "ghost", disabled: busy },
+              { label: "Save", type: "submit", variant: "primary", disabled: busy },
+            ],
+          })
+        : "";
+
+    const abModal =
+      adminAbModal === "create" || (adminAbModal === "edit" && editAb)
+        ? renderModal({
+            title: adminAbModal === "create" ? "Add address book" : "Edit address book",
+            closeAction: "admin-ab-close",
+            size: "sm",
+            form: true,
+            formAttrs: 'data-form="admin-ab"',
+            body: `
+            <input type="hidden" name="id" value="${editAb ? editAb.id : ""}" />
+            ${
+              adminAbModal === "create"
+                ? `<label>URI token id
+              <input type="text" name="uri" required pattern="[a-z0-9-]+" placeholder="personal" ${busy ? "disabled" : ""} />
+            </label>`
+                : `<p class="muted small">URI <span class="mono">${esc(editAb!.uri)}</span> (read-only)</p>`
+            }
+            <label>Display name
+              <input type="text" name="displayname" required value="${esc(editAb?.displayname ?? "")}" ${busy ? "disabled" : ""} />
+            </label>
+            <label>Description
+              <textarea name="description" rows="2" ${busy ? "disabled" : ""}>${esc(editAb?.description ?? "")}</textarea>
+            </label>`,
+            footer: [
+              { label: "Cancel", action: "admin-ab-close", variant: "ghost", disabled: busy },
+              { label: "Save", type: "submit", variant: "primary", disabled: busy },
+            ],
+          })
+        : "";
+
+    const resDeleteModal = adminResourceDelete
+      ? renderModal({
+          title: `Delete ${adminResourceDelete.kind === "calendar" ? "calendar" : "address book"}`,
+          closeAction: "admin-resource-delete-close",
+          size: "sm",
+          body: `
+          <p>Delete <strong>${esc(adminResourceDelete.label)}</strong> for <span class="mono">${esc(u.username)}</span>?</p>
+          ${
+            adminResourceDelete.kind === "addressbook"
+              ? `<label class="check-row"><input type="checkbox" data-action="admin-ab-force-toggle" ${adminResourceDelete.force ? "checked" : ""} /> Force delete even if contacts exist</label>`
+              : `<p class="muted small">Events on this calendar will be removed if this is the only instance.</p>`
+          }`,
+          footer: [
+            { label: "Cancel", action: "admin-resource-delete-close", variant: "ghost" },
+            {
+              label: "Delete",
+              action: "admin-resource-delete-confirm",
+              variant: "danger",
+              disabled: busy,
+            },
+          ],
+        })
+      : "";
+
+    return `<section class="card admin-user-detail">
+      <div class="section-header">
+        <h2>User <span class="mono">${esc(u.username)}</span></h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-small" data-action="admin-user-edit-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Edit</button>
+          <button type="button" class="btn btn-small btn-danger" data-action="admin-user-delete-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Delete</button>
+          <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-close">Close</button>
+        </div>
+      </div>
+      <p class="muted small admin-breadcrumb">Users → <span class="mono">${esc(u.username)}</span></p>
+      <dl class="admin-dl">
+        <div><dt>Username</dt><dd class="mono">${esc(u.username)}</dd></div>
+        <div><dt>Display name</dt><dd>${esc(u.displayname || "—")}</dd></div>
+        <div><dt>Email</dt><dd>${u.email ? `<a href="mailto:${esc(u.email)}">${esc(u.email)}</a>` : "—"}</dd></div>
+        <div><dt>Principal</dt><dd class="mono">${esc(u.principal)}</dd></div>
+        <div><dt>Calendars</dt><dd>${esc(String(u.calendarCount))}</dd></div>
+        <div><dt>Events / objects</dt><dd>${esc(String(u.eventCount))}</dd></div>
+        <div><dt>Address books</dt><dd>${esc(String(u.addressBookCount))}</dd></div>
+        <div><dt>Contacts</dt><dd>${esc(String(u.contactCount))}</dd></div>
+      </dl>
+    </section>
+    <section class="card">
+      <div class="section-header">
+        <h2>Calendars</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-small" data-action="admin-cal-create" ${busy ? "disabled" : ""}>Add calendar</button>
+        </div>
+      </div>
+      <div class="contacts-table-wrap admin-table-placeholder">
+        <table class="contacts-table">
+          <thead><tr><th>URI</th><th>Name</th><th class="hide-sm">Objects</th><th class="hide-sm">DAV path</th><th>Actions</th></tr></thead>
+          <tbody>${calRows}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <div class="section-header">
+        <h2>Address books</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-small" data-action="admin-ab-create" ${busy ? "disabled" : ""}>Add address book</button>
+        </div>
+      </div>
+      <div class="contacts-table-wrap admin-table-placeholder">
+        <table class="contacts-table">
+          <thead><tr><th>URI</th><th>Name</th><th class="hide-sm">Contacts</th><th>Actions</th></tr></thead>
+          <tbody>${abRows}</tbody>
+        </table>
+      </div>
+    </section>
+    ${calModal}${abModal}${resDeleteModal}`;
+  }
+
+  function renderAdminUsersShell(): string {
+    const meta = adminPageMeta("users");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("users");
+    }
+
+    const list = filteredAdminUsers();
+    const rows =
+      adminUsersLoading && adminUsers.length === 0
+        ? `<tr><td colspan="4" class="muted admin-table-empty">Loading users…</td></tr>`
+        : list.length === 0
+          ? `<tr><td colspan="4" class="muted admin-table-empty">${
+              adminUsersError
+                ? esc(adminUsersError)
+                : adminUsersQuery.trim()
+                  ? "No users match this filter."
+                  : "No users found."
+            }</td></tr>`
+          : list
+              .map((u) => {
+                const active =
+                  adminSelectedUsername &&
+                  adminSelectedUsername.toLowerCase() === u.username.toLowerCase()
+                    ? " is-selected"
+                    : "";
+                return `<tr class="contact-table-row${active}" data-action="admin-user-view" data-username="${esc(u.username)}" tabindex="0" role="button">
+                  <td class="mono">${esc(u.username)}</td>
+                  <td class="hide-sm">${esc(u.displayname || "—")}</td>
+                  <td class="hide-sm">${esc(u.email || "—")}</td>
+                  <td class="admin-user-actions">
+                    <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-view" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>View</button>
+                    <button type="button" class="btn btn-ghost btn-small" data-action="admin-user-edit-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Edit</button>
+                    <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="admin-user-delete-open" data-username="${esc(u.username)}" ${busy ? "disabled" : ""}>Delete</button>
+                  </td>
+                </tr>`;
+              })
+              .join("");
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("Users", "admin-users")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-users-refresh" ${busy || adminUsersLoading ? "disabled" : ""}>Refresh</button>
+            <button type="button" class="btn btn-primary btn-small" data-action="admin-user-create-open" ${busy ? "disabled" : ""}>Add user</button>
+          </div>
+        </div>
+        <p class="muted small">
+          DAV user accounts. Passwords and digests are never returned by the API.
+        </p>
+        <div class="admin-users-toolbar">
+          <input type="search" data-action="admin-users-search" placeholder="Filter by username, name, email…"
+            value="${esc(adminUsersQuery)}" aria-label="Filter users" ${busy ? "disabled" : ""} />
+          <span class="muted small">${esc(String(list.length))}${adminUsersQuery.trim() ? ` / ${adminUsers.length}` : ""} user${list.length === 1 ? "" : "s"}</span>
+        </div>
+        ${adminUsersError && adminUsers.length > 0 ? `<p class="flash flash-error" style="margin:0.75rem 0">${esc(adminUsersError)}</p>` : ""}
+        <div class="contacts-table-wrap admin-table-placeholder">
+          <table class="contacts-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th class="hide-sm">Display name</th>
+                <th class="hide-sm">Email</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </section>
+      ${renderAdminUserDetailPanel()}
+      ${renderAdminUserCreateModal()}
+      ${renderAdminUserEditModal()}
+      ${renderAdminUserDeleteModal()}`;
+  }
+
+  function renderAdminSettingsShell(): string {
+    const meta = adminPageMeta("settings");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("settings");
+    }
+    if (adminSystemSettingsLoading && !adminSystemSettings) {
+      return `<section class="card"><p class="muted">Loading system settings…</p></section>`;
+    }
+    if (adminSystemSettingsError && !adminSystemSettings) {
+      return `<section class="card">
+        <p class="flash flash-error">${esc(adminSystemSettingsError)}</p>
+        <button type="button" class="btn btn-ghost" data-action="admin-settings-refresh">Retry</button>
+      </section>`;
+    }
+    const s = adminSystemSettings;
+    if (!s) {
+      return `<section class="card"><p class="muted">No settings loaded.</p></section>`;
+    }
+    const check = (name: string, on: boolean, label: string) =>
+      `<label class="check-row"><input type="checkbox" name="${esc(name)}" ${on ? "checked" : ""} ${busy || s.writable === false ? "disabled" : ""} /> ${esc(label)}</label>`;
+    const num = (name: string, val: number | undefined, label: string, help = "") =>
+      `<label>${esc(label)}
+        <input type="number" name="${esc(name)}" value="${esc(String(val ?? 0))}" ${busy || s.writable === false ? "disabled" : ""} />
+        ${help ? `<span class="muted small">${esc(help)}</span>` : ""}
+      </label>`;
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("System settings", "admin-settings")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-settings-refresh" ${busy ? "disabled" : ""}>Reload</button>
+          </div>
+        </div>
+        <p class="muted small">
+          Writes <span class="mono">config/baikal.yaml</span> atomically. Changing
+          <strong>session timeout</strong> affects portal idle sessions.
+          ${s.writable === false ? '<span class="flash flash-error">Config is not writable by PHP.</span>' : ""}
+        </p>
+        <form class="stack admin-settings-form" data-form="admin-settings">
+          <h3 class="admin-subsection-title">DAV services</h3>
+          ${check("cal_enabled", !!s.cal_enabled, "Enable CalDAV")}
+          ${check("card_enabled", !!s.card_enabled, "Enable CardDAV")}
+          ${check("tasks_enabled", !!s.tasks_enabled, "Enable Tasks (VTODO)")}
+          ${check("notes_enabled", !!s.notes_enabled, "Enable Notes (VJOURNAL)")}
+          <label>WebDAV authentication type
+            <select name="dav_auth_type" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["Digest", "Basic", "Apache"]
+                .map(
+                  (t) =>
+                    `<option value="${t}" ${s.dav_auth_type === t ? "selected" : ""}>${t}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>Server timezone
+            <select name="timezone" required ${busy || s.writable === false ? "disabled" : ""}>
+              ${timezoneSelectOptions(s.timezone || "UTC")}
+            </select>
+          </label>
+          <label>Email invite sender
+            <input type="text" name="invite_from" value="${esc(s.invite_from || "")}" placeholder="noreply@example.com" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <h3 class="admin-subsection-title">WebDAV files</h3>
+          ${check("files_enabled", !!s.files_enabled, "Enable WebDAV file storage")}
+          <label>Storage path
+            <input type="text" name="files_storage_path" value="${esc(s.files_storage_path || "")}" placeholder="empty = Specific/files" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          ${num("files_max_upload_mb", s.files_max_upload_mb, "Max file size (MB)")}
+          ${num("files_quota_mb", s.files_quota_mb, "Quota per user (MB)", "0 = unlimited")}
+          ${num("files_quarantine_days", s.files_quarantine_days, "Deleted user file retention (days)")}
+
+          <h3 class="admin-subsection-title">Session & portal</h3>
+          ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal session")}
+          <label>Portal log level
+            <select name="portal_log_level" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["off", "error", "warn", "info", "debug"]
+                .map(
+                  (l) =>
+                    `<option value="${l}" ${(s.portal_log_level || "off") === l ? "selected" : ""}>${l}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          ${check("portal_admin_ui_enabled", s.portal_admin_ui_enabled !== false, "Portal Administration UI enabled")}
+          <label>Portal admin users (comma-separated)
+            <input type="text" name="portal_admin_users" value="${esc(
+              Array.isArray(s.portal_admin_users)
+                ? s.portal_admin_users.join(", ")
+                : String(s.portal_admin_users || ""),
+            )}" placeholder="empty = DAV user admin" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <h3 class="admin-subsection-title">WebDAV-Push</h3>
+          ${check("push_enabled", !!s.push_enabled, "Enable WebDAV-Push")}
+          <label>Push external URL (HTTPS)
+            <input type="url" name="push_external_url" value="${esc(s.push_external_url || "")}" placeholder="https://dav.example.com/dav.php/" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          <label>Push log level
+            <select name="push_log_level" ${busy || s.writable === false ? "disabled" : ""}>
+              ${["off", "error", "warn", "info", "debug"]
+                .map(
+                  (l) =>
+                    `<option value="${l}" ${(s.push_log_level || "off") === l ? "selected" : ""}>${l}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+
+          <h3 class="admin-subsection-title">Server admin password</h3>
+          <p class="muted small">
+            Stored in <span class="mono">baikal.yaml</span> for install recovery.
+            Portal login uses each DAV user’s own password (e.g. user <span class="mono">admin</span> created at install).
+            ${s.hasAdminPassword ? "Leave blank to keep the current server admin password." : "No server admin password set yet."}
+          </p>
+          <label>New server admin password
+            <input type="password" name="admin_password" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+          <label>Confirm server admin password
+            <input type="password" name="admin_password_confirm" autocomplete="new-password" ${busy || s.writable === false ? "disabled" : ""} />
+          </label>
+
+          <div class="form-actions-row" style="margin-top:1rem">
+            <button type="submit" class="btn btn-primary" ${busy || s.writable === false ? "disabled" : ""}>Save settings</button>
+          </div>
+        </form>
+      </section>
+      <section class="card card-danger-zone">
+        <div class="section-header">
+          <h2>Danger zone</h2>
+        </div>
+        <p class="muted small">
+          <strong>Reset to Default</strong> is a full factory wipe: config, database (all users and data),
+          WebDAV files, and install lock. A timestamped backup of
+          <span class="mono">baikal.yaml</span> is kept next to config; <strong>back up volumes first</strong>
+          if you need data recovery. Everything else is deleted, then the installer opens.
+        </p>
+        <div class="form-actions-row" style="margin-top:0.75rem">
+          <button type="button" class="btn btn-danger" data-action="admin-reset-open" ${busy || s.writable === false ? "disabled" : ""}>
+            Reset to Default
+          </button>
+        </div>
+      </section>
+      ${renderAdminResetModal()}`;
+  }
+
+  function renderAdminResetModal(): string {
+    if (!adminResetModalOpen) return "";
+    return renderModal({
+      id: "admin-reset-modal",
+      title: "Reset to Default",
+      titleId: "admin-reset-title",
+      closeAction: "admin-reset-close",
+      size: "sm",
+      body: `
+          <p>This permanently wipes this AngaraDAV instance and opens the installer.</p>
+          <ul class="admin-feature-list muted">
+            <li>Deletes <span class="mono">config/baikal.yaml</span> (timestamped backup only)</li>
+            <li>Deletes the database (all DAV users, calendars, contacts, events)</li>
+            <li>Deletes WebDAV file homes and quarantine</li>
+            <li>Removes <span class="mono">INSTALL_DISABLED</span> so install can run</li>
+          </ul>
+          <p class="muted small">This cannot be undone. You will complete setup at <span class="mono">/portal/install/</span>.</p>
+          ${renderConfirmCheckbox({
+            action: "admin-reset-toggle",
+            label: "I understand all data will be deleted and the installer will open",
+            checked: adminResetConfirmChecked,
+            disabled: busy,
+            style: "admin",
+          })}
+          <label style="margin-top:1rem">Your portal password
+            <input type="password" data-action="admin-reset-password" value="${esc(adminResetPassword)}"
+              autocomplete="current-password" placeholder="Re-enter password to confirm" ${busy ? "disabled" : ""} />
+          </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-reset-close", variant: "ghost", disabled: busy },
+        {
+          label: "Reset and open installer",
+          action: "admin-reset-confirm",
+          variant: "danger",
+          disabled: busy || !adminResetConfirmChecked || adminResetPassword.trim() === "",
+        },
+      ],
+    });
+  }
+
+  function renderAdminDatabaseShell(): string {
+    const meta = adminPageMeta("database");
+    if (meta && meta.available === false) {
+      return adminComingSoonBanner("database");
+    }
+    if (adminDatabaseSettingsLoading && !adminDatabaseSettings) {
+      return `<section class="card"><p class="muted">Loading database settings…</p></section>`;
+    }
+    if (adminDatabaseSettingsError && !adminDatabaseSettings) {
+      return `<section class="card">
+        <p class="flash flash-error">${esc(adminDatabaseSettingsError)}</p>
+        <button type="button" class="btn btn-ghost" data-action="admin-database-refresh">Retry</button>
+      </section>`;
+    }
+    const d = adminDatabaseSettings;
+    if (!d) {
+      return `<section class="card"><p class="muted">No database settings loaded.</p></section>`;
+    }
+    const backend = adminDbFormBackend;
+    const notWritable = d.writable === false;
+
+    return `
+      <section class="card">
+        <div class="section-header">
+          ${infoTitle("Database", "admin-database")}
+          <div class="section-actions">
+            ${meta ? `<span class="badge ${adminStatusBadgeClass(meta.status)}">${esc(adminStatusLabel(meta.status))}</span>` : ""}
+            <button type="button" class="btn btn-ghost btn-small" data-action="admin-database-refresh" ${busy ? "disabled" : ""}>Refresh</button>
+          </div>
+        </div>
+        <p class="flash flash-info" style="margin-bottom:1rem">${esc(d.warning)}</p>
+        <dl class="admin-dl admin-dl-stack">
+          <div>
+            <dt>Current backend</dt>
+            <dd><span class="badge badge-admin">${esc((d.backend || "—").toUpperCase())}</span></dd>
+          </div>
+          ${
+            d.backend === "sqlite" || d.sqlite_file
+              ? `<div>
+            <dt>SQLite file</dt>
+            <dd class="mono admin-dl-path">${esc(d.sqlite_file || "—")}</dd>
+          </div>`
+              : ""
+          }
+          ${
+            d.backend === "pgsql" || d.pgsql_host
+              ? `<div>
+            <dt>PostgreSQL</dt>
+            <dd class="mono admin-dl-path">${esc(d.pgsql_host || "—")} / ${esc(d.pgsql_dbname || "—")} · ${esc(d.pgsql_username || "—")}</dd>
+          </div>
+          <div>
+            <dt>Password</dt>
+            <dd>${d.hasPassword ? '<span class="badge badge-ok">Set</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd>
+          </div>`
+              : ""
+          }
+          <div>
+            <dt>Encryption key</dt>
+            <dd>${d.hasEncryptionKey ? '<span class="badge badge-ok">Configured</span> <span class="muted small">(never shown)</span>' : '<span class="badge badge-off">Not set</span>'}</dd>
+          </div>
+        </dl>
+
+        <h3 class="admin-subsection-title">Edit connection</h3>
+        ${notWritable ? `<p class="flash flash-error">Config is not writable by PHP.</p>` : ""}
+        <form class="stack admin-database-form" data-form="admin-database">
+          <label>Backend
+            <select name="backend" data-action="admin-db-backend" ${busy || notWritable ? "disabled" : ""}>
+              <option value="sqlite" ${backend === "sqlite" ? "selected" : ""}>SQLite</option>
+              <option value="pgsql" ${backend === "pgsql" ? "selected" : ""}>PostgreSQL</option>
+            </select>
+          </label>
+          <div data-admin-db-panel="sqlite" style="${backend === "sqlite" ? "" : "display:none"}">
+            <label>SQLite file path
+              <input type="text" name="sqlite_file" class="mono" value="${esc(d.sqlite_file || "")}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+          </div>
+          <div data-admin-db-panel="pgsql" style="${backend === "pgsql" ? "" : "display:none"}">
+            <label>PostgreSQL host
+              <input type="text" name="pgsql_host" class="mono" value="${esc(d.pgsql_host || "")}" placeholder="localhost:5432" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Database name
+              <input type="text" name="pgsql_dbname" class="mono" value="${esc(d.pgsql_dbname || "")}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Username
+              <input type="text" name="pgsql_username" class="mono" value="${esc(d.pgsql_username || "")}" autocomplete="off" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+            <label>Password
+              <input type="password" name="pgsql_password" autocomplete="new-password" placeholder="${d.hasPassword ? "Leave blank to keep current" : ""}" ${busy || notWritable ? "disabled" : ""} />
+            </label>
+          </div>
+          <div class="form-actions-row" style="margin-top:1rem">
+            <button type="button" class="btn btn-ghost" data-action="admin-db-test" ${busy || notWritable ? "disabled" : ""}>Test connection</button>
+            <button type="submit" class="btn btn-primary" ${busy || notWritable ? "disabled" : ""}>Save database settings…</button>
+          </div>
+        </form>
+      </section>
+      ${renderAdminDbConfirmModal()}`;
+  }
+
+  function renderAdminDbConfirmModal(): string {
+    if (!adminDbConfirmOpen) return "";
+    const canSave = adminDbConfirmText.trim() === "CONFIRM";
+    return renderModal({
+      id: "admin-db-confirm-modal",
+      title: "Confirm database change",
+      titleId: "admin-db-confirm-title",
+      closeAction: "admin-db-confirm-close",
+      size: "sm",
+      body: `
+          <p>Wrong values can take the instance offline. Type <strong class="mono">CONFIRM</strong> to save.</p>
+          <label>Confirmation
+            <input type="text" data-action="admin-db-confirm-input" value="${esc(adminDbConfirmText)}"
+              autocomplete="off" spellcheck="false" placeholder="CONFIRM" ${busy ? "disabled" : ""} />
+          </label>`,
+      footer: [
+        { label: "Cancel", action: "admin-db-confirm-close", variant: "ghost", disabled: busy },
+        {
+          label: "Save database settings",
+          action: "admin-db-confirm-save",
+          variant: "danger",
+          disabled: busy || !canSave,
+        },
+      ],
+    });
+  }
+
+  /** Admin-only Administration shell (opened from the user menu). */
   function renderAdminSection(): string {
     if (!userIsAdmin()) {
       return `<div class="card"><p class="muted">You do not have permission to view Administration.</p></div>`;
     }
-    return `<div class="portal-grid portal-grid-admin">
-      <section class="card admin-section">
-        ${infoTitle("Server administration", "administration")}
-        <p class="muted">
-          Manage DAV users, calendars, address books, and system settings in the classic Web Admin.
-          That UI uses the separate <strong>admin</strong> password (not your DAV credentials), unless you already have an admin session open.
-        </p>
-        <div class="admin-link-grid">
-          <a class="btn btn-primary" href="/admin/">Open Admin Dashboard</a>
-          <a class="btn btn-ghost" href="/admin/?/users">Users and resources</a>
-          <a class="btn btn-ghost" href="/admin/?/settings/standard">System Settings</a>
-          <a class="btn btn-ghost" href="/admin/?/settings/database">Database settings</a>
-        </div>
-        <p class="muted small" style="margin-top:1.25rem">
-          Signed in as <span class="mono">${esc(user?.username ?? "")}</span>
-          with role <span class="badge badge-admin">Admin</span>.
-        </p>
-      </section>
-    </div>`;
+    if (!adminUiEnabled()) {
+      return `<section class="card admin-coming-soon-card">
+          <div class="admin-coming-soon-head">
+            <span class="badge badge-off">Disabled</span>
+            <h2 class="admin-coming-soon-title">Portal Administration</h2>
+          </div>
+          <p class="muted">
+            The Administration UI is turned off
+            (<span class="mono">system.portal_admin_ui_enabled</span>).
+          </p>
+        </section>`;
+    }
+    if (adminPage === "users") return renderAdminUsersShell();
+    if (adminPage === "settings") return renderAdminSettingsShell();
+    if (adminPage === "database") return renderAdminDatabaseShell();
+    return renderAdminOverview();
   }
 
   /** Flatten tasks as a tree (subtasks under parent via RELATED-TO parentUid). */
@@ -3988,7 +6041,7 @@ export function mountApp(root: HTMLElement): void {
         ) {
           filesRenamePath = null;
           filesDeletePaths = null;
-          filesTransfer = null;
+          resetFilesTransferTree();
           filesMkdirOpen = false;
           render();
           return;
@@ -4199,6 +6252,80 @@ export function mountApp(root: HTMLElement): void {
           }
         })();
       }, 250);
+    });
+    const adminUsersSearch = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-users-search"]',
+    );
+    adminUsersSearch?.addEventListener("input", () => {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        adminUsersQuery = adminUsersSearch.value;
+        render();
+      }, 150);
+    });
+    const adminCreateForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-user-create"]',
+    );
+    adminCreateForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminUserCreate(adminCreateForm);
+    });
+    const adminEditForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-user-edit"]',
+    );
+    adminEditForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminUserEdit(adminEditForm);
+    });
+    const adminCalForm = root.querySelector<HTMLFormElement>('[data-form="admin-cal"]');
+    adminCalForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminCalSave(adminCalForm);
+    });
+    const adminAbForm = root.querySelector<HTMLFormElement>('[data-form="admin-ab"]');
+    adminAbForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminAbSave(adminAbForm);
+    });
+    const adminSettingsForm = root.querySelector<HTMLFormElement>(
+      '[data-form="admin-settings"]',
+    );
+    adminSettingsForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void onAdminSettingsSave(adminSettingsForm);
+    });
+    const adminDbForm = root.querySelector<HTMLFormElement>('[data-form="admin-database"]');
+    adminDbForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      onAdminDatabaseFormSubmit(adminDbForm);
+    });
+    const adminDbBackend = root.querySelector<HTMLSelectElement>(
+      'select[data-action="admin-db-backend"]',
+    );
+    adminDbBackend?.addEventListener("change", () => {
+      adminDbFormBackend = adminDbBackend.value === "pgsql" ? "pgsql" : "sqlite";
+      render();
+    });
+    const adminDbConfirmInp = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-db-confirm-input"]',
+    );
+    adminDbConfirmInp?.addEventListener("input", () => {
+      adminDbConfirmText = adminDbConfirmInp.value;
+      const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-db-confirm-save"]');
+      if (btn) {
+        btn.disabled = busy || adminDbConfirmText.trim() !== "CONFIRM";
+      }
+    });
+    const adminResetPw = root.querySelector<HTMLInputElement>(
+      'input[data-action="admin-reset-password"]',
+    );
+    adminResetPw?.addEventListener("input", () => {
+      adminResetPassword = adminResetPw.value;
+      const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-reset-confirm"]');
+      if (btn) {
+        btn.disabled =
+          busy || !adminResetConfirmChecked || adminResetPassword.trim() === "";
+      }
     });
     const noteSearchInput = root.querySelector<HTMLInputElement>('input[data-action="note-search"]');
     noteSearchInput?.addEventListener("input", () => {
@@ -4528,9 +6655,35 @@ export function mountApp(root: HTMLElement): void {
       applyPortalUi(res.ui);
       log.event("login.ok", { username: user?.username ?? username });
       bumpSessionIdleTimer();
+      if (userIsAdmin()) {
+        try {
+          await loadAdminCapabilities();
+        } catch (e) {
+          log.warn("admin.capabilities login", e instanceof Error ? e.message : e);
+        }
+      }
       normalizeActiveTab();
-      persistTab(activeTab);
+      persistTab(activeTab, adminPage);
       await loadHome();
+      if (activeTab === "admin" && userIsAdmin() && adminUiEnabled()) {
+        try {
+          if (adminPage === "overview" && adminPageMeta("overview")?.available !== false) {
+            await loadAdminDashboard();
+          } else if (adminPage === "users" && adminPageMeta("users")?.available !== false) {
+            await loadAdminUsers();
+            if (adminSelectedUsername) {
+              await loadAdminUserDetail(adminSelectedUsername);
+              await loadAdminUserResources(adminSelectedUsername);
+            }
+          } else if (adminPage === "settings" && adminPageMeta("settings")?.available !== false) {
+            await loadAdminSystemSettings();
+          } else if (adminPage === "database" && adminPageMeta("database")?.available !== false) {
+            await loadAdminDatabaseSettings();
+          }
+        } catch (e) {
+          log.warn("admin login load", e instanceof Error ? e.message : e);
+        }
+      }
       setFlash("success", "Signed in");
     } catch (e) {
       log.warn("login.failed", e instanceof Error ? e.message : e);
@@ -4595,11 +6748,19 @@ export function mountApp(root: HTMLElement): void {
   async function onFilesTransfer(form: HTMLFormElement) {
     if (!filesTransfer || filesTransfer.paths.length === 0) return;
     const fd = new FormData(form);
-    const toPath = String(fd.get("toPath") ?? "").trim().replace(/^\/+|\/+$/g, "");
+    // Prefer the tree selection (state); hidden input is the form fallback.
+    const toPath = (filesTransferDest || String(fd.get("toPath") ?? ""))
+      .trim()
+      .replace(/^\/+|\/+$/g, "");
     const newNameRaw = String(fd.get("newName") ?? "").trim();
     const op = filesTransfer.op;
     const paths = [...filesTransfer.paths];
     const multi = paths.length > 1;
+    if (isBlockedTransferDest(toPath, paths)) {
+      setFlash("error", "Choose a different destination folder");
+      render();
+      return;
+    }
     busy = true;
     clearFlash();
     render();
@@ -4609,8 +6770,8 @@ export function mountApp(root: HTMLElement): void {
       for (const path of paths) {
         try {
           if (op === "copy") {
-            // Omit newName when unchanged so the server can append " (copy)"
-            // if the destination already has that name.
+            // Omit newName when unchanged so the server applies same-folder
+            // " (copy)" vs cross-folder keep-name rules.
             const sourceBase = basenamePath(path);
             const copyName =
               multi || !newNameRaw || newNameRaw === sourceBase ? undefined : newNameRaw;
@@ -4631,7 +6792,7 @@ export function mountApp(root: HTMLElement): void {
           errors.push(`${basenamePath(path)}: ${e instanceof Error ? e.message : "failed"}`);
         }
       }
-      filesTransfer = null;
+      resetFilesTransferTree();
       checkedFilePaths = [];
       await loadFiles();
       const verb = op === "copy" ? "Copied" : "Moved";
@@ -4910,6 +7071,9 @@ export function mountApp(root: HTMLElement): void {
         readOnly,
       });
       selectedId = res.calendar.id;
+      if (!selectedIds.includes(res.calendar.id)) {
+        selectedIds = [...selectedIds, res.calendar.id];
+      }
       createCalModalOpen = false;
       await loadHome();
       let msg = `Created “${res.calendar.displayname}”`;
@@ -4960,10 +7124,10 @@ export function mountApp(root: HTMLElement): void {
       render();
       return;
     }
-    if (action === "select-cal") {
+    if (action === "select-cal" || action === "toggle-cal") {
       const id = Number(t.dataset.id);
       if (!Number.isFinite(id)) return;
-      selectedId = id;
+      toggleCalendarSelected(id);
       busy = true;
       clearFlash();
       render();
@@ -4983,6 +7147,9 @@ export function mountApp(root: HTMLElement): void {
       const cal = calendars.find((c) => c.id === id && c.canShare);
       if (!cal) return;
       selectedId = id;
+      if (!selectedIds.includes(id)) {
+        selectedIds = [...selectedIds, id];
+      }
       calModalOpen = true;
       deleteConfirmId = null;
       busy = true;
@@ -5044,6 +7211,7 @@ export function mountApp(root: HTMLElement): void {
       try {
         await api.deleteCalendar(id);
         if (selectedId === id) selectedId = null;
+        selectedIds = selectedIds.filter((x) => x !== id);
         deleteConfirmId = null;
         calModalOpen = false;
         shares = [];
@@ -5053,6 +7221,12 @@ export function mountApp(root: HTMLElement): void {
           const def = pickDefaultCalendar();
           if (def) {
             selectedId = def.id;
+            if (!selectedIds.includes(def.id)) {
+              selectedIds = [...selectedIds, def.id];
+            }
+            await loadMonthEvents();
+          } else if (selectedIds.length > 0) {
+            selectedId = selectedIds[0];
             await loadMonthEvents();
           }
         }
@@ -5413,7 +7587,422 @@ export function mountApp(root: HTMLElement): void {
     if (action === "tab") {
       const tab = parseTabId(t.dataset.tab);
       if (tab) {
+        if (tab === "admin") {
+          // User menu → Administration: land on Overview
+          adminPage = "overview";
+        }
         await activateTab(tab);
+      }
+      return;
+    }
+    if (action === "admin-page") {
+      const page = parseAdminPageId(t.dataset.adminPage);
+      if (page) {
+        await activateAdminPage(page);
+      }
+      return;
+    }
+    if (action === "admin-refresh") {
+      if (!userIsAdmin() || activeTab !== "admin") return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminDashboard();
+        setFlash("success", "Overview refreshed");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-users-refresh") {
+      if (!userIsAdmin() || activeTab !== "admin") return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminUsers();
+        if (adminSelectedUsername) {
+          await loadAdminUserDetail(adminSelectedUsername);
+        }
+        setFlash("success", "Users refreshed");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-view") {
+      const username = t.dataset.username ?? "";
+      if (!username || !userIsAdmin()) return;
+      busy = true;
+      clearFlash();
+      adminSelectedUsername = username;
+      adminPage = "users";
+      persistTab("admin", "users", username);
+      render();
+      try {
+        await loadAdminUserDetail(username);
+        await loadAdminUserResources(username);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Failed to load user");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-close") {
+      adminSelectedUsername = null;
+      adminUserDetail = null;
+      adminUserDetailError = null;
+      adminUserEditOpen = false;
+      persistTab("admin", "users", null);
+      render();
+      return;
+    }
+    if (action === "admin-user-create-open") {
+      if (!userIsAdmin()) return;
+      adminUserCreateOpen = true;
+      adminUserEditOpen = false;
+      adminUserDeleteUsername = null;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-user-create-close") {
+      adminUserCreateOpen = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-edit-open") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminSelectedUsername ?? "";
+      if (!username) return;
+      busy = true;
+      clearFlash();
+      adminUserCreateOpen = false;
+      adminUserDeleteUsername = null;
+      adminSelectedUsername = username;
+      adminPage = "users";
+      persistTab("admin", "users", username);
+      render();
+      try {
+        if (!adminUserDetail || adminUserDetail.username.toLowerCase() !== username.toLowerCase()) {
+          await loadAdminUserDetail(username);
+        }
+        adminUserEditOpen = true;
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Failed to load user");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-user-edit-close") {
+      adminUserEditOpen = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-open") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminSelectedUsername ?? "";
+      if (!username) return;
+      adminUserDeleteUsername = username;
+      adminUserDeleteConfirmChecked = false;
+      adminUserCreateOpen = false;
+      adminUserEditOpen = false;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-close") {
+      adminUserDeleteUsername = null;
+      adminUserDeleteConfirmChecked = false;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-toggle") {
+      const cb = t as HTMLInputElement;
+      adminUserDeleteConfirmChecked = !!cb.checked;
+      render();
+      return;
+    }
+    if (action === "admin-user-delete-confirm") {
+      if (!userIsAdmin()) return;
+      const username = t.dataset.username ?? adminUserDeleteUsername ?? "";
+      if (!username || !adminUserDeleteConfirmChecked) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await api.adminDeleteUser(username, true);
+        log.event("admin.user.delete", { username });
+        adminUserDeleteUsername = null;
+        adminUserDeleteConfirmChecked = false;
+        adminUserEditOpen = false;
+        if (adminSelectedUsername?.toLowerCase() === username.toLowerCase()) {
+          adminSelectedUsername = null;
+          adminUserDetail = null;
+          adminUserCalendars = [];
+          adminUserAddressBooks = [];
+          persistTab("admin", "users", null);
+        }
+        await loadAdminUsers();
+        setFlash("success", `Deleted user “${username}”`);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-cal-create") {
+      adminCalModal = "create";
+      adminCalEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-cal-edit") {
+      adminCalModal = "edit";
+      adminCalEditId = Number(t.dataset.id);
+      render();
+      return;
+    }
+    if (action === "admin-cal-close") {
+      adminCalModal = null;
+      adminCalEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-cal-delete") {
+      adminResourceDelete = {
+        kind: "calendar",
+        id: Number(t.dataset.id),
+        label: t.dataset.label ?? "calendar",
+      };
+      render();
+      return;
+    }
+    if (action === "admin-ab-create") {
+      adminAbModal = "create";
+      adminAbEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-ab-edit") {
+      adminAbModal = "edit";
+      adminAbEditId = Number(t.dataset.id);
+      render();
+      return;
+    }
+    if (action === "admin-ab-close") {
+      adminAbModal = null;
+      adminAbEditId = null;
+      render();
+      return;
+    }
+    if (action === "admin-ab-delete") {
+      adminResourceDelete = {
+        kind: "addressbook",
+        id: Number(t.dataset.id),
+        label: t.dataset.label ?? "address book",
+        force: false,
+      };
+      render();
+      return;
+    }
+    if (action === "admin-ab-force-toggle") {
+      if (adminResourceDelete?.kind === "addressbook") {
+        adminResourceDelete = {
+          ...adminResourceDelete,
+          force: !!(t as HTMLInputElement).checked,
+        };
+        render();
+      }
+      return;
+    }
+    if (action === "admin-resource-delete-close") {
+      adminResourceDelete = null;
+      render();
+      return;
+    }
+    if (action === "admin-resource-delete-confirm") {
+      if (!adminSelectedUsername || !adminResourceDelete) return;
+      const uname = adminSelectedUsername;
+      const del = adminResourceDelete;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        if (del.kind === "calendar") {
+          await api.adminDeleteUserCalendar(uname, del.id, true);
+        } else {
+          await api.adminDeleteUserAddressBook(uname, del.id, true, !!del.force);
+        }
+        adminResourceDelete = null;
+        await loadAdminUserResources(uname);
+        await loadAdminUserDetail(uname);
+        setFlash("success", "Deleted");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-settings-refresh") {
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminSystemSettings();
+        setFlash("success", "Settings reloaded");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reload failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-reset-open") {
+      adminResetModalOpen = true;
+      adminResetConfirmChecked = false;
+      adminResetPassword = "";
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "admin-reset-close") {
+      adminResetModalOpen = false;
+      adminResetConfirmChecked = false;
+      adminResetPassword = "";
+      render();
+      return;
+    }
+    if (action === "admin-reset-toggle") {
+      const cb = t as HTMLInputElement;
+      adminResetConfirmChecked = !!cb.checked;
+      render();
+      return;
+    }
+    if (action === "admin-reset-password") {
+      adminResetPassword = (t as HTMLInputElement).value;
+      // Avoid full re-render on every keystroke; enable button via live value next confirm
+      const btn = root.querySelector<HTMLButtonElement>(
+        '[data-action="admin-reset-confirm"]',
+      );
+      if (btn) {
+        btn.disabled = busy || !adminResetConfirmChecked || adminResetPassword.trim() === "";
+      }
+      return;
+    }
+    if (action === "admin-reset-confirm") {
+      if (!adminResetConfirmChecked) return;
+      if (adminResetPassword.trim() === "") {
+        setFlash("error", "Re-enter your password to confirm Reset to Default");
+        render();
+        return;
+      }
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const res = await api.adminResetToDefault(true, adminResetPassword);
+        log.event("admin.settings.reset-to-default");
+        adminResetModalOpen = false;
+        adminResetConfirmChecked = false;
+        adminResetPassword = "";
+        const dest =
+          res.redirectUrl && res.redirectUrl.startsWith("/")
+            ? res.redirectUrl
+            : "/portal/install/";
+        window.location.assign(dest);
+        return;
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reset failed");
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-database-refresh") {
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        await loadAdminDatabaseSettings();
+        setFlash("success", "Database settings reloaded");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Reload failed");
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
+    if (action === "admin-db-backend") {
+      const sel = t as HTMLSelectElement;
+      adminDbFormBackend = sel.value === "pgsql" ? "pgsql" : "sqlite";
+      render();
+      return;
+    }
+    if (action === "admin-db-test") {
+      const form = t.closest("form") as HTMLFormElement | null;
+      void onAdminDatabaseTest(form);
+      return;
+    }
+    if (action === "admin-db-confirm-close") {
+      adminDbConfirmOpen = false;
+      adminDbConfirmText = "";
+      adminDbPendingBody = null;
+      render();
+      return;
+    }
+    if (action === "admin-db-confirm-input") {
+      const inp = t as HTMLInputElement;
+      adminDbConfirmText = inp.value;
+      // Re-render only the button state lightly via full render
+      render();
+      // restore focus/cursor on the confirm field
+      const el = root.querySelector<HTMLInputElement>('[data-action="admin-db-confirm-input"]');
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+      return;
+    }
+    if (action === "admin-db-confirm-save") {
+      if (adminDbConfirmText.trim() !== "CONFIRM" || !adminDbPendingBody) return;
+      busy = true;
+      clearFlash();
+      render();
+      try {
+        const body = { ...adminDbPendingBody, confirm: "CONFIRM" };
+        const res = await api.adminUpdateDatabaseSettings(body);
+        adminDatabaseSettings = res.data;
+        adminDbConfirmOpen = false;
+        adminDbConfirmText = "";
+        adminDbPendingBody = null;
+        const b = (res.data.backend || "sqlite").toLowerCase();
+        adminDbFormBackend = b === "pgsql" ? "pgsql" : "sqlite";
+        log.event("admin.database.save", { backend: res.data.backend });
+        setFlash("success", "Database settings saved");
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Database save failed");
+      } finally {
+        busy = false;
+        render();
       }
       return;
     }
@@ -5462,39 +8051,63 @@ export function mountApp(root: HTMLElement): void {
     if (action === "files-copy") {
       const path = t.dataset.path ?? "";
       if (!path) return;
-      filesTransfer = { op: "copy", paths: [path] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("copy", [path]);
       return;
     }
     if (action === "files-move") {
       const path = t.dataset.path ?? "";
       if (!path) return;
-      filesTransfer = { op: "move", paths: [path] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("move", [path]);
       return;
     }
     if (action === "files-bulk-copy") {
       if (checkedFilePaths.length === 0) return;
-      filesTransfer = { op: "copy", paths: [...checkedFilePaths] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
-      render();
+      void openFilesTransfer("copy", [...checkedFilePaths]);
       return;
     }
     if (action === "files-bulk-move") {
       if (checkedFilePaths.length === 0) return;
-      filesTransfer = { op: "move", paths: [...checkedFilePaths] };
-      filesRenamePath = null;
-      filesDeletePaths = null;
+      void openFilesTransfer("move", [...checkedFilePaths]);
+      return;
+    }
+    if (action === "files-tree-select") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!filesTransfer) return;
+      // dataset.path is "" for Home — do not treat empty as missing
+      const path = t.dataset.path ?? "";
+      if (isBlockedTransferDest(path, filesTransfer.paths)) return;
+      filesTransferDest = path;
       render();
       return;
     }
+    if (action === "files-tree-toggle" || action === "files-tree-retry") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!filesTransfer) return;
+      const path = t.dataset.path ?? "";
+      if (action === "files-tree-retry") {
+        const next = { ...filesTreeChildren };
+        delete next[path];
+        filesTreeChildren = next;
+        if (!filesTreeExpanded.includes(path)) {
+          filesTreeExpanded = [...filesTreeExpanded, path];
+        }
+        void ensureFilesTreeChildren(path);
+        return;
+      }
+      const isOpen = filesTreeExpanded.includes(path);
+      if (isOpen) {
+        filesTreeExpanded = filesTreeExpanded.filter((p) => p !== path);
+        render();
+      } else {
+        filesTreeExpanded = [...filesTreeExpanded, path];
+        void ensureFilesTreeChildren(path);
+      }
+      return;
+    }
     if (action === "files-transfer-close") {
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -5502,7 +8115,7 @@ export function mountApp(root: HTMLElement): void {
       if (checkedFilePaths.length === 0) return;
       filesDeletePaths = [...checkedFilePaths];
       filesRenamePath = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -5525,7 +8138,7 @@ export function mountApp(root: HTMLElement): void {
       filesMkdirOpen = true;
       filesRenamePath = null;
       filesDeletePaths = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       clearFlash();
       render();
       return;
@@ -5538,7 +8151,7 @@ export function mountApp(root: HTMLElement): void {
     if (action === "files-rename-open") {
       filesRenamePath = t.dataset.path ?? null;
       filesDeletePaths = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -5551,7 +8164,7 @@ export function mountApp(root: HTMLElement): void {
       const path = t.dataset.path ?? "";
       filesDeletePaths = path ? [path] : null;
       filesRenamePath = null;
-      filesTransfer = null;
+      resetFilesTransferTree();
       render();
       return;
     }
@@ -6084,20 +8697,26 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "export-ab") {
-      if (selectedAbId === null) return;
-      abModalOpen = true;
+      ev.stopPropagation();
+      const idRaw = t.dataset.id;
+      const abId =
+        idRaw !== undefined && idRaw !== ""
+          ? Number(idRaw)
+          : selectedAbId;
+      if (abId === null || Number.isNaN(abId)) return;
       busy = true;
       clearFlash();
       render();
       try {
-        const { blob, filename } = await api.exportAddressBook(selectedAbId);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const { blob, filename } = await api.exportAddressBook(abId);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -6117,13 +8736,14 @@ export function mountApp(root: HTMLElement): void {
           selectedAbId,
           selectedContactUri,
         );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -6153,20 +8773,26 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
     if (action === "export-cal") {
-      if (selectedId === null) return;
-      calModalOpen = true;
+      ev.stopPropagation();
+      const idRaw = t.dataset.id;
+      const calId =
+        idRaw !== undefined && idRaw !== ""
+          ? Number(idRaw)
+          : selectedId;
+      if (calId === null || Number.isNaN(calId)) return;
       busy = true;
       clearFlash();
       render();
       try {
-        const { blob, filename } = await api.exportCalendar(selectedId);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFlash("success", `Exported ${filename}`);
+        const { blob, filename } = await api.exportCalendar(calId);
+        const outcome = await saveBlobAsFile(blob, filename);
+        if (outcome === "cancelled") {
+          setFlash("info", "Export cancelled");
+        } else if (outcome === "saved") {
+          setFlash("success", `Saved ${filename}`);
+        } else {
+          setFlash("success", `Download started: ${filename}`);
+        }
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Export failed");
       } finally {
@@ -6174,6 +8800,56 @@ export function mountApp(root: HTMLElement): void {
         render();
       }
     }
+  }
+
+  /**
+   * Save a blob to disk. Prefer the File System Access picker when available
+   * (true cancel detection). Fall back to a temporary object-URL download —
+   * do not revoke the URL immediately or browsers cancel the download.
+   */
+  async function saveBlobAsFile(
+    blob: Blob,
+    filename: string,
+  ): Promise<"saved" | "cancelled" | "started"> {
+    const w = window as Window & {
+      showSaveFilePicker?: (opts: {
+        suggestedName?: string;
+      }) => Promise<FileSystemFileHandle>;
+    };
+    if (typeof w.showSaveFilePicker === "function") {
+      try {
+        const handle = await w.showSaveFilePicker({ suggestedName: filename });
+        const writable = await handle.createWritable();
+        try {
+          await writable.write(blob);
+        } finally {
+          await writable.close();
+        }
+        return "saved";
+      } catch (e) {
+        // User cancelled the save dialog
+        if (e instanceof DOMException && e.name === "AbortError") {
+          return "cancelled";
+        }
+        // No user activation / unsupported context → fall through to <a download>
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    // Keep the blob URL alive until the browser has started reading it.
+    // Immediate revokeObjectURL often aborts the download (looks like Cancel).
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 60_000);
+    return "started";
   }
 
   function bindImportInput() {

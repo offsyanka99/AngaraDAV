@@ -30,16 +30,40 @@ namespace Baikal;
 use Symfony\Component\Yaml\Yaml;
 
 class Framework extends \Flake\Core\Framework {
-    static function installTool() {
+    /**
+     * Install/upgrade gate. Browser/DAV contexts redirect to the portal installer.
+     * Portal JSON API throws ApiException (503) so the SPA can show a message instead of following HTML 302.
+     *
+     * @param string $reason machine code: not_configured|upgrade_required|admin_password_missing
+     * @param array<string, mixed> $extra extra JSON fields for the portal API
+     */
+    static function installTool(string $reason = 'not_configured', array $extra = []) {
         if (defined("BAIKAL_CONTEXT_INSTALL") && BAIKAL_CONTEXT_INSTALL === true) {
             # Install tool has been launched and we're already on the install page
             return;
-        } else {
-            # Install tool has been launched; redirecting user
-            $sInstallToolUrl = PROJECT_URI . "admin/install/";
-            header("Location: " . $sInstallToolUrl);
-            exit(0);
         }
+
+        # Portal JSON API: never emit an HTML Location redirect
+        if (defined('BAIKAL_CONTEXT_PORTAL_API') && BAIKAL_CONTEXT_PORTAL_API === true) {
+            $product = defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '';
+            $productBase = defined('BAIKAL_VERSION_BASE') ? (string) BAIKAL_VERSION_BASE : baikal_version_base($product);
+            $payload = array_merge([
+                'code'           => $reason,
+                'installUrl'     => '/portal/install/',
+                'productVersion' => $product,
+                'productBase'    => $productBase,
+            ], $extra);
+            $message = match ($reason) {
+                'upgrade_required' => 'Server upgrade required. Open /portal/install/ and complete the upgrade before using the portal.',
+                'admin_password_missing' => 'Server setup is incomplete. Open /portal/install/ to finish configuration.',
+                default => 'AngaraDAV is not configured yet. Open /portal/install/ to complete setup.',
+            };
+            throw new \Baikal\Portal\ApiException($message, 503, $payload);
+        }
+
+        $sInstallToolUrl = PROJECT_URI . "portal/install/";
+        header("Location: " . $sInstallToolUrl);
+        exit(0);
     }
 
     static function bootstrap() {
@@ -51,22 +75,28 @@ class Framework extends \Flake\Core\Framework {
 
         # Check that a config file exists
         if (!file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-            self::installTool();
+            self::installTool('not_configured');
         } else {
             $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
             date_default_timezone_set($config['system']['timezone']);
 
             # Check that Baïkal is already configured
-            if (!isset($config['system']['configured_version'])) {
-                self::installTool();
+            if (!isset($config['system']['configured_version']) || trim((string) $config['system']['configured_version']) === '') {
+                self::installTool('not_configured');
             } else {
-                # Check that running version matches configured version
-                if (version_compare(BAIKAL_VERSION, $config['system']['configured_version']) > 0) {
-                    self::installTool();
+                $configured = (string) $config['system']['configured_version'];
+                # Compare version *bases* so +build.sha rebuilds do not force the wizard
+                if (function_exists('baikal_needs_upgrade') && baikal_needs_upgrade($configured)) {
+                    self::installTool('upgrade_required', [
+                        'configuredVersion' => $configured,
+                        'configuredBase'    => baikal_version_base($configured),
+                    ]);
                 } else {
                     # Check that admin password is set
                     if (!$config['system']['admin_passwordhash']) {
-                        self::installTool();
+                        self::installTool('admin_password_missing', [
+                            'configuredVersion' => $configured,
+                        ]);
                     }
 
                     \Baikal\Core\Tools::assertBaikalIsOk();

@@ -199,8 +199,8 @@ class Framework extends \Flake\Core\Framework {
         if (!\Flake\Util\Tools::isCliPhp()) {
             ini_set("html_errors", true);
             // Admin session lifetime / secure cookie flags (no-op if Auth class unavailable)
-            if (class_exists('\\BaikalAdmin\\Core\\Auth')) {
-                \BaikalAdmin\Core\Auth::configureSession();
+            if (class_exists('\\Baikal\\Core\\AdminPassword')) {
+                \Baikal\Core\AdminPassword::configureSession();
             }
             if (session_status() === PHP_SESSION_NONE) {
                 session_start();

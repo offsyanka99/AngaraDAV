@@ -2,6 +2,12 @@
 
 namespace Baikal\Portal;
 
+use Baikal\Portal\Admin\AdminAudit;
+use Baikal\Portal\Admin\AdminCapabilitiesService;
+use Baikal\Portal\Admin\AdminDashboardService;
+use Baikal\Portal\Admin\AdminSettingsService;
+use Baikal\Portal\Admin\AdminUserResourceService;
+use Baikal\Portal\Admin\AdminUserService;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -10,6 +16,27 @@ use Symfony\Component\Yaml\Yaml;
 class App {
     /** @var Auth */
     private $auth;
+
+    /** @var AdminAuth */
+    private $adminAuth;
+
+    /** @var AdminAudit */
+    private $adminAudit;
+
+    /** @var AdminDashboardService */
+    private $adminDashboard;
+
+    /** @var AdminCapabilitiesService */
+    private $adminCapabilities;
+
+    /** @var AdminUserService */
+    private $adminUsers;
+
+    /** @var AdminUserResourceService */
+    private $adminResources;
+
+    /** @var AdminSettingsService */
+    private $adminSettings;
 
     /** @var ShareService */
     private $shares;
@@ -43,6 +70,19 @@ class App {
             $sessionMax = (int) $config['system']['session_max_age_minutes'] * 60;
         }
         $this->auth = new Auth($pdo, $realm, $sessionMax);
+        $this->adminAuth = new AdminAuth($this->auth, $config);
+        $this->adminAudit = new AdminAudit($this->portalSpecificDir(), $this->portalLogLevel());
+        $this->adminDashboard = new AdminDashboardService($pdo, $config);
+        $this->adminCapabilities = new AdminCapabilitiesService($config);
+        $this->adminUsers = new AdminUserService($pdo, $config);
+        $this->adminResources = new AdminUserResourceService($pdo, $config);
+        $configPath = defined('PROJECT_PATH_CONFIG')
+            ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/baikal.yaml'
+            : '';
+        $this->adminSettings = new AdminSettingsService(
+            $configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'),
+            $this->portalSpecificDir()
+        );
         $this->shares = new ShareService($pdo);
         $this->contacts = new ContactService($pdo);
         $this->items = new CalendarItemService($pdo);
@@ -58,7 +98,7 @@ class App {
      */
     private function enrichProfile(array $profile): array {
         $username = (string) ($profile['username'] ?? '');
-        $isAdmin = $username !== '' && $this->portalUserIsAdmin($username);
+        $isAdmin = $username !== '' && $this->adminAuth->isAdmin($username);
         $profile['isAdmin'] = $isAdmin;
         $profile['role'] = $isAdmin ? 'Admin' : 'User';
 
@@ -66,50 +106,17 @@ class App {
     }
 
     /**
-     * Whether a DAV username has the portal Admin role.
-     *
-     * Config (YAML): system.portal_admin_users as list or comma-separated string.
-     * Env override: PORTAL_ADMIN_USERS / BAIKAL_PORTAL_ADMIN_USERS (comma-separated).
-     * If neither is set, a DAV user named "admin" is treated as Admin.
+     * Writable Specific/ directory for portal_debug.log (and rate-limit files).
      */
-    private function portalUserIsAdmin(string $username): bool {
-        $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
-        $raw = getenv('PORTAL_ADMIN_USERS');
-        if ($raw === false || $raw === '') {
-            $raw = getenv('BAIKAL_PORTAL_ADMIN_USERS');
+    private function portalSpecificDir(): string {
+        if (defined('PROJECT_PATH_SPECIFIC') && PROJECT_PATH_SPECIFIC !== '') {
+            return rtrim((string) PROJECT_PATH_SPECIFIC, '/');
         }
-        if ($raw === false || $raw === '') {
-            $raw = $sys['portal_admin_users'] ?? null;
+        if (defined('PROJECT_PATH_ROOT') && PROJECT_PATH_ROOT !== '') {
+            return rtrim((string) PROJECT_PATH_ROOT, '/') . '/Specific';
         }
 
-        $users = [];
-        if (is_array($raw)) {
-            foreach ($raw as $u) {
-                if (is_string($u) || is_numeric($u)) {
-                    $users[] = (string) $u;
-                }
-            }
-        } elseif (is_string($raw) && trim($raw) !== '') {
-            $parts = preg_split('/[\s,]+/', $raw) ?: [];
-            foreach ($parts as $u) {
-                if ($u !== '') {
-                    $users[] = $u;
-                }
-            }
-        }
-
-        if ($users === []) {
-            // Zero-config default: DAV user named "admin" has the Admin role
-            return strcasecmp($username, 'admin') === 0;
-        }
-
-        foreach ($users as $u) {
-            if ($u !== '' && strcasecmp($u, $username) === 0) {
-                return true;
-            }
-        }
-
-        return false;
+        return '';
     }
 
     /**
@@ -185,13 +192,11 @@ class App {
         if (!$this->portalServerLogEnabled($min)) {
             return;
         }
-        $dir = defined('PROJECT_PATH_SPECIFIC')
-            ? PROJECT_PATH_SPECIFIC
-            : (defined('PROJECT_PATH_ROOT') ? PROJECT_PATH_ROOT . 'Specific/' : '');
+        $dir = $this->portalSpecificDir();
         if ($dir === '' || !is_dir($dir) || !is_writable($dir)) {
             return;
         }
-        $path = rtrim($dir, '/') . '/portal_debug.log';
+        $path = $dir . '/portal_debug.log';
         $ts = date('Y-m-d H:i:s');
         $level = strtoupper($min);
         @file_put_contents(
@@ -199,6 +204,21 @@ class App {
             '[' . $ts . '] [' . $level . '] AngaraDAV portal: ' . $message . "\n",
             FILE_APPEND | LOCK_EX
         );
+    }
+
+    /**
+     * Audit helper for admin mutations (create-user, settings, …).
+     * Prefer this over free-form portalServerLog for /api/admin/* writes.
+     */
+    public function adminAudit(): AdminAudit {
+        return $this->adminAudit;
+    }
+
+    /**
+     * Dashboard domain service (read-only stats). Used by admin routes and tests.
+     */
+    public function adminDashboard(): AdminDashboardService {
+        return $this->adminDashboard;
     }
 
     /**
@@ -448,6 +468,17 @@ class App {
             ];
         }
 
+        // --- Portal Administration API (/api/admin/*) ---
+        // Security gate (Phase 9.1): EVERY admin route enters only here.
+        // - requireAdmin() → 401 unauthenticated, 403 non-admin (server-side; UI hide is not enough)
+        // - Mutations already passed assertSameOrigin + CSRF above
+        // - dispatchAdminRoutes has no public entry; do not call it without requireAdmin first
+        if ($path === '/admin' || str_starts_with($path, '/admin/')) {
+            $adminUser = $this->adminAuth->requireAdmin();
+
+            return $this->dispatchAdminRoutes($method, $path, $adminUser);
+        }
+
         $username = $this->auth->requireUser();
 
         if ($method === 'GET' && $path === '/directory') {
@@ -678,6 +709,496 @@ class App {
             return $itemRoutes;
         }
 
+        throw new ApiException('Not found', 404);
+    }
+
+    /**
+     * Non-secret field names from a settings PATCH body (observability only).
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array{keys?: string}
+     */
+    private function adminSettingsBodyKeysForLog(array $body): array {
+        $safe = [];
+        foreach (array_keys($body) as $k) {
+            if (!is_string($k) || $k === '') {
+                continue;
+            }
+            if (preg_match('/pass|digest|secret|token|hash|csrf/i', $k)) {
+                // Record that a password-related key was present without the value
+                if (stripos($k, 'admin_password') !== false) {
+                    $safe[] = 'admin_password*';
+                }
+                continue;
+            }
+            $safe[] = $k;
+        }
+        if ($safe === []) {
+            return [];
+        }
+        sort($safe);
+
+        return ['keys' => implode(',', $safe)];
+    }
+
+    /**
+     * Admin JSON API under /api/admin/*.
+     *
+     * Caller must already have called AdminAuth::requireAdmin() (and CSRF for
+     * mutating methods is enforced in dispatch()).
+     *
+     * @return array<string, mixed>|list<mixed>
+     */
+    private function dispatchAdminRoutes(string $method, string $path, string $adminUser) {
+        // Normalize: /admin → /admin/, strip trailing slash for matching
+        $adminPath = $path;
+        if ($adminPath === '/admin') {
+            $adminPath = '/admin/';
+        }
+
+        // Health / authz smoke check
+        if ($method === 'GET' && ($adminPath === '/admin/ping' || $adminPath === '/admin/ping/')) {
+            return [
+                'ok'   => true,
+                'user' => $adminUser,
+            ];
+        }
+
+        // Read-only dashboard stats (Phase 1 service + early API for tests/SPA)
+        if ($method === 'GET' && ($adminPath === '/admin/dashboard' || $adminPath === '/admin/dashboard/')) {
+            return [
+                'data' => $this->adminDashboard->stats(),
+            ];
+        }
+
+        // Feature gating / parity matrix for Administration shell
+        if ($method === 'GET' && ($adminPath === '/admin/capabilities' || $adminPath === '/admin/capabilities/')) {
+            return [
+                'data' => $this->adminCapabilities->capabilities(),
+            ];
+        }
+
+        // System settings (Standard)
+        if ($adminPath === '/admin/settings/system' || $adminPath === '/admin/settings/system/') {
+            if ($method === 'GET') {
+                return ['data' => $this->adminSettings->getSystemSettings()];
+            }
+            if ($method === 'PUT' || $method === 'PATCH') {
+                $body = $this->jsonBody();
+                // Non-secret keys present in the request (for ops diagnosis only)
+                $keysCtx = $this->adminSettingsBodyKeysForLog($body);
+                try {
+                    $data = $this->adminSettings->updateSystemSettings($body);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-system-settings',
+                        'system',
+                        'ok',
+                        $keysCtx
+                    );
+                    $this->portalServerLog(
+                        'admin settings save ok user=' . $adminUser
+                        . ($keysCtx !== [] ? ' keys=' . ($keysCtx['keys'] ?? '-') : ''),
+                        'info'
+                    );
+
+                    return ['data' => $data];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-system-settings',
+                        'system',
+                        'error:' . $e->getStatus(),
+                        array_merge($keysCtx, ['msg' => $e->getMessage()])
+                    );
+                    // Explicit ops line even if audit file is unwritable
+                    $this->portalServerLog(
+                        'admin settings save failed user=' . $adminUser
+                        . ' status=' . $e->getStatus()
+                        . ' error=' . $e->getMessage(),
+                        $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
+            }
+        }
+
+        // Factory reset → installer (removes baikal.yaml + INSTALL_DISABLED)
+        if ($adminPath === '/admin/settings/reset-to-default' || $adminPath === '/admin/settings/reset-to-default/') {
+            if ($method === 'POST') {
+                $body = $this->jsonBody();
+                $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
+                $reauthPassword = (string) ($body['password'] ?? $body['admin_password'] ?? '');
+                if ($reauthPassword === '') {
+                    throw new ApiException('Re-enter your password to confirm Reset to Default', 400);
+                }
+                if (!$this->auth->verifyPassword($adminUser, $reauthPassword)) {
+                    throw new ApiException('Password verification failed', 401);
+                }
+                try {
+                    $result = $this->adminSettings->resetToDefault($confirm);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'reset-to-default',
+                        'system',
+                        'ok',
+                        ['backup' => $result['backupPath'] ?? null]
+                    );
+                    $this->portalServerLog(
+                        'admin reset-to-default ok user=' . $adminUser
+                        . ($result['backupPath'] ? ' backup=' . $result['backupPath'] : ''),
+                        'warn'
+                    );
+
+                    return $result;
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'reset-to-default',
+                        'system',
+                        'error:' . $e->getStatus(),
+                        ['msg' => $e->getMessage()]
+                    );
+                    $this->portalServerLog(
+                        'admin reset-to-default failed user=' . $adminUser
+                        . ' status=' . $e->getStatus()
+                        . ' error=' . $e->getMessage(),
+                        $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Optional live connection probe (no YAML write)
+        if ($adminPath === '/admin/settings/database/test' || $adminPath === '/admin/settings/database/test/') {
+            if ($method === 'POST') {
+                $body = $this->jsonBody();
+                $result = $this->adminSettings->testDatabaseConnection($body);
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'test-database-connection',
+                    'database',
+                    'ok',
+                    ['backend' => $result['backend'] ?? null]
+                );
+
+                return $result;
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Database settings — write requires confirm: "CONFIRM" (Phase 8.2)
+        if ($adminPath === '/admin/settings/database' || $adminPath === '/admin/settings/database/') {
+            if ($method === 'GET') {
+                return ['data' => $this->adminSettings->getDatabaseSettings()];
+            }
+            if ($method === 'PUT' || $method === 'PATCH' || $method === 'POST') {
+                $body = $this->jsonBody();
+                $keysCtx = [
+                    'keys'    => implode(',', array_values(array_filter(
+                        array_keys($body),
+                        static function ($k) {
+                            return !in_array($k, ['pgsql_password', 'confirm', 'encryption_key'], true);
+                        }
+                    ))),
+                    'backend' => isset($body['backend']) ? (string) $body['backend'] : null,
+                ];
+                try {
+                    $data = $this->adminSettings->updateDatabaseSettings($body);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-database-settings',
+                        'database',
+                        'ok',
+                        $keysCtx
+                    );
+                    $this->portalServerLog(
+                        'admin database settings save ok user=' . $adminUser
+                        . ' backend=' . (string) ($data['backend'] ?? ''),
+                        'warn'
+                    );
+
+                    return ['data' => $data];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-database-settings',
+                        'database',
+                        'error:' . $e->getStatus(),
+                        array_merge($keysCtx, ['msg' => $e->getMessage()])
+                    );
+                    $this->portalServerLog(
+                        'admin database settings save failed user=' . $adminUser
+                        . ' status=' . $e->getStatus()
+                        . ' error=' . $e->getMessage(),
+                        $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
+            }
+        }
+
+        // Users — never returns digesta1
+        if ($adminPath === '/admin/users' || $adminPath === '/admin/users/') {
+            if ($method === 'GET') {
+                return [
+                    'users' => $this->adminUsers->listUsers(),
+                ];
+            }
+            if ($method === 'POST') {
+                $body = $this->jsonBody();
+                try {
+                    $user = $this->adminUsers->createUser($body);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'create-user',
+                        (string) ($user['username'] ?? ''),
+                        'ok'
+                    );
+
+                    return ['user' => $user];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'create-user',
+                        (string) ($body['username'] ?? ''),
+                        'error:' . $e->getStatus()
+                    );
+                    throw $e;
+                }
+            }
+        }
+
+        // Nested: /admin/users/{username}/calendars[/{id}]
+        if (preg_match('#^/admin/users/([^/]+)/calendars(?:/(\d+))?/?$#', $adminPath, $m)) {
+            $uname = rawurldecode($m[1]);
+            $calId = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+            if ($calId === null) {
+                if ($method === 'GET') {
+                    return ['calendars' => $this->adminResources->listCalendars($uname)];
+                }
+                if ($method === 'POST') {
+                    $body = $this->jsonBody();
+                    try {
+                        $cal = $this->adminResources->createCalendar($uname, $body);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'create-calendar',
+                            $uname . '/' . (string) ($cal['uri'] ?? ''),
+                            'ok'
+                        );
+
+                        return ['calendar' => $cal];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'create-calendar',
+                            $uname,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+            } else {
+                if ($method === 'GET') {
+                    return ['calendar' => $this->adminResources->getCalendar($uname, $calId)];
+                }
+                if ($method === 'PATCH' || $method === 'PUT') {
+                    $body = $this->jsonBody();
+                    try {
+                        $cal = $this->adminResources->updateCalendar($uname, $calId, $body);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'update-calendar',
+                            $uname . '/' . $calId,
+                            'ok'
+                        );
+
+                        return ['calendar' => $cal];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'update-calendar',
+                            $uname . '/' . $calId,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+                if ($method === 'DELETE') {
+                    $body = $this->jsonBody();
+                    $confirm = !empty($body['confirm'])
+                        || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
+                    try {
+                        $this->adminResources->deleteCalendar($uname, $calId, $confirm);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'delete-calendar',
+                            $uname . '/' . $calId,
+                            'ok'
+                        );
+
+                        return ['ok' => true];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'delete-calendar',
+                            $uname . '/' . $calId,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+            }
+        }
+
+        // Nested: /admin/users/{username}/addressbooks[/{id}]
+        if (preg_match('#^/admin/users/([^/]+)/addressbooks(?:/(\d+))?/?$#', $adminPath, $m)) {
+            $uname = rawurldecode($m[1]);
+            $abId = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null;
+            if ($abId === null) {
+                if ($method === 'GET') {
+                    return ['addressbooks' => $this->adminResources->listAddressBooks($uname)];
+                }
+                if ($method === 'POST') {
+                    $body = $this->jsonBody();
+                    try {
+                        $ab = $this->adminResources->createAddressBook($uname, $body);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'create-addressbook',
+                            $uname . '/' . (string) ($ab['uri'] ?? ''),
+                            'ok'
+                        );
+
+                        return ['addressbook' => $ab];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'create-addressbook',
+                            $uname,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+            } else {
+                if ($method === 'GET') {
+                    return ['addressbook' => $this->adminResources->getAddressBook($uname, $abId)];
+                }
+                if ($method === 'PATCH' || $method === 'PUT') {
+                    $body = $this->jsonBody();
+                    try {
+                        $ab = $this->adminResources->updateAddressBook($uname, $abId, $body);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'update-addressbook',
+                            $uname . '/' . $abId,
+                            'ok'
+                        );
+
+                        return ['addressbook' => $ab];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'update-addressbook',
+                            $uname . '/' . $abId,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+                if ($method === 'DELETE') {
+                    $body = $this->jsonBody();
+                    $confirm = !empty($body['confirm'])
+                        || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
+                    $force = !empty($body['force'])
+                        || (isset($_GET['force']) && (string) $_GET['force'] !== '0' && (string) $_GET['force'] !== '');
+                    try {
+                        $this->adminResources->deleteAddressBook($uname, $abId, $confirm, $force);
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'delete-addressbook',
+                            $uname . '/' . $abId,
+                            'ok'
+                        );
+
+                        return ['ok' => true];
+                    } catch (ApiException $e) {
+                        $this->adminAudit->mutation(
+                            $adminUser,
+                            'delete-addressbook',
+                            $uname . '/' . $abId,
+                            'error:' . $e->getStatus()
+                        );
+                        throw $e;
+                    }
+                }
+            }
+        }
+
+        if (preg_match('#^/admin/users/([^/]+)/?$#', $adminPath, $m)) {
+            $uname = rawurldecode($m[1]);
+            if ($method === 'GET') {
+                return [
+                    'user' => $this->adminUsers->getUser($uname),
+                ];
+            }
+            if ($method === 'PATCH' || $method === 'PUT') {
+                $body = $this->jsonBody();
+                try {
+                    $user = $this->adminUsers->updateUser($uname, $body);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-user',
+                        (string) ($user['username'] ?? $uname),
+                        'ok',
+                        [
+                            'fields' => 'profile',
+                        ]
+                    );
+
+                    return ['user' => $user];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'update-user',
+                        $uname,
+                        'error:' . $e->getStatus()
+                    );
+                    throw $e;
+                }
+            }
+            if ($method === 'DELETE') {
+                $body = $this->jsonBody();
+                $confirm = !empty($body['confirm'])
+                    || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
+                try {
+                    $result = $this->adminUsers->deleteUser($uname, $confirm);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'delete-user',
+                        (string) ($result['username'] ?? $uname),
+                        'ok'
+                    );
+
+                    return $result;
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        'delete-user',
+                        $uname,
+                        'error:' . $e->getStatus()
+                    );
+                    throw $e;
+                }
+            }
+        }
+
+        // Unknown admin route — 404 (not 403) so missing features are obvious
         throw new ApiException('Not found', 404);
     }
 
@@ -1020,37 +1541,11 @@ class App {
     }
 
     /**
-     * Reject cross-site browser requests (defense in depth with SameSite=Lax).
+     * Reject cross-site browser requests (defense in depth with SameSite=Lax + CSRF).
+     * Fail closed when neither Origin nor Referer is present on state-changing calls.
      */
     private function assertSameOrigin(): void {
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        if ($host === '') {
-            return;
-        }
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        if (is_string($origin) && $origin !== '') {
-            $parts = parse_url($origin);
-            $oh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $oh .= ':' . $parts['port'];
-            }
-            if ($oh === '' || strcasecmp($oh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-
-            return;
-        }
-        $referer = $_SERVER['HTTP_REFERER'] ?? '';
-        if (is_string($referer) && $referer !== '') {
-            $parts = parse_url($referer);
-            $rh = $parts['host'] ?? '';
-            if (isset($parts['port'])) {
-                $rh .= ':' . $parts['port'];
-            }
-            if ($rh !== '' && strcasecmp($rh, $host) !== 0) {
-                throw new ApiException('Cross-origin request blocked', 403);
-            }
-        }
+        SameOrigin::assert($_SERVER);
     }
 
     /** @var string|null Raw php://input (one-shot stream — cache for reuse) */

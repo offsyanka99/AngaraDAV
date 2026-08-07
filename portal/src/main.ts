@@ -1,8 +1,16 @@
 import "./styles.css";
 import { mountApp } from "./app";
+import { mountInstall } from "./install";
 
 const root = document.getElementById("app");
 if (!root) {
   throw new Error("#app missing");
 }
-mountApp(root);
+
+// Portal installer at /portal/install/
+const path = window.location.pathname.replace(/\/+$/, "") || "/";
+if (path === "/portal/install" || path.endsWith("/portal/install")) {
+  void mountInstall(root);
+} else {
+  mountApp(root);
+}

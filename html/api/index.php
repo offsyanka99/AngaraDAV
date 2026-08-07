@@ -37,6 +37,8 @@ if (!is_dir($root . 'vendor')) {
 define('PROJECT_PATH_ROOT', $root);
 define('BAIKAL_CONTEXT', true);
 define('PROJECT_CONTEXT_BASEURI', '/');
+// Portal JSON API: Framework install/upgrade gate must return JSON, not Location: /portal/install/
+define('BAIKAL_CONTEXT_PORTAL_API', true);
 
 require PROJECT_PATH_ROOT . 'vendor/autoload.php';
 require PROJECT_PATH_ROOT . 'Core/Distrib.php';
@@ -55,12 +57,21 @@ if (!empty($_SERVER['PATH_INFO'])) {
 }
 
 try {
+    $norm = '/' . trim($path, '/');
+    // Unauthenticated install/upgrade API — must not require baikal.yaml / DB
+    if ($norm === '/install' || str_starts_with($norm, '/install/')) {
+        $install = \Baikal\Portal\Install\InstallApp::bootstrap();
+        $install->handle($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);
+        exit;
+    }
+
     $app = \Baikal\Portal\App::bootstrap();
     $app->handle($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);
 } catch (\Baikal\Portal\ApiException $e) {
     http_response_code($e->getStatus());
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_SLASHES) . "\n";
+    $body = array_merge(['error' => $e->getMessage()], $e->getPayload());
+    echo json_encode($body, JSON_UNESCAPED_SLASHES) . "\n";
 } catch (\Throwable $e) {
     error_log('portal api bootstrap: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
     http_response_code(500);

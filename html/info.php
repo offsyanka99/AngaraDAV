@@ -75,7 +75,8 @@ echo json_encode([
         'files'  => '/dav.php/files/{username}/',
         'cal'    => '/cal.php/',
         'card'   => '/card.php/',
-        'admin'  => '/admin/',
+        'admin'  => '/portal/#admin',
+        'install'=> '/portal/install/',
         'health' => '/health.php',
     ],
 ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . "\n";

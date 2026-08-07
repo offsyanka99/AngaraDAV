@@ -60,7 +60,7 @@ check_mount /var/www/baikal/Specific Specific
 if [ -f /var/www/baikal/config/baikal.yaml ]; then
   echo "$ME: info: baikal.yaml is present"
 else
-  echo "$ME: info: baikal.yaml not present yet (complete /admin/install/ once)"
+  echo "$ME: info: baikal.yaml not present yet (complete /portal/install/ once)"
 fi
 
 if [ -f /var/www/baikal/Specific/INSTALL_DISABLED ]; then

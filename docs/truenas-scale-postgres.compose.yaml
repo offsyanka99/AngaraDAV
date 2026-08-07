@@ -42,11 +42,17 @@
 #
 # After deploy:
 # 1. Open http://NAS-IP:31088  → complete installer (admin password; select PostgreSQL)
-# 2. Admin:  http://NAS-IP:31088/admin/
-# 3. Portal: http://NAS-IP:31088/portal/   ← calendars + contacts (DAV user login)
-# 4. DAV:    http://NAS-IP:31088/dav.php/  ← clients + classic browser
-# 5. Health: http://NAS-IP:31088/health.php
-# 6. Info:   http://NAS-IP:31088/info.php
+# 2. Portal Administration: http://NAS-IP:31088/portal/  (Admin-role DAV user)
+# 3. Installer (first boot):  http://NAS-IP:31088/portal/install/
+# 3. Portal:             http://NAS-IP:31088/portal/    (DAV user login)
+# 4. DAV:                http://NAS-IP:31088/dav.php/
+# 5. Health / Info:      /health.php · /info.php
+#
+# Portal Administration (Admin-role DAV users): user menu → Administration.
+#   Grant: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
+#   Default if unset: DAV user "admin". Parallel with classic /admin/ (last write wins).
+#   Database credential writes: portal Administration → Database (type CONFIRM).
+#   See docs/DEPLOYMENT.md → Portal Administration
 #
 # Backup regularly (all three mounts):
 #   config/   → baikal.yaml (admin hash, auth, feature flags)
@@ -63,6 +69,7 @@
 #
 # Optional env (same as the SQLite variant; see docs/DEPLOYMENT.md for the
 # full list): BAIKAL_LOCK_INSTALL, BAIKAL_ALLOW_REINSTALL, PORTAL_LOG_LEVEL,
+# PORTAL_ADMIN_USERS (or BAIKAL_PORTAL_ADMIN_USERS) — portal Admin role DAV users,
 # TIME_FORMAT, BAIKAL_PORTAL_WEEK_START, BAIKAL_PUSH_EXTERNAL_URL,
 # PUSH_LOG_LEVEL, BAIKAL_FILES_STORAGE_PATH, BAIKAL_FILES_MAX_UPLOAD_MB,
 # BAIKAL_FILES_QUOTA_MB, BAIKAL_DAV_MAX_BODY_SIZE.
@@ -101,8 +108,10 @@ services:
         max-file: "3"
 
   angaradav:
+    # See docs/truenas-scale.compose.yaml for tag naming (2.0.3, release-2.0.0-portal-admin, …)
     image: ghcr.io/offsyanka99/angaradav:latest
-    # Or pin a tested commit:
+    # image: ghcr.io/offsyanka99/angaradav:2.0.3
+    # image: ghcr.io/offsyanka99/angaradav:release-2.0.0-portal-admin
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     container_name: angaradav
@@ -131,6 +140,8 @@ services:
       BAIKAL_PORTAL_WEEK_START: "monday" # or sunday
       # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
+      # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):
+      # PORTAL_ADMIN_USERS: "alice,bob"  # or BAIKAL_PORTAL_ADMIN_USERS; default DAV user "admin"
       # Required only after enabling WebDAV-Push in baikal.yaml/admin:
       # BAIKAL_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only

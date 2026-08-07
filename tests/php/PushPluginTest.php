@@ -16,6 +16,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 require $root . '/vendor/autoload.php';
 
+use Baikal\Core\Plugins\Push\ChangeNotifier;
 use Baikal\Core\Plugins\Push\Notifier;
 use Baikal\Core\Plugins\Push\PushLogger;
 use Baikal\Core\Plugins\Push\QueueStorage;
@@ -49,6 +50,13 @@ class PushPluginProbe extends PushPlugin {
 
     public function pubResolveExpiry(?int $requested): int {
         return $this->resolveExpiry($requested);
+    }
+
+    /**
+     * @param string|array<int, string> $dontNotify
+     */
+    public function pubDispatchContent(string $collection, $dontNotify = []): void {
+        $this->dispatchContent($collection, $dontNotify);
     }
 }
 
@@ -376,5 +384,128 @@ assert_true(
     'send with no subscriptions returns a successful empty result'
 );
 
+// --- Shared calendar fan-out: expand + enqueue for owner + sharee paths ---
+$pdo->exec(
+    'CREATE TABLE IF NOT EXISTS calendarinstances (
+        id INTEGER PRIMARY KEY,
+        calendarid INTEGER NOT NULL,
+        principaluri TEXT NOT NULL,
+        uri TEXT NOT NULL,
+        access INTEGER NOT NULL DEFAULT 1
+    )'
+);
+$pdo->exec('DELETE FROM calendarinstances');
+$pdo->exec('DELETE FROM push_queue');
+// calendar id 42 shared: alice owns "work", bob sees "shared-work"
+$pdo->exec(
+    "INSERT INTO calendarinstances (id, calendarid, principaluri, uri, access) VALUES
+     (1, 42, 'principals/alice', 'work', 1),
+     (2, 42, 'principals/bob', 'shared-work', 2)"
+);
+$pdo->exec(
+    "INSERT INTO calendarinstances (id, calendarid, principaluri, uri, access) VALUES
+     (3, 99, 'principals/alice', 'private', 1)"
+);
+
+$expanded = ChangeNotifier::expandContentResourceUris($pdo, 'calendars/alice/work');
+sort($expanded);
+assert_true(
+    $expanded === ['calendars/alice/work', 'calendars/bob/shared-work'],
+    'expand includes owner and sharee DAV paths for same calendarid'
+);
+assert_true(
+    ChangeNotifier::expandContentResourceUris($pdo, 'calendars/alice/private') === ['calendars/alice/private'],
+    'unshared calendar expands to single path'
+);
+assert_true(
+    ChangeNotifier::expandContentResourceUris($pdo, 'calendars/alice') === ['calendars/alice'],
+    'calendar home is not expanded via instances'
+);
+assert_true(
+    ChangeNotifier::expandContentResourceUris($pdo, 'addressbooks/alice/default') === ['addressbooks/alice/default'],
+    'address books are not expanded via calendarinstances'
+);
+assert_true(
+    ChangeNotifier::topic('calendars/alice/work') !== ChangeNotifier::topic('calendars/bob/shared-work'),
+    'owner and sharee paths have distinct push topics'
+);
+
+// DAV dispatch fans out one queue job per instance path (distinct topics).
+$plugin->pubDispatchContent('calendars/alice/work');
+$fanoutJobs = $queue->nextBatch(10);
+$fanoutResources = array_map(static fn ($j) => (string) $j['resource_uri'], $fanoutJobs);
+sort($fanoutResources);
+assert_true(count($fanoutJobs) === 2, 'DAV content dispatch enqueues two jobs for shared calendar');
+assert_true(
+    $fanoutResources === ['calendars/alice/work', 'calendars/bob/shared-work'],
+    'DAV fan-out jobs target owner and sharee resource URIs'
+);
+$topics = [];
+foreach ($fanoutJobs as $j) {
+    $topics[(string) $j['resource_uri']] = (string) $j['topic'];
+}
+assert_true(
+    $topics['calendars/alice/work'] === ChangeNotifier::topic('calendars/alice/work')
+        && $topics['calendars/bob/shared-work'] === ChangeNotifier::topic('calendars/bob/shared-work'),
+    'each fan-out job carries the topic for its own path'
+);
+foreach ($fanoutJobs as $j) {
+    $queue->complete((int) $j['id']);
+}
+
+// Sharee-triggered path also fans out (e.g. read-write share write from bob).
+$plugin->pubDispatchContent('calendars/bob/shared-work');
+$fanoutFromSharee = $queue->nextBatch(10);
+$fromShareePaths = array_map(static fn ($j) => (string) $j['resource_uri'], $fanoutFromSharee);
+sort($fromShareePaths);
+assert_true(
+    $fromShareePaths === ['calendars/alice/work', 'calendars/bob/shared-work'],
+    'sharee-side write also fans out to all instances'
+);
+foreach ($fanoutFromSharee as $j) {
+    $queue->complete((int) $j['id']);
+}
+
+// Worker delivery would match subscriptions by exact resource_uri:
+// register alice + bob on their paths; only bob's path job notifies bob.
+$bobTopic = ChangeNotifier::topic('calendars/bob/shared-work');
+$aliceTopic = ChangeNotifier::topic('calendars/alice/work');
+$storage->upsert([
+    'principaluri'     => 'principals/alice',
+    'resource_uri'     => 'calendars/alice/work',
+    'topic'            => $aliceTopic,
+    'push_resource'    => 'https://up.example.net/alice-phone',
+    'content_encoding' => 'aes128gcm',
+    'pubkey'           => 'PUB-A',
+    'auth_secret'      => 'SEC-A',
+    'triggers'         => json_encode(['content' => '1', 'property' => '0']),
+    'expires'          => $now + 3600,
+]);
+$storage->upsert([
+    'principaluri'     => 'principals/bob',
+    'resource_uri'     => 'calendars/bob/shared-work',
+    'topic'            => $bobTopic,
+    'push_resource'    => 'https://up.example.net/bob-phone',
+    'content_encoding' => 'aes128gcm',
+    'pubkey'           => 'PUB-B',
+    'auth_secret'      => 'SEC-B',
+    'triggers'         => json_encode(['content' => '1', 'property' => '0']),
+    'expires'          => $now + 3600,
+]);
+assert_true(
+    count($storage->findActiveByResource('calendars/alice/work')) === 1,
+    'owner subscription bound to owner path only'
+);
+assert_true(
+    count($storage->findActiveByResource('calendars/bob/shared-work')) === 1,
+    'sharee subscription bound to sharee path only'
+);
+assert_true(
+    count($storage->findActiveByResource('calendars/alice/work')) === 1
+        && (string) $storage->findActiveByResource('calendars/alice/work')[0]['principaluri'] === 'principals/alice',
+    'owner-path lookup does not return sharee subscription (pre-fan-out gap)'
+);
+
 echo "\n" . ($failures === 0 ? "All push tests passed." : "$failures push test(s) FAILED.") . "\n";
+exit($failures === 0 ? 0 : 1);
 exit($failures === 0 ? 0 : 1);

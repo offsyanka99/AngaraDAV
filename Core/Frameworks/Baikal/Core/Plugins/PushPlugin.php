@@ -433,20 +433,43 @@ class PushPlugin extends ServerPlugin {
      * @param string|array<int, string> $dontNotify '*' or list of registration URLs
      */
     protected function dispatchContent(string $collection, $dontNotify): void {
-        $topic = $this->topic($collection);
-        $this->queue->enqueue(
-            $collection,
-            $topic,
-            true,
-            false,
-            $this->syncTokenFor($collection),
-            $this->suppressedIds($collection, $dontNotify)
+        // Fan out to every calendar instance (owner + sharees). Each DAVx5 client
+        // registers on its own DAV path/topic; a single owner-path job never wakes sharees.
+        $paths = \Baikal\Core\Plugins\Push\ChangeNotifier::expandContentResourceUris(
+            $this->pdo,
+            $collection
         );
-        $this->logger->info('content notification enqueued', [
-            'resource' => $collection,
-            'source'   => 'dav',
-            'client'   => $this->clientSource(),
-        ]);
+        if ($paths === []) {
+            $paths = [$collection];
+        }
+
+        $syncToken = $this->syncTokenFor($collection);
+        if ($syncToken === null) {
+            foreach ($paths as $path) {
+                $syncToken = $this->syncTokenFor($path);
+                if ($syncToken !== null) {
+                    break;
+                }
+            }
+        }
+
+        $client = $this->clientSource();
+        foreach ($paths as $path) {
+            $this->queue->enqueue(
+                $path,
+                $this->topic($path),
+                true,
+                false,
+                $syncToken,
+                $this->suppressedIds($path, $dontNotify)
+            );
+            $this->logger->info('content notification enqueued', [
+                'resource' => $path,
+                'source'   => 'dav',
+                'client'   => $client,
+                'trigger'  => $collection,
+            ]);
+        }
     }
 
     /**
@@ -579,6 +602,9 @@ class PushPlugin extends ServerPlugin {
     }
 
     protected function syncTokenFor(string $collection): ?string {
+        if ($this->server === null) {
+            return null;
+        }
         try {
             $node = $this->server->tree->getNodeForPath($collection);
         } catch (\Throwable $e) {
@@ -598,7 +624,7 @@ class PushPlugin extends ServerPlugin {
      * @return string|array<int, string> '*' or list of registration URLs
      */
     protected function parseDontNotify() {
-        if (!isset($this->server->httpRequest)) {
+        if ($this->server === null || !isset($this->server->httpRequest)) {
             return [];
         }
         $values = $this->server->httpRequest->getHeaderAsArray('Push-Dont-Notify');
@@ -655,6 +681,9 @@ class PushPlugin extends ServerPlugin {
     }
 
     protected function currentPrincipal(): ?string {
+        if ($this->server === null) {
+            return null;
+        }
         $acl = $this->server->getPlugin('acl');
         if ($acl instanceof \Sabre\DAVACL\Plugin) {
             $principal = $acl->getCurrentUserPrincipal();
