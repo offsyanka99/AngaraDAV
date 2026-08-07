@@ -449,6 +449,22 @@ Use that user's DAV credentials, not the admin account. Use HTTPS for Basic or
 Digest authentication. `/cal.php/` remains CalDAV-only and `/card.php/`
 remains CardDAV-only; generic files are exposed only through `/dav.php/`.
 
+#### Android client (WebDAV-sync)
+
+**[WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync)** is an Android app
+for syncing files with a private WebDAV home (compatible with AngaraDAV when
+file storage is enabled).
+
+| Setting | Value |
+|---------|--------|
+| Server URL | `https://baikal.example/dav.php/files/USERNAME/` |
+| Username / password | AngaraDAV **DAV user** credentials |
+| Auth | Prefer **HTTPS**; Basic over TLS or Digest as configured in AngaraDAV |
+
+Project and releases: <https://github.com/offsyanka99/WebDAV-sync>.  
+CalDAV/CardDAV on Android remains the usual choice (e.g. DAVx⁵) against
+`/dav.php/` — WebDAV-sync targets **file** homes, not calendars/contacts.
+
 The **User portal** (`/portal/`) includes a **Files** tab that uses the same
 private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`

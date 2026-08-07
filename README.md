@@ -9,6 +9,8 @@ AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file ser
 **Version:** `2.1.0`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
+**Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
+
 AngaraDAV includes:
 
 - **Docker** image and **TrueNAS SCALE** compose
@@ -151,6 +153,20 @@ file sharing, public links, trash/version history, RFC 6578 file Sync, or
 WebDAV-Push for files. Configuration, Docker limits, external volume setup,
 maintenance, and backup guidance are in
 [`docs/DEPLOYMENT.md#generic-webdav-file-storage`](docs/DEPLOYMENT.md#generic-webdav-file-storage).
+
+### Android (WebDAV files)
+
+For phones and tablets, use **[WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync)** —
+an Android app that syncs local folders with a WebDAV server. Point it at your
+AngaraDAV file home:
+
+```text
+https://host/dav.php/files/USERNAME/
+```
+
+Use the same **DAV username and password** as desktop clients (not the portal-only
+admin password unless that account is also a DAV user). Prefer HTTPS. Details:
+[WebDAV-sync on GitHub](https://github.com/offsyanka99/WebDAV-sync).
 
 WebDAV-Push
 -----------
