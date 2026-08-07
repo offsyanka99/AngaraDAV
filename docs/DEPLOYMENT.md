@@ -451,7 +451,19 @@ remains CardDAV-only; generic files are exposed only through `/dav.php/`.
 The **User portal** (`/portal/`) includes a **Files** tab that uses the same
 private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
-is `info` or `debug` (list/upload/download/mkdir/rename/delete).
+is `info` or `debug` (list/upload/download/mkdir/rename/delete/copy/move).
+
+**Copy / Move:** the SPA opens a destination **folder tree** (Home + subfolders;
+expand on demand). You do not need to type a path.
+
+**Copy naming:**
+
+| Destination | Default name |
+|-------------|--------------|
+| **Same folder** as the source | Original name with a unique ` (copy)` / ` (copy N)` suffix so the original is never overwritten |
+| **Another folder** | **Keeps the original filename** when free; only adds ` (copy)` if that name already exists in the destination |
+
+Optional “New name” in the single-item dialog still overrides the default.
 
 **Upload size limits:** the UI “max upload” value is the AngaraDAV app quota
 (`files_max_upload_mb`, in MB). Multipart portal uploads also need matching

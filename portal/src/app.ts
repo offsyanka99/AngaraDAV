@@ -277,6 +277,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
       "Upload, download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
       "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
+      "Same-folder copies get a “ (copy)” name so the original is never overwritten. Copies into another folder keep the original filename unless that name is already taken there.",
       "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
     ],
   },
@@ -4437,7 +4438,7 @@ export function mountApp(root: HTMLElement): void {
                           <p class="muted small" style="margin:0.35rem 0 0">
                             ${
                               op === "copy"
-                                ? "Leave as-is to keep the name (a “ (copy)” suffix is added if it already exists in the destination)."
+                                ? "Same-folder copies get a “ (copy)” name. Cross-folder copies keep the original name unless it already exists in the destination."
                                 : "Leave as-is to keep the current name."
                             }
                           </p>`
@@ -6769,8 +6770,8 @@ export function mountApp(root: HTMLElement): void {
       for (const path of paths) {
         try {
           if (op === "copy") {
-            // Omit newName when unchanged so the server can append " (copy)"
-            // if the destination already has that name.
+            // Omit newName when unchanged so the server applies same-folder
+            // " (copy)" vs cross-folder keep-name rules.
             const sourceBase = basenamePath(path);
             const copyName =
               multi || !newNameRaw || newNameRaw === sourceBase ? undefined : newNameRaw;

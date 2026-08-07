@@ -356,7 +356,12 @@ class FileService {
     }
 
     /**
-     * Copy a file or folder. Default: same parent with a unique " (copy)" name.
+     * Copy a file or folder.
+     *
+     * Naming rules when $newName is empty (or equals the source name):
+     * - Same folder: unique " (copy)" / " (copy N)" sibling name
+     * - Different folder: keep the original name when free; only generate a
+     *   unique " (copy)" name if the destination already has that name
      *
      * @return array{path: string, name: string, type: string}
      */
@@ -377,9 +382,8 @@ class FileService {
             $parent = '';
         }
         $destParent = $toDir !== null ? $this->normalizeListPath($toDir) : $parent;
-        $baseName = $newName !== null && trim($newName) !== ''
-            ? $this->assertName($newName)
-            : $this->uniqueCopyName($storage, $destParent, basename(str_replace('\\', '/', $source)));
+        $sourceName = basename(str_replace('\\', '/', $source));
+        $baseName = $this->resolveCopyBaseName($storage, $parent, $destParent, $sourceName, $newName);
 
         try {
             $destination = $storage->childPath($destParent, $baseName);
@@ -449,6 +453,43 @@ class FileService {
         }
 
         return $out;
+    }
+
+    /**
+     * Choose the destination base name for a copy.
+     *
+     * Same-folder copies of the source name always use uniqueCopyName so the
+     * original is never overwritten. Cross-folder copies keep the original
+     * (or explicit) name when free; uniqueness is only applied on conflict.
+     */
+    private function resolveCopyBaseName(
+        HomeStorage $storage,
+        string $sourceParent,
+        string $destParent,
+        string $sourceName,
+        ?string $newName
+    ): string {
+        $explicit = $newName !== null && trim($newName) !== '';
+        $preferred = $explicit ? $this->assertName($newName) : $sourceName;
+        $sameFolder = $destParent === $sourceParent;
+
+        // Same folder + keeping the source name → always " (copy)" family
+        if ($sameFolder && (!$explicit || $preferred === $sourceName)) {
+            return $this->uniqueCopyName($storage, $destParent, $sourceName);
+        }
+
+        // Different folder or custom name: keep preferred when free
+        try {
+            $probe = $storage->childPath($destParent, $preferred);
+            if (!$storage->isVisibleChild($probe)) {
+                return $preferred;
+            }
+        } catch (\Throwable $e) {
+            // Invalid path construction — fall through to unique name
+        }
+
+        // Destination already has that name (or name invalid at that path)
+        return $this->uniqueCopyName($storage, $destParent, $preferred);
     }
 
     /**

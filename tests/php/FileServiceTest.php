@@ -174,7 +174,20 @@ assert_true($copied['path'] === 'archive/note (copy).txt', 'copy path under arch
 $metaCopy = $svc->openDownload('alice', 'archive/note (copy).txt');
 assert_true(file_get_contents($metaCopy['absolutePath']) === 'v2-longer', 'copy has same contents');
 
-// Copy directory tree
+// Cross-folder copy keeps the original name (no " (copy)" when free)
+$svc->createDirectory('alice', '', 'inbox');
+$cross = $svc->copy('alice', 'archive/note.txt', 'inbox');
+assert_true($cross['name'] === 'note.txt', 'cross-folder copy keeps original name');
+assert_true($cross['path'] === 'inbox/note.txt', 'cross-folder copy path is inbox/note.txt');
+$metaCross = $svc->openDownload('alice', 'inbox/note.txt');
+assert_true(file_get_contents($metaCross['absolutePath']) === 'v2-longer', 'cross-folder copy has same contents');
+
+// Cross-folder copy when destination name exists → unique " (copy)" only then
+$cross2 = $svc->copy('alice', 'archive/note.txt', 'inbox');
+assert_true($cross2['name'] === 'note (copy).txt', 'cross-folder name collision uses (copy)');
+assert_true($cross2['path'] === 'inbox/note (copy).txt', 'collision path under inbox/');
+
+// Copy directory tree (same folder → " (copy)")
 $svc->createDirectory('alice', 'archive', 'nested');
 $svc->writeFile('alice', 'archive/nested', 'leaf.txt', "leaf\n", false);
 $dirCopy = $svc->copy('alice', 'archive/nested');
@@ -182,6 +195,12 @@ assert_true($dirCopy['type'] === 'dir', 'directory copy type is dir');
 assert_true($dirCopy['name'] === 'nested (copy)', 'directory copy name');
 $listNested = $svc->listEntries('alice', $dirCopy['path']);
 assert_true(count($listNested['entries']) === 1 && $listNested['entries'][0]['name'] === 'leaf.txt', 'copied tree has leaf');
+
+// Directory cross-folder copy keeps original name
+$svc->createDirectory('alice', '', 'export');
+$dirCross = $svc->copy('alice', 'archive/nested', 'export');
+assert_true($dirCross['name'] === 'nested', 'cross-folder dir copy keeps name');
+assert_true($dirCross['path'] === 'export/nested', 'cross-folder dir path');
 
 // Bulk copy + delete
 $bulkCopy = $svc->bulk('alice', 'copy', ['archive/note.txt', 'archive/new-via-replace.txt']);

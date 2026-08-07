@@ -23,7 +23,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
-  - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled
+  - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
   - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
@@ -64,7 +64,7 @@ Legacy release history
 | `2.0.0` | **Portal Administration**: `/api/admin/*` + SPA shell (users, settings, DB with CONFIRM, install at `/portal/install/`); classic Formal `/admin/` UI removed (redirects to portal) |
 | `2.0.1` | WebDAV-Push fan-out for **shared calendars**: content updates notify every calendar instance (owner + sharees) with the correct path/topic so DAVx⁵ on sharee devices wakes without waiting for the poll interval |
 | `2.0.2` | Portal upgrade-required login banner + JSON 503 API gate; version base compare and `2.0.x+sha` display (no `git.`); multi-select calendars on the month grid |
-| `2.0.3` | Security P1–P3: DB connection test, install password re-prompt, last-Admin delete block, user password rate-limit, Reset-to-Default re-auth |
+| `2.0.3` | Security P1–P3: DB connection test, install password re-prompt, last-Admin delete block, user password rate-limit, Reset-to-Default re-auth; Files Copy/Move folder tree; same-folder-only ` (copy)` naming |
 
 Image tags: `latest`, `2.0.3`, `sha-…`.
 
