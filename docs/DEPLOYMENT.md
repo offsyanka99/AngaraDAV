@@ -470,10 +470,10 @@ private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
 is `info` or `debug` (list/upload/download/mkdir/rename/delete/copy/move).
 
-**Upload:** **Upload files** multi-selects files into the current folder.
-**Upload folder** lets the browser pick a directory; AngaraDAV creates the
-folder tree (from each file’s relative path) and uploads every file. Both modes
-show a **progress dialog** (file count, bytes transferred, current name) — keep
+**Upload:** a single **Upload** button opens a dialog. Drop files and/or folders
+(mixed selections keep nested structure), or use **Choose files…** /
+**Choose folder…** (browsers need separate pickers; drag-and-drop supports both
+at once). A **progress dialog** shows file count, bytes, and current name — keep
 the tab open until it finishes. A status line under the table shows item counts
 (and selection counts when checkboxes are used).
 
@@ -771,8 +771,7 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 ### 2.1.1
 
 - **Product version** `2.1.1`.
-- **Files — Upload folder:** choose a directory in the browser; nested folders are created and every file is uploaded into the current Files path.
-- **Files — Upload progress:** multi-file and folder uploads show a progress dialog (count, bytes, current file). Keep the tab open until it finishes.
+- **Files — Upload:** single **Upload** dialog — drop files and/or folders (nested trees preserved), or browse files/folder; multi-file **progress** dialog (count, bytes, current file).
 - **Files — Status bar:** item count under the table (`N items · X folders, Y files`; selection shows `k of N selected`).
 - **Files — Multi-select scroll:** selecting checkboxes no longer jumps the list back to the top.
 - **Session timeout UX:** mid-session idle expiry still shows *“Your session timed out…”*; a cold open of Sign in after browser close / expired cookie stays silent.

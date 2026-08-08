@@ -275,7 +275,7 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Files",
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
-      "Upload files or an entire folder (browser recreates the folder tree). Large or multi-file uploads show a progress dialog — keep the tab open until it finishes.",
+      "Upload files, folders, or a mix (drag-and-drop or browse). Nested folder trees are recreated automatically. Large or multi-file uploads show a progress dialog — keep the tab open until it finishes.",
       "Download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
       "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
       "Same-folder copies get a “ (copy)” name so the original is never overwritten. Copies into another folder keep the original filename unless that name is already taken there.",
@@ -532,7 +532,6 @@ export function mountApp(root: HTMLElement): void {
    * Updated in-place (DOM) while uploading so the bar stays smooth.
    */
   type FilesUploadProgress = {
-    mode: "files" | "folder";
     phase: "uploading" | "done" | "error";
     totalFiles: number;
     completedFiles: number;
@@ -547,8 +546,19 @@ export function mountApp(root: HTMLElement): void {
     /** First few error lines for the result panel. */
     errorSamples: string[];
   };
+  /** One file (or empty-dir marker) queued for upload with a relative path. */
+  type FilesUploadItem = {
+    file: File | null;
+    /** Path relative to current folder, e.g. "docs/a.txt" or "docs/sub" for empty dir. */
+    relativePath: string;
+    /** When true, only ensure the directory exists (no file body). */
+    isEmptyDir?: boolean;
+  };
   let filesUploadProgress: FilesUploadProgress | null = null;
   let filesUploadElapsedTimer: ReturnType<typeof setInterval> | null = null;
+  /** Choose-files / drop-zone modal (single Upload entry point). */
+  let filesUploadPickerOpen = false;
+  let filesUploadDropActive = false;
   let escapeBound = false;
   /** From /ui|/me + baikal.yaml / env (TIME_FORMAT, week start, log level) */
   let portalUi: {
@@ -618,6 +628,8 @@ export function mountApp(root: HTMLElement): void {
     importProgress = null;
     filesUploadProgress = null;
     stopFilesUploadElapsedTimer();
+    filesUploadPickerOpen = false;
+    filesUploadDropActive = false;
     user = null;
     calendars = [];
     shares = [];
@@ -659,6 +671,8 @@ export function mountApp(root: HTMLElement): void {
     filesDeletePaths = null;
     resetFilesTransferTree();
     filesMkdirOpen = false;
+    filesUploadPickerOpen = false;
+    filesUploadDropActive = false;
     checkedFilePaths = [];
     photoPreview = null;
     photoBase64Pending = null;
@@ -3396,14 +3410,11 @@ export function mountApp(root: HTMLElement): void {
         ? "Upload finished"
         : p.phase === "error"
           ? "Upload failed"
-          : p.mode === "folder"
-            ? "Uploading folder…"
-            : "Uploading files…";
+          : "Uploading…";
     const pct = filesUploadBarPercent(p);
     const barClass =
       pct === null ? "files-upload-progress-bar is-indeterminate" : "files-upload-progress-bar";
     const barStyle = pct !== null ? ` style="width:${pct}%"` : "";
-    const modeLabel = p.mode === "folder" ? "folder" : "files";
     let body = "";
     if (running) {
       const statusLine = `Uploading ${p.completedFiles.toLocaleString()} / ${p.totalFiles.toLocaleString()} file${
@@ -3417,7 +3428,8 @@ export function mountApp(root: HTMLElement): void {
           : "";
       body = `
         <p class="muted small" style="margin:0 0 0.75rem">
-          Uploading <strong>${esc(modeLabel)}</strong>
+          Uploading to
+          <span class="mono">${esc(filesPath === "" ? "Home" : filesPath)}</span>
           ${sizeLine ? ` · <span class="muted">${esc(sizeLine)}</span>` : ""}
         </p>
         <div class="import-progress-track files-upload-progress-track" role="progressbar"
@@ -4404,6 +4416,7 @@ export function mountApp(root: HTMLElement): void {
         abModalOpen ||
         importProgress !== null ||
         filesUploadProgress !== null ||
+        filesUploadPickerOpen ||
         filesRenamePath !== null ||
         filesDeletePaths !== null ||
         filesTransfer !== null ||
@@ -4727,6 +4740,49 @@ export function mountApp(root: HTMLElement): void {
         })
       : "";
 
+    const uploadPickerModal = filesUploadPickerOpen
+      ? renderModal({
+          id: "files-upload-picker-modal",
+          title: "Upload",
+          titleId: "files-upload-picker-title",
+          closeAction: "files-upload-picker-close",
+          size: "md",
+          body: `
+                <p class="muted small" style="margin:0 0 0.75rem">
+                  Destination:
+                  <span class="mono">${esc(filesPath === "" ? "Home" : filesPath)}</span>
+                </p>
+                <div class="files-upload-dropzone${filesUploadDropActive ? " is-dragover" : ""}"
+                  data-files-upload-dropzone
+                  tabindex="0"
+                  role="button"
+                  aria-label="Drop files or folders to upload">
+                  <div class="files-upload-dropzone-icon" aria-hidden="true">⬆</div>
+                  <p class="files-upload-dropzone-title">Drop files or folders here</p>
+                  <p class="muted small" style="margin:0.35rem 0 0">
+                    Nested folders keep their structure. You can mix files and folders in one drop.
+                  </p>
+                </div>
+                <div class="files-upload-browse-row">
+                  <label class="btn btn-primary btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""}>
+                    Choose files…
+                    <input type="file" data-action="files-upload-pick-files" ${busy ? "disabled" : ""} multiple hidden />
+                  </label>
+                  <label class="btn btn-ghost btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""}>
+                    Choose folder…
+                    <input type="file" data-action="files-upload-pick-folder" ${busy ? "disabled" : ""}
+                      multiple webkitdirectory directory hidden />
+                  </label>
+                </div>
+                <p class="muted small" style="margin:0.75rem 0 0">
+                  Browsers need separate pickers for files vs folders; drag-and-drop supports both at once.
+                </p>`,
+          footer: [
+            { label: "Cancel", action: "files-upload-picker-close", variant: "ghost" },
+          ],
+        })
+      : "";
+
     return `<div class="portal-grid portal-grid-files">
       <section class="card files-panel">
         <div class="files-head">
@@ -4743,15 +4799,8 @@ export function mountApp(root: HTMLElement): void {
           <div class="files-toolbar-actions">
             <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${busy || filesLoading ? "disabled" : ""}>Refresh</button>
             <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${busy ? "disabled" : ""}>New folder</button>
-            <label class="btn btn-ghost btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""} title="Upload one or more files into this folder">
-              Upload files
-              <input type="file" data-action="files-upload" ${busy ? "disabled" : ""} multiple hidden />
-            </label>
-            <label class="btn btn-primary btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""} title="Upload a folder (creates the folder and all nested files)">
-              Upload folder
-              <input type="file" data-action="files-upload-folder" ${busy ? "disabled" : ""}
-                multiple webkitdirectory directory hidden />
-            </label>
+            <button type="button" class="btn btn-primary btn-small" data-action="files-upload-open" ${busy ? "disabled" : ""}
+              title="Upload files or folders into this folder">Upload</button>
           </div>
         </div>
         ${bulkBar}
@@ -4785,6 +4834,7 @@ export function mountApp(root: HTMLElement): void {
       ${deleteModal}
       ${transferModal}
       ${mkdirModal}
+      ${uploadPickerModal}
     </div>`;
   }
 
@@ -6295,6 +6345,12 @@ export function mountApp(root: HTMLElement): void {
           return;
         }
         if (filesUploadProgress) return; // block Escape while upload is running
+        if (filesUploadPickerOpen) {
+          filesUploadPickerOpen = false;
+          filesUploadDropActive = false;
+          render();
+          return;
+        }
         if (userMenuOpen) {
           userMenuOpen = false;
           unbindUserMenuOutside();
@@ -6344,16 +6400,82 @@ export function mountApp(root: HTMLElement): void {
         filesMkdirForm?.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
       });
     }
-    root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload"]').forEach((input) => {
-      input.addEventListener("change", () => {
-        void onFilesUpload(input, "files");
+    root
+      .querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload-pick-files"]')
+      .forEach((input) => {
+        input.addEventListener("change", () => {
+          onFilesUploadInput(input, false);
+        });
       });
-    });
-    root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload-folder"]').forEach((input) => {
-      input.addEventListener("change", () => {
-        void onFilesUpload(input, "folder");
+    root
+      .querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload-pick-folder"]')
+      .forEach((input) => {
+        input.addEventListener("change", () => {
+          onFilesUploadInput(input, true);
+        });
       });
-    });
+    // Drag-and-drop: files, folders, or a mix (preserves nested structure)
+    const dropzone = root.querySelector<HTMLElement>("[data-files-upload-dropzone]");
+    if (dropzone && filesUploadPickerOpen) {
+      const setDrag = (on: boolean) => {
+        if (filesUploadDropActive === on) return;
+        filesUploadDropActive = on;
+        dropzone.classList.toggle("is-dragover", on);
+      };
+      dropzone.addEventListener("dragenter", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setDrag(true);
+      });
+      dropzone.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+        setDrag(true);
+      });
+      dropzone.addEventListener("dragleave", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const related = ev.relatedTarget as Node | null;
+        if (related && dropzone.contains(related)) return;
+        setDrag(false);
+      });
+      dropzone.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setDrag(false);
+        const dt = ev.dataTransfer;
+        if (!dt) return;
+        void (async () => {
+          try {
+            const items = await itemsFromDataTransfer(dt);
+            if (items.length === 0) {
+              setFlash("info", "Nothing to upload from that drop");
+              render();
+              return;
+            }
+            await startFilesUpload(items);
+          } catch (e) {
+            setFlash("error", e instanceof Error ? e.message : "Drop failed");
+            render();
+          }
+        })();
+      });
+      // Click dropzone → open multi-file picker (folder still via “Choose folder…”)
+      dropzone.addEventListener("click", () => {
+        root
+          .querySelector<HTMLInputElement>('input[data-action="files-upload-pick-files"]')
+          ?.click();
+      });
+      dropzone.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          root
+            .querySelector<HTMLInputElement>('input[data-action="files-upload-pick-files"]')
+            ?.click();
+        }
+      });
+    }
     // Indeterminate "select all" for files multi-select
     root.querySelectorAll<HTMLInputElement>('input[data-action="files-select-all"][data-indeterminate="1"]').forEach((cb) => {
       cb.indeterminate = true;
@@ -7084,25 +7206,120 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
-  /**
-   * Upload selected files (or a folder via webkitdirectory). Creates nested
-   * directories from each file's relative path, streams each file with progress.
-   */
-  async function onFilesUpload(input: HTMLInputElement, mode: "files" | "folder") {
-    const list = input.files;
-    if (!list || list.length === 0) return;
+  /** Build upload items from a plain multi-file picker (no relative tree). */
+  function itemsFromFileList(list: FileList | File[], preferRelative: boolean): FilesUploadItem[] {
     const files = Array.from(list);
-    input.value = "";
+    return files.map((file) => {
+      const rel =
+        preferRelative && file.webkitRelativePath
+          ? file.webkitRelativePath.replace(/\\/g, "/")
+          : file.name;
+      return { file, relativePath: rel || file.name };
+    });
+  }
+
+  /** Read all entries from a directory reader (Chrome returns batches). */
+  function readAllDirectoryEntries(
+    reader: FileSystemDirectoryReader,
+  ): Promise<FileSystemEntry[]> {
+    return new Promise((resolve, reject) => {
+      const all: FileSystemEntry[] = [];
+      const readBatch = () => {
+        reader.readEntries(
+          (batch) => {
+            if (!batch.length) {
+              resolve(all);
+              return;
+            }
+            all.push(...batch);
+            readBatch();
+          },
+          (err) => reject(err),
+        );
+      };
+      readBatch();
+    });
+  }
+
+  function fileFromEntry(entry: FileSystemFileEntry): Promise<File> {
+    return new Promise((resolve, reject) => {
+      entry.file(resolve, reject);
+    });
+  }
+
+  /**
+   * Walk a dropped FileSystemEntry tree into upload items with relative paths.
+   * Empty directories become mkdir-only markers so the tree is preserved.
+   */
+  async function walkFileSystemEntry(
+    entry: FileSystemEntry,
+    parentRel: string,
+  ): Promise<FilesUploadItem[]> {
+    const rel = joinStoragePath(parentRel, entry.name);
+    if (entry.isFile) {
+      const file = await fileFromEntry(entry as FileSystemFileEntry);
+      return [{ file, relativePath: rel || entry.name }];
+    }
+    if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      const children = await readAllDirectoryEntries(reader);
+      if (children.length === 0) {
+        return [{ file: null, relativePath: rel, isEmptyDir: true }];
+      }
+      const out: FilesUploadItem[] = [];
+      for (const child of children) {
+        out.push(...(await walkFileSystemEntry(child, rel)));
+      }
+      return out;
+    }
+    return [];
+  }
+
+  async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUploadItem[]> {
+    const items = dt.items ? Array.from(dt.items) : [];
+    const out: FilesUploadItem[] = [];
+    let usedEntries = false;
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const anyItem = item as DataTransferItem & {
+        webkitGetAsEntry?: () => FileSystemEntry | null;
+      };
+      const entry =
+        typeof anyItem.webkitGetAsEntry === "function" ? anyItem.webkitGetAsEntry() : null;
+      if (entry) {
+        usedEntries = true;
+        out.push(...(await walkFileSystemEntry(entry, "")));
+      }
+    }
+    if (usedEntries && out.length > 0) return out;
+    // Fallback: plain files (no folder structure)
+    if (dt.files && dt.files.length > 0) {
+      return itemsFromFileList(dt.files, false);
+    }
+    return out;
+  }
+
+  /**
+   * Upload a list of items (files and/or nested folder paths). Creates intermediate
+   * directories as needed and streams each file with progress.
+   */
+  async function startFilesUpload(items: FilesUploadItem[]): Promise<void> {
+    if (items.length === 0) return;
+    filesUploadPickerOpen = false;
+    filesUploadDropActive = false;
+
+    const fileItems = items.filter((it) => it.file && !it.isEmptyDir);
+    const emptyDirs = items.filter((it) => it.isEmptyDir && it.relativePath);
     const destBase = filesPath;
-    const bytesTotal = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const bytesTotal = fileItems.reduce((sum, it) => sum + (it.file?.size || 0), 0);
     const startedAt = Date.now();
+    const totalWork = fileItems.length + emptyDirs.length;
     filesUploadProgress = {
-      mode,
       phase: "uploading",
-      totalFiles: files.length,
+      totalFiles: Math.max(fileItems.length, 1),
       completedFiles: 0,
       failedFiles: 0,
-      currentName: files[0]?.name || "",
+      currentName: fileItems[0]?.relativePath || emptyDirs[0]?.relativePath || "",
       bytesTotal,
       bytesSent: 0,
       startedAt,
@@ -7121,15 +7338,32 @@ export function mountApp(root: HTMLElement): void {
     let bytesCompleted = 0;
 
     try {
-      for (const file of files) {
-        const rel =
-          mode === "folder" && file.webkitRelativePath
-            ? file.webkitRelativePath.replace(/\\/g, "/")
-            : file.name;
+      // Empty folders first (mkdir only)
+      for (const dir of emptyDirs) {
+        const rel = dir.relativePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        if (!rel) continue;
+        if (filesUploadProgress) {
+          filesUploadProgress = {
+            ...filesUploadProgress,
+            currentName: rel + "/",
+            elapsedSec: Math.floor((Date.now() - startedAt) / 1000),
+          };
+          updateFilesUploadProgressDom(filesUploadProgress);
+        }
+        try {
+          await ensureNestedDirectories(destBase, rel, createdDirs);
+        } catch (e) {
+          errors.push(`${rel}/: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+
+      for (const item of fileItems) {
+        const file = item.file!;
+        const rel = (item.relativePath || file.name).replace(/\\/g, "/");
         const parts = rel.split("/").filter(Boolean);
         const fileName = parts.pop() || file.name;
         const relDir = parts.join("/");
-        const displayName = mode === "folder" && rel ? rel : fileName;
+        const displayName = rel || fileName;
 
         if (filesUploadProgress) {
           filesUploadProgress = {
@@ -7160,13 +7394,11 @@ export function mountApp(root: HTMLElement): void {
               updateFilesUploadProgressDom(filesUploadProgress);
             },
           });
-          // Use a File-like object with the storage name when folder paths rename
-          // is not needed — name is always file.name from the File object.
           log.event("files.upload", {
             path: parentPath,
             name: fileName,
             size: file.size,
-            folder: mode === "folder",
+            relativePath: rel,
           });
           ok += 1;
           bytesCompleted += file.size || 0;
@@ -7199,20 +7431,16 @@ export function mountApp(root: HTMLElement): void {
       await loadFiles();
       stopFilesUploadElapsedTimer();
       const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+      const totalFiles = fileItems.length;
 
       if (ok > 0 && errors.length === 0) {
         const msg =
-          mode === "folder"
-            ? ok === 1
-              ? "Uploaded 1 file from folder"
-              : `Uploaded ${ok} files from folder`
-            : ok === 1
-              ? "Uploaded 1 file"
-              : `Uploaded ${ok} files`;
+          ok === 1
+            ? "Uploaded 1 file"
+            : `Uploaded ${ok} files`;
         filesUploadProgress = {
-          mode,
           phase: "done",
-          totalFiles: files.length,
+          totalFiles: Math.max(totalFiles, 1),
           completedFiles: ok,
           failedFiles: 0,
           currentName: "",
@@ -7227,9 +7455,8 @@ export function mountApp(root: HTMLElement): void {
       } else if (ok > 0) {
         const msg = `Uploaded ${ok}; ${errors.length} failed. ${errors[0]}`;
         filesUploadProgress = {
-          mode,
           phase: "done",
-          totalFiles: files.length,
+          totalFiles: Math.max(totalFiles, 1),
           completedFiles: ok,
           failedFiles: errors.length,
           currentName: "",
@@ -7241,12 +7468,30 @@ export function mountApp(root: HTMLElement): void {
           errorSamples: errors.slice(0, 12),
         };
         setFlash("info", msg);
+      } else if (totalWork > 0 && errors.length === 0 && emptyDirs.length > 0) {
+        const msg =
+          emptyDirs.length === 1
+            ? "Created 1 empty folder"
+            : `Created ${emptyDirs.length} empty folders`;
+        filesUploadProgress = {
+          phase: "done",
+          totalFiles: 1,
+          completedFiles: 0,
+          failedFiles: 0,
+          currentName: "",
+          bytesTotal: 0,
+          bytesSent: 0,
+          startedAt,
+          elapsedSec,
+          resultMessage: msg,
+          errorSamples: [],
+        };
+        setFlash("success", msg);
       } else {
         const msg = errors[0] || "Upload failed";
         filesUploadProgress = {
-          mode,
           phase: "error",
-          totalFiles: files.length,
+          totalFiles: Math.max(totalFiles, 1),
           completedFiles: 0,
           failedFiles: errors.length,
           currentName: "",
@@ -7263,9 +7508,8 @@ export function mountApp(root: HTMLElement): void {
       stopFilesUploadElapsedTimer();
       const msg = e instanceof Error ? e.message : "Upload failed";
       filesUploadProgress = {
-        mode,
         phase: "error",
-        totalFiles: files.length,
+        totalFiles: Math.max(fileItems.length, 1),
         completedFiles: ok,
         failedFiles: Math.max(errors.length, 1),
         currentName: "",
@@ -7281,6 +7525,14 @@ export function mountApp(root: HTMLElement): void {
       busy = false;
       render();
     }
+  }
+
+  function onFilesUploadInput(input: HTMLInputElement, preferRelative: boolean): void {
+    const list = input.files;
+    if (!list || list.length === 0) return;
+    const items = itemsFromFileList(list, preferRelative);
+    input.value = "";
+    void startFilesUpload(items);
   }
 
   async function onShare(form: HTMLFormElement) {
@@ -7554,6 +7806,24 @@ export function mountApp(root: HTMLElement): void {
       ) {
         closeFilesUploadProgress();
       }
+      return;
+    }
+    if (action === "files-upload-open") {
+      if (busy) return;
+      filesUploadPickerOpen = true;
+      filesUploadDropActive = false;
+      filesRenamePath = null;
+      filesDeletePaths = null;
+      resetFilesTransferTree();
+      filesMkdirOpen = false;
+      clearFlash();
+      render();
+      return;
+    }
+    if (action === "files-upload-picker-close") {
+      filesUploadPickerOpen = false;
+      filesUploadDropActive = false;
+      render();
       return;
     }
     if (action === "logout") {
@@ -8581,6 +8851,8 @@ export function mountApp(root: HTMLElement): void {
     }
     if (action === "files-mkdir") {
       filesMkdirOpen = true;
+      filesUploadPickerOpen = false;
+      filesUploadDropActive = false;
       filesRenamePath = null;
       filesDeletePaths = null;
       resetFilesTransferTree();
