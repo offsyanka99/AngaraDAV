@@ -52,7 +52,7 @@ const TAB_STORAGE_KEY = "angaradav-portal-tab";
 const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-const APP_VERSION_FALLBACK = "2.1.0";
+const APP_VERSION_FALLBACK = "2.1.1";
 const DOCS_URL = "https://github.com/offsyanka99/AngaraDAV/tree/main/docs";
 
 function parseTabId(raw: string | null | undefined): TabId | null {
@@ -275,7 +275,8 @@ const SECTION_INFO: Record<string, { title: string; paragraphs: string[] }> = {
     title: "Files",
     paragraphs: [
       "Browse and manage your private WebDAV file home. The same files are available to desktop clients at /dav.php/files/{username}/.",
-      "Upload, download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
+      "Upload files or an entire folder (browser recreates the folder tree). Large or multi-file uploads show a progress dialog — keep the tab open until it finishes.",
+      "Download, create folders, copy, move, rename, and delete. Use checkboxes to multi-select items for bulk copy, move, or delete.",
       "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
       "Same-folder copies get a “ (copy)” name so the original is never overwritten. Copies into another folder keep the original filename unless that name is already taken there.",
       "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
@@ -526,6 +527,28 @@ export function mountApp(root: HTMLElement): void {
   };
   let importProgress: ImportProgress | null = null;
   let importElapsedTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Files tab multi-upload / folder-upload progress dialog.
+   * Updated in-place (DOM) while uploading so the bar stays smooth.
+   */
+  type FilesUploadProgress = {
+    mode: "files" | "folder";
+    phase: "uploading" | "done" | "error";
+    totalFiles: number;
+    completedFiles: number;
+    failedFiles: number;
+    currentName: string;
+    bytesTotal: number;
+    /** Completed files' bytes + current file loaded bytes. */
+    bytesSent: number;
+    startedAt: number;
+    elapsedSec: number;
+    resultMessage: string | null;
+    /** First few error lines for the result panel. */
+    errorSamples: string[];
+  };
+  let filesUploadProgress: FilesUploadProgress | null = null;
+  let filesUploadElapsedTimer: ReturnType<typeof setInterval> | null = null;
   let escapeBound = false;
   /** From /ui|/me + baikal.yaml / env (TIME_FORMAT, week start, log level) */
   let portalUi: {
@@ -593,6 +616,8 @@ export function mountApp(root: HTMLElement): void {
     stopSessionIdleTimer();
     stopImportElapsedTimer();
     importProgress = null;
+    filesUploadProgress = null;
+    stopFilesUploadElapsedTimer();
     user = null;
     calendars = [];
     shares = [];
@@ -1728,11 +1753,11 @@ export function mountApp(root: HTMLElement): void {
       }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
-        // Anonymous visit or expired cookie on first paint — never keep a stale shell
+        // Anonymous visit or expired cookie on first paint — never keep a stale shell.
+        // Do not flash “session timed out” here: the user never had an active SPA
+        // session this page load (browser reopen, restored cookie, new tab). That
+        // message is only for mid-session expiry (see handleSessionExpired).
         clearPortalSessionState();
-        if (/timed\s*out|session expired/i.test(e.message)) {
-          setFlash("info", e.message);
-        }
         log.event("bootstrap.anonymous");
       } else {
         log.error("bootstrap failed", e instanceof Error ? e.message : e);
@@ -3040,7 +3065,8 @@ export function mountApp(root: HTMLElement): void {
       </main>
       ${footer}
       ${infoModalHtml()}
-      ${renderImportProgressModal()}`;
+      ${renderImportProgressModal()}
+      ${renderFilesUploadProgressModal()}`;
   }
 
   /** Success/error banner; shown on main page or inside open calendar modal. */
@@ -3286,6 +3312,211 @@ export function mountApp(root: HTMLElement): void {
       body,
       footer,
     });
+  }
+
+  function stopFilesUploadElapsedTimer(): void {
+    if (filesUploadElapsedTimer !== null) {
+      clearInterval(filesUploadElapsedTimer);
+      filesUploadElapsedTimer = null;
+    }
+  }
+
+  function startFilesUploadElapsedTimer(): void {
+    stopFilesUploadElapsedTimer();
+    filesUploadElapsedTimer = setInterval(() => {
+      if (
+        !filesUploadProgress ||
+        filesUploadProgress.phase === "done" ||
+        filesUploadProgress.phase === "error"
+      ) {
+        stopFilesUploadElapsedTimer();
+        return;
+      }
+      filesUploadProgress = {
+        ...filesUploadProgress,
+        elapsedSec: Math.floor((Date.now() - filesUploadProgress.startedAt) / 1000),
+      };
+      updateFilesUploadProgressDom(filesUploadProgress);
+    }, 1000);
+  }
+
+  function closeFilesUploadProgress(): void {
+    stopFilesUploadElapsedTimer();
+    filesUploadProgress = null;
+    render();
+  }
+
+  function filesUploadBarPercent(p: FilesUploadProgress): number | null {
+    if (p.bytesTotal > 0) {
+      return Math.min(100, Math.max(0, Math.round((100 * p.bytesSent) / p.bytesTotal)));
+    }
+    if (p.totalFiles > 0) {
+      return Math.min(
+        100,
+        Math.max(0, Math.round((100 * p.completedFiles) / p.totalFiles)),
+      );
+    }
+    return null;
+  }
+
+  function updateFilesUploadProgressDom(p: FilesUploadProgress): void {
+    if (!root.querySelector("[data-files-upload-progress]")) return;
+    const bar = root.querySelector<HTMLElement>(".files-upload-progress-bar");
+    const track = root.querySelector<HTMLElement>(".files-upload-progress-track");
+    const status = root.querySelector<HTMLElement>("[data-files-upload-status]");
+    const current = root.querySelector<HTMLElement>("[data-files-upload-current]");
+    const pct = filesUploadBarPercent(p);
+    const statusLine =
+      p.phase === "uploading"
+        ? `Uploading ${p.completedFiles.toLocaleString()} / ${p.totalFiles.toLocaleString()} file${p.totalFiles === 1 ? "" : "s"}${
+            p.failedFiles ? ` · ${p.failedFiles} failed` : ""
+          }${pct !== null ? ` (${pct}%)` : ""} · ${formatElapsed(p.elapsedSec)}`
+        : status?.textContent || "";
+    if (status && p.phase === "uploading") status.textContent = statusLine;
+    if (current && p.phase === "uploading") {
+      current.textContent = p.currentName || "";
+      current.title = p.currentName || "";
+    }
+    if (bar && pct !== null) {
+      bar.classList.remove("is-indeterminate");
+      bar.style.width = `${pct}%`;
+    }
+    if (track && pct !== null) {
+      track.setAttribute("aria-valuenow", String(pct));
+      track.removeAttribute("aria-valuetext");
+    }
+  }
+
+  function renderFilesUploadProgressModal(): string {
+    if (!filesUploadProgress) return "";
+    const p = filesUploadProgress;
+    const running = p.phase === "uploading";
+    const title =
+      p.phase === "done"
+        ? "Upload finished"
+        : p.phase === "error"
+          ? "Upload failed"
+          : p.mode === "folder"
+            ? "Uploading folder…"
+            : "Uploading files…";
+    const pct = filesUploadBarPercent(p);
+    const barClass =
+      pct === null ? "files-upload-progress-bar is-indeterminate" : "files-upload-progress-bar";
+    const barStyle = pct !== null ? ` style="width:${pct}%"` : "";
+    const modeLabel = p.mode === "folder" ? "folder" : "files";
+    let body = "";
+    if (running) {
+      const statusLine = `Uploading ${p.completedFiles.toLocaleString()} / ${p.totalFiles.toLocaleString()} file${
+        p.totalFiles === 1 ? "" : "s"
+      }${p.failedFiles ? ` · ${p.failedFiles} failed` : ""}${
+        pct !== null ? ` (${pct}%)` : ""
+      } · ${formatElapsed(p.elapsedSec)}`;
+      const sizeLine =
+        p.bytesTotal > 0
+          ? `${formatFileSize(p.bytesSent)} / ${formatFileSize(p.bytesTotal)}`
+          : "";
+      body = `
+        <p class="muted small" style="margin:0 0 0.75rem">
+          Uploading <strong>${esc(modeLabel)}</strong>
+          ${sizeLine ? ` · <span class="muted">${esc(sizeLine)}</span>` : ""}
+        </p>
+        <div class="import-progress-track files-upload-progress-track" role="progressbar"
+          aria-valuemin="0" aria-valuemax="100"
+          ${pct !== null ? `aria-valuenow="${pct}"` : 'aria-valuetext="In progress"'}
+          aria-label="Upload progress">
+          <div class="${barClass}"${barStyle}></div>
+        </div>
+        <p class="import-status-line" data-files-upload-status>${esc(statusLine)}</p>
+        <p class="muted small mono files-upload-current" data-files-upload-current title="${esc(p.currentName)}">${esc(p.currentName)}</p>
+        <p class="muted small">Keep this tab open until the upload finishes.</p>`;
+    } else if (p.phase === "done") {
+      body = `
+        ${renderFlash("success", p.resultMessage || "Upload completed.", {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
+        <p class="muted small" style="margin:0">Took ${esc(formatElapsed(p.elapsedSec))}</p>`;
+    } else {
+      const samples =
+        p.errorSamples.length > 0
+          ? `<ul class="files-upload-error-list muted small">${p.errorSamples
+              .slice(0, 8)
+              .map((e) => `<li>${esc(e)}</li>`)
+              .join("")}${
+              p.errorSamples.length > 8
+                ? `<li>…and ${p.errorSamples.length - 8} more</li>`
+                : ""
+            }</ul>`
+          : "";
+      body = `
+        ${renderFlash("error", p.resultMessage || "Upload failed.", {
+          className: "import-result",
+          style: "margin:0 0 1rem",
+        })}
+        ${samples}
+        <p class="muted small" style="margin:0.75rem 0 0">After ${esc(formatElapsed(p.elapsedSec))}</p>`;
+    }
+    const footer = running
+      ? `<p class="muted small" style="margin:0">Please wait…</p>`
+      : renderModalFooter([
+          { label: "Close", action: "close-files-upload-progress", variant: "primary" },
+        ]);
+    return renderModal({
+      title,
+      titleId: "files-upload-progress-title",
+      closeAction: "close-files-upload-progress",
+      size: "sm",
+      className: "import-progress-modal files-upload-progress-modal",
+      cardClassName: "import-progress-card",
+      rootAttrs: "data-files-upload-progress",
+      hideClose: running,
+      lockBackdrop: running,
+      body,
+      footer,
+    });
+  }
+
+  /** Join parent + relative segments into a storage path (no leading/trailing slash). */
+  function joinStoragePath(...parts: string[]): string {
+    return parts
+      .map((p) => p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""))
+      .filter(Boolean)
+      .join("/");
+  }
+
+  /**
+   * Ensure nested directories exist under basePath (create only missing segments).
+   * 409 "already exists" is treated as success so re-uploads work.
+   */
+  async function ensureNestedDirectories(
+    basePath: string,
+    relativeDir: string,
+    created: Set<string>,
+  ): Promise<void> {
+    const segments = relativeDir
+      .replace(/\\/g, "/")
+      .split("/")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    let parent = basePath;
+    for (const name of segments) {
+      const full = joinStoragePath(parent, name);
+      if (created.has(full)) {
+        parent = full;
+        continue;
+      }
+      try {
+        await api.filesMkdir(parent, name);
+        log.event("files.mkdir", { path: parent, name, via: "upload-folder" });
+      } catch (e) {
+        // Folder already present from a previous upload or concurrent create
+        if (!(e instanceof ApiError && e.status === 409)) {
+          throw e;
+        }
+      }
+      created.add(full);
+      parent = full;
+    }
   }
 
   function readFileTextWithProgress(
@@ -4172,6 +4403,7 @@ export function mountApp(root: HTMLElement): void {
         contactModalOpen ||
         abModalOpen ||
         importProgress !== null ||
+        filesUploadProgress !== null ||
         filesRenamePath !== null ||
         filesDeletePaths !== null ||
         filesTransfer !== null ||
@@ -4269,6 +4501,8 @@ export function mountApp(root: HTMLElement): void {
     const allChecked =
       filesEntries.length > 0 && filesEntries.every((e) => checkedFilePaths.includes(e.path));
     const someChecked = nChecked > 0;
+    const nDirs = filesEntries.filter((e) => e.type === "dir").length;
+    const nFiles = filesEntries.length - nDirs;
     const bulkBar =
       nChecked > 0
         ? `<div class="bulk-bar files-bulk-bar" role="toolbar" aria-label="Selected files">
@@ -4280,6 +4514,17 @@ export function mountApp(root: HTMLElement): void {
             </div>
           </div>`
         : "";
+    const filesCountLabel = (() => {
+      if (filesLoading && filesEntries.length === 0) return "Loading…";
+      if (filesEntries.length === 0) return "0 items";
+      const parts: string[] = [];
+      if (nDirs > 0) parts.push(`${nDirs} folder${nDirs === 1 ? "" : "s"}`);
+      if (nFiles > 0) parts.push(`${nFiles} file${nFiles === 1 ? "" : "s"}`);
+      const total = `${filesEntries.length} item${filesEntries.length === 1 ? "" : "s"}`;
+      // Prefer breakdown when mixed; otherwise plain total is enough.
+      if (parts.length === 2) return `${total} · ${parts.join(", ")}`;
+      return parts[0] ?? total;
+    })();
 
     const rows =
       filesEntries.length === 0
@@ -4498,9 +4743,14 @@ export function mountApp(root: HTMLElement): void {
           <div class="files-toolbar-actions">
             <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${busy || filesLoading ? "disabled" : ""}>Refresh</button>
             <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${busy ? "disabled" : ""}>New folder</button>
-            <label class="btn btn-primary btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""}>
-              Upload
+            <label class="btn btn-ghost btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""} title="Upload one or more files into this folder">
+              Upload files
               <input type="file" data-action="files-upload" ${busy ? "disabled" : ""} multiple hidden />
+            </label>
+            <label class="btn btn-primary btn-small files-upload-btn" ${busy ? "aria-disabled=true" : ""} title="Upload a folder (creates the folder and all nested files)">
+              Upload folder
+              <input type="file" data-action="files-upload-folder" ${busy ? "disabled" : ""}
+                multiple webkitdirectory directory hidden />
             </label>
           </div>
         </div>
@@ -4526,6 +4776,9 @@ export function mountApp(root: HTMLElement): void {
               ${filesLoading && filesEntries.length === 0 ? `<tr><td colspan="5" class="muted">Loading…</td></tr>` : rows}
             </tbody>
           </table>
+        </div>
+        <div class="files-status-bar muted small" role="status" aria-live="polite">
+          ${nChecked > 0 ? `${nChecked} of ${filesEntries.length} selected` : esc(filesCountLabel)}
         </div>
       </section>
       ${renameModal}
@@ -5897,12 +6150,14 @@ export function mountApp(root: HTMLElement): void {
     const table = root.querySelector<HTMLElement>(".contacts-table-wrap");
     const abList = root.querySelector<HTMLElement>(".contacts-ab-list");
     const calList = root.querySelector<HTMLElement>(".calendars-owned-list");
+    const filesTable = root.querySelector<HTMLElement>(".files-table-wrap");
     return {
       windowX: window.scrollX,
       windowY: window.scrollY,
       tableTop: table?.scrollTop ?? null,
       abListTop: abList?.scrollTop ?? null,
       calListTop: calList?.scrollTop ?? null,
+      filesTableTop: filesTable?.scrollTop ?? null,
     };
   }
 
@@ -5912,6 +6167,7 @@ export function mountApp(root: HTMLElement): void {
     tableTop: number | null;
     abListTop: number | null;
     calListTop: number | null;
+    filesTableTop: number | null;
   }) {
     // Double rAF: after layout of the newly injected form/list
     requestAnimationFrame(() => {
@@ -5928,6 +6184,10 @@ export function mountApp(root: HTMLElement): void {
         if (s.calListTop !== null) {
           const calList = root.querySelector<HTMLElement>(".calendars-owned-list");
           if (calList) calList.scrollTop = s.calListTop;
+        }
+        if (s.filesTableTop !== null) {
+          const filesTable = root.querySelector<HTMLElement>(".files-table-wrap");
+          if (filesTable) filesTable.scrollTop = s.filesTableTop;
         }
       });
     });
@@ -6027,6 +6287,14 @@ export function mountApp(root: HTMLElement): void {
           return;
         }
         if (importProgress) return; // block Escape while import is running
+        if (
+          filesUploadProgress &&
+          (filesUploadProgress.phase === "done" || filesUploadProgress.phase === "error")
+        ) {
+          closeFilesUploadProgress();
+          return;
+        }
+        if (filesUploadProgress) return; // block Escape while upload is running
         if (userMenuOpen) {
           userMenuOpen = false;
           unbindUserMenuOutside();
@@ -6078,7 +6346,12 @@ export function mountApp(root: HTMLElement): void {
     }
     root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload"]').forEach((input) => {
       input.addEventListener("change", () => {
-        void onFilesUpload(input);
+        void onFilesUpload(input, "files");
+      });
+    });
+    root.querySelectorAll<HTMLInputElement>('input[type="file"][data-action="files-upload-folder"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        void onFilesUpload(input, "folder");
       });
     });
     // Indeterminate "select all" for files multi-select
@@ -6811,36 +7084,199 @@ export function mountApp(root: HTMLElement): void {
     }
   }
 
-  async function onFilesUpload(input: HTMLInputElement) {
+  /**
+   * Upload selected files (or a folder via webkitdirectory). Creates nested
+   * directories from each file's relative path, streams each file with progress.
+   */
+  async function onFilesUpload(input: HTMLInputElement, mode: "files" | "folder") {
     const list = input.files;
     if (!list || list.length === 0) return;
     const files = Array.from(list);
     input.value = "";
+    const destBase = filesPath;
+    const bytesTotal = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const startedAt = Date.now();
+    filesUploadProgress = {
+      mode,
+      phase: "uploading",
+      totalFiles: files.length,
+      completedFiles: 0,
+      failedFiles: 0,
+      currentName: files[0]?.name || "",
+      bytesTotal,
+      bytesSent: 0,
+      startedAt,
+      elapsedSec: 0,
+      resultMessage: null,
+      errorSamples: [],
+    };
     busy = true;
     clearFlash();
+    startFilesUploadElapsedTimer();
     render();
+
     let ok = 0;
     const errors: string[] = [];
+    const createdDirs = new Set<string>();
+    let bytesCompleted = 0;
+
     try {
       for (const file of files) {
+        const rel =
+          mode === "folder" && file.webkitRelativePath
+            ? file.webkitRelativePath.replace(/\\/g, "/")
+            : file.name;
+        const parts = rel.split("/").filter(Boolean);
+        const fileName = parts.pop() || file.name;
+        const relDir = parts.join("/");
+        const displayName = mode === "folder" && rel ? rel : fileName;
+
+        if (filesUploadProgress) {
+          filesUploadProgress = {
+            ...filesUploadProgress,
+            currentName: displayName,
+            bytesSent: bytesCompleted,
+            elapsedSec: Math.floor((Date.now() - startedAt) / 1000),
+          };
+          updateFilesUploadProgressDom(filesUploadProgress);
+        }
+
         try {
-          await api.filesUpload(filesPath, file, { replace: true });
-          log.event("files.upload", { path: filesPath, name: file.name, size: file.size });
+          if (relDir) {
+            await ensureNestedDirectories(destBase, relDir, createdDirs);
+          }
+          const parentPath = joinStoragePath(destBase, relDir);
+          await api.filesUpload(parentPath, file, {
+            replace: true,
+            onProgress: (loaded, total) => {
+              if (!filesUploadProgress || filesUploadProgress.phase !== "uploading") return;
+              const fileTotal = total > 0 ? total : file.size;
+              filesUploadProgress = {
+                ...filesUploadProgress,
+                currentName: displayName,
+                bytesSent: bytesCompleted + Math.min(loaded, fileTotal || loaded),
+                elapsedSec: Math.floor((Date.now() - startedAt) / 1000),
+              };
+              updateFilesUploadProgressDom(filesUploadProgress);
+            },
+          });
+          // Use a File-like object with the storage name when folder paths rename
+          // is not needed — name is always file.name from the File object.
+          log.event("files.upload", {
+            path: parentPath,
+            name: fileName,
+            size: file.size,
+            folder: mode === "folder",
+          });
           ok += 1;
+          bytesCompleted += file.size || 0;
+          if (filesUploadProgress) {
+            filesUploadProgress = {
+              ...filesUploadProgress,
+              completedFiles: ok,
+              failedFiles: errors.length,
+              bytesSent: bytesCompleted,
+            };
+            updateFilesUploadProgressDom(filesUploadProgress);
+          }
         } catch (e) {
-          errors.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
+          const msg = `${displayName}: ${e instanceof Error ? e.message : "failed"}`;
+          errors.push(msg);
+          bytesCompleted += file.size || 0;
+          if (filesUploadProgress) {
+            filesUploadProgress = {
+              ...filesUploadProgress,
+              completedFiles: ok,
+              failedFiles: errors.length,
+              bytesSent: bytesCompleted,
+              errorSamples: errors.slice(0, 12),
+            };
+            updateFilesUploadProgressDom(filesUploadProgress);
+          }
         }
       }
+
       await loadFiles();
+      stopFilesUploadElapsedTimer();
+      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+
       if (ok > 0 && errors.length === 0) {
-        setFlash("success", ok === 1 ? "Uploaded 1 file" : `Uploaded ${ok} files`);
+        const msg =
+          mode === "folder"
+            ? ok === 1
+              ? "Uploaded 1 file from folder"
+              : `Uploaded ${ok} files from folder`
+            : ok === 1
+              ? "Uploaded 1 file"
+              : `Uploaded ${ok} files`;
+        filesUploadProgress = {
+          mode,
+          phase: "done",
+          totalFiles: files.length,
+          completedFiles: ok,
+          failedFiles: 0,
+          currentName: "",
+          bytesTotal,
+          bytesSent: bytesTotal,
+          startedAt,
+          elapsedSec,
+          resultMessage: msg,
+          errorSamples: [],
+        };
+        setFlash("success", msg);
       } else if (ok > 0) {
-        setFlash("info", `Uploaded ${ok}; ${errors.length} failed. ${errors[0]}`);
+        const msg = `Uploaded ${ok}; ${errors.length} failed. ${errors[0]}`;
+        filesUploadProgress = {
+          mode,
+          phase: "done",
+          totalFiles: files.length,
+          completedFiles: ok,
+          failedFiles: errors.length,
+          currentName: "",
+          bytesTotal,
+          bytesSent: bytesTotal,
+          startedAt,
+          elapsedSec,
+          resultMessage: msg,
+          errorSamples: errors.slice(0, 12),
+        };
+        setFlash("info", msg);
       } else {
-        setFlash("error", errors[0] || "Upload failed");
+        const msg = errors[0] || "Upload failed";
+        filesUploadProgress = {
+          mode,
+          phase: "error",
+          totalFiles: files.length,
+          completedFiles: 0,
+          failedFiles: errors.length,
+          currentName: "",
+          bytesTotal,
+          bytesSent: 0,
+          startedAt,
+          elapsedSec,
+          resultMessage: msg,
+          errorSamples: errors.slice(0, 12),
+        };
+        setFlash("error", msg);
       }
     } catch (e) {
-      setFlash("error", e instanceof Error ? e.message : "Upload failed");
+      stopFilesUploadElapsedTimer();
+      const msg = e instanceof Error ? e.message : "Upload failed";
+      filesUploadProgress = {
+        mode,
+        phase: "error",
+        totalFiles: files.length,
+        completedFiles: ok,
+        failedFiles: Math.max(errors.length, 1),
+        currentName: "",
+        bytesTotal,
+        bytesSent: bytesCompleted,
+        startedAt,
+        elapsedSec: Math.floor((Date.now() - startedAt) / 1000),
+        resultMessage: msg,
+        errorSamples: errors.length ? errors.slice(0, 12) : [msg],
+      };
+      setFlash("error", msg);
     } finally {
       busy = false;
       render();
@@ -7108,6 +7544,15 @@ export function mountApp(root: HTMLElement): void {
     if (action === "close-import-progress") {
       if (importProgress && (importProgress.phase === "done" || importProgress.phase === "error")) {
         closeImportProgress();
+      }
+      return;
+    }
+    if (action === "close-files-upload-progress") {
+      if (
+        filesUploadProgress &&
+        (filesUploadProgress.phase === "done" || filesUploadProgress.phase === "error")
+      ) {
+        closeFilesUploadProgress();
       }
       return;
     }

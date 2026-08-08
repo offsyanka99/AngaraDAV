@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.1.0`
+**Version:** `2.1.1`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
@@ -25,7 +25,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
-  - **Files** tab: browse/upload/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
+  - **Files** tab: browse/upload files or folders/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
   - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
@@ -68,8 +68,9 @@ Legacy release history
 | `2.0.2` | Portal upgrade-required login banner + JSON 503 API gate; version base compare and `2.0.x+sha` display (no `git.`); multi-select calendars on the month grid |
 | `2.0.3` | Security P1–P3: DB connection test, install password re-prompt, last-Admin delete block, user password rate-limit, Reset-to-Default re-auth; Files Copy/Move folder tree; same-folder-only ` (copy)` naming |
 | `2.1.0` | **Mainline 2.1:** portal Administration cutover on `main`; Files Copy/Move destination **folder tree**; cross-folder copy keeps original filename; export download fix; calendar Owned empty-hint + list Export; CI skips for classic Formal admin browser tests |
+| `2.1.1` | Files: **upload folder** (recreates nested tree), multi-file **upload progress** dialog, folder item-count status bar; fix files list scroll jump on multi-select; cold login after session timeout no longer shows timeout banner |
 
-Image tags: `latest`, `2.1.0`, `sha-…`.
+Image tags: `latest`, `2.1.1`, `sha-…`.
 
 Quick start (Docker)
 --------------------
@@ -111,7 +112,7 @@ User portal
 3. **Calendar:** owned list, month view, create/edit events (repeat rules), Edit modal (details, share, import/export `.ics`).
 4. **Contacts:** address books, contact search/CRUD, photos, birthday/special dates, custom fields, import/export `.vcf`.
 5. **Tasks** / **Notes:** manage `VTODO` / `VJOURNAL` on your calendars.
-6. **Files:** browse your private WebDAV file home (when **Enable WebDAV file storage** is on). Desktop clients still use `/dav.php/files/{username}/`.
+6. **Files:** browse your private WebDAV file home (when **Enable WebDAV file storage** is on). Upload files or whole folders with a progress dialog. Desktop clients still use `/dav.php/files/{username}/`.
 7. **Administration** (Admin role only — user menu): Overview, Users, System settings; Database is read-only in the portal. Classic `/admin/` remains available in parallel.
 
 **Portal Admin role:** env `PORTAL_ADMIN_USERS` / `BAIKAL_PORTAL_ADMIN_USERS`, or YAML `system.portal_admin_users`; if unset, DAV user `admin` is Admin. Details and portal-vs-classic matrix: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#portal-administration-parallel-with-classic-admin).
@@ -241,7 +242,7 @@ Changelog
 - TrueNAS startup hang on recursive **chown** mitigated (`BAIKAL_SKIP_CHOWN` + chown only data mounts)
 - Slow bulk import on NAS SQLite fixed via chunked transactions (~minutes → ~seconds for multi-thousand event calendars)
 - After import, drop the **duplicate result banner** under Import/export in address-book and calendar details modals (progress dialog + top flash only)
-- **Session idle timeout** clears the portal UI and returns to the **Sign in** screen with a “session timed out” message (no leftover calendars/contacts in the DOM); client idle timer follows `session_max_age_minutes`
+- **Session idle timeout** clears the portal UI and returns to the **Sign in** screen (no leftover calendars/contacts in the DOM); if the session expires while the app is open, a “session timed out” message is shown — a cold reopen of the login page after an expired cookie stays silent; client idle timer follows `session_max_age_minutes`
 - Portal SPA shell (`/portal/`) is **not cached** so rebuilds pick up new hashed JS; hashed `/portal/assets/*` are long-cached
 
 ### 0.11.1-fork.3

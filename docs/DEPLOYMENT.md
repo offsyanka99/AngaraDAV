@@ -105,7 +105,7 @@ Entrypoint also logs mount warnings at container start (`25-check-baikal-persist
 | `/info.php` | Public feature flags (no secrets); same `version` / `git` fields |
 | `/dav.php/` | Combined CalDAV + CardDAV + generic WebDAV + classic browser UI |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
-| `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload/download/rename/delete) |
+| `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload files or folders with progress/download/rename/delete) |
 | `/cal.php/` | CalDAV only |
 | `/card.php/` | CardDAV only |
 | `/portal/install/` | Installer / upgrade SPA |
@@ -123,7 +123,7 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Secti
 | 3 | **Calendar:** owned list (Edit / Delete), month grid with create/edit/delete events (RRULE), holidays/read-only; details, share, import/export `.ics`; **select shared calendars** (read-only or full access) to view/edit events; **Add calendar → Import .ics**; large imports show **live %** (chunked SQLite txs keep NAS imports fast) |
 | 4 | **Contacts:** address books (delete confirm), contact search/CRUD, photos, birthday/special dates, custom fields, book + single-contact `.vcf` export (progress dialog with **live %** of cards + result) |
 | 5 | **Tasks / Notes:** CalDAV `VTODO` / `VJOURNAL` on writable calendars (bulk actions on tasks) |
-| 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`) |
+| 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`); upload files or a whole folder (nested dirs created automatically); progress dialog for large/multi-file uploads; item count under the list |
 | 7 | **Administration** (Admin role only): Overview, System settings, Users CRUD, Database (CONFIRM gate on write) |
 
 ### Screenshots
@@ -155,7 +155,7 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Secti
 - Portal meta (read-only / holidays flags): `Specific/portal_meta.json` (include in backups).
 - **Read-only calendars** are enforced on CalDAV (`/dav.php/`, `/cal.php/`) via `ReadOnlyPlugin` — clients get **403** on write methods, not only a portal import block.
 - Contact photos require **PHP GD** (`php8.2-gd` in the Docker image); stored as **vCard 3.0** `PHOTO;ENCODING=b` JPEG (avoids vCard 4 raw-binary corruption).
-- Portal sessions: idle timeout from `session_max_age_minutes` (same as admin, default **15** minutes). When the session expires, the SPA **clears all in-memory data**, shows the **Sign in** screen, and a banner: *“Your session timed out. Please sign in again.”* (server 401 + client idle timer aligned via `sessionIdleSeconds` from `/api/ui`). Login rate-limited; CSRF + same-origin checks on mutations.
+- Portal sessions: idle timeout from `session_max_age_minutes` (same as admin, default **15** minutes). When the session expires **while the portal is open**, the SPA **clears all in-memory data**, shows the **Sign in** screen, and a banner: *“Your session timed out. Please sign in again.”* (server 401 + client idle timer aligned via `sessionIdleSeconds` from `/api/ui`). Opening the login screen after the browser was closed (or a cold load with an already-expired cookie) shows a clean Sign in form without that banner. Login rate-limited; CSRF + same-origin checks on mutations.
 - Optional portal locale helpers in `baikal.yaml` / env (override browser auto-detect):
   - `system.portal_time_format` or `TIME_FORMAT` / `BAIKAL_PORTAL_TIME_FORMAT`: `auto` | `12h` | `24h`
   - `system.portal_week_start` or `BAIKAL_PORTAL_WEEK_START`: `auto` | `monday` | `sunday`
@@ -470,6 +470,13 @@ private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
 is `info` or `debug` (list/upload/download/mkdir/rename/delete/copy/move).
 
+**Upload:** **Upload files** multi-selects files into the current folder.
+**Upload folder** lets the browser pick a directory; AngaraDAV creates the
+folder tree (from each file’s relative path) and uploads every file. Both modes
+show a **progress dialog** (file count, bytes transferred, current name) — keep
+the tab open until it finishes. A status line under the table shows item counts
+(and selection counts when checkboxes are used).
+
 **Copy / Move:** the SPA opens a destination **folder tree** (Home + subfolders;
 expand on demand). You do not need to type a path.
 
@@ -761,6 +768,15 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 
 ## Release notes
 
+### 2.1.1
+
+- **Product version** `2.1.1`.
+- **Files — Upload folder:** choose a directory in the browser; nested folders are created and every file is uploaded into the current Files path.
+- **Files — Upload progress:** multi-file and folder uploads show a progress dialog (count, bytes, current file). Keep the tab open until it finishes.
+- **Files — Status bar:** item count under the table (`N items · X folders, Y files`; selection shows `k of N selected`).
+- **Files — Multi-select scroll:** selecting checkboxes no longer jumps the list back to the top.
+- **Session timeout UX:** mid-session idle expiry still shows *“Your session timed out…”*; a cold open of Sign in after browser close / expired cookie stays silent.
+
 ### 2.1.0
 
 - **Product version** `2.1.0` (upgrade wizard compares version base only; rebuilds that only change the build SHA do not force upgrade).
@@ -841,7 +857,7 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 | Container **stuck** on `40-fix-baikal-file-permissions.sh` | Skip/chown only `config`+`Specific`; `BAIKAL_SKIP_CHOWN` |
 | Large `.ics` import **~6 min** for ~2.7k events on TrueNAS | Chunked SQLite transactions (~**2s** measured) |
 | Import success shown **three times** (progress dialog, modal top flash, sticky banner under Import/export) | Removed sticky bottom import-result banner from address-book and calendar details modals |
-| After idle timeout, **dashboard still visible** with calendars/contacts | SPA clears state, shows Sign in + “session timed out” message (server 401 + client timer) |
+| After idle timeout, **dashboard still visible** with calendars/contacts | SPA clears state, shows Sign in + “session timed out” message when expiry happens mid-session (server 401 + client timer); cold login after browser close stays silent |
 | Stale portal JS after image upgrade (browser cache) | nginx: no-cache on `/portal/` HTML; long-cache only on hashed `/portal/assets/*` |
 
 ### 0.11.1-fork.3

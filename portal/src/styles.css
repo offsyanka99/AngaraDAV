@@ -622,7 +622,9 @@ body.layout-files .portal-grid-files {
 
 body.layout-files .files-panel > .files-head,
 body.layout-files .files-panel > .muted,
-body.layout-files .files-panel > .files-toolbar {
+body.layout-files .files-panel > .files-toolbar,
+body.layout-files .files-panel > .files-bulk-bar,
+body.layout-files .files-panel > .files-status-bar {
   flex-shrink: 0;
 }
 
@@ -757,6 +759,42 @@ body.layout-files .files-table-wrap {
   max-height: min(60vh, 40rem);
   overflow: auto;
   width: 100%;
+}
+
+/* Folder summary under the list (Finder / Explorer style status line). */
+.files-status-bar {
+  margin-top: 0.45rem;
+  padding: 0.15rem 0.15rem 0;
+  line-height: 1.35;
+}
+
+.files-upload-current {
+  margin: 0.35rem 0 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 1.25em;
+}
+
+.files-upload-error-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  max-height: 10rem;
+  overflow: auto;
+}
+
+/* Reuse import progress track styling for file uploads */
+.files-upload-progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent, #3b82f6);
+  transition: width 0.15s ease-out;
+}
+
+.files-upload-progress-bar.is-indeterminate {
+  width: 40% !important;
+  animation: import-progress-indeterminate 1.2s ease-in-out infinite;
 }
 
 .files-table {
