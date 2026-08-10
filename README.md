@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.1.1`
+**Version:** `2.1.2`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
@@ -25,7 +25,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
-  - **Files** tab: browse/upload files or folders/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
+  - **Files** tab: browse/upload (toolbar **Upload ▾** Files…/Folder…, drop mix onto list)/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
   - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
@@ -69,8 +69,9 @@ Legacy release history
 | `2.0.3` | Security P1–P3: DB connection test, install password re-prompt, last-Admin delete block, user password rate-limit, Reset-to-Default re-auth; Files Copy/Move folder tree; same-folder-only ` (copy)` naming |
 | `2.1.0` | **Mainline 2.1:** portal Administration cutover on `main`; Files Copy/Move destination **folder tree**; cross-folder copy keeps original filename; export download fix; calendar Owned empty-hint + list Export; CI skips for classic Formal admin browser tests |
 | `2.1.1` | Files: single **Upload** (files, folders, or mix via drop/browse; nested trees), **upload progress** dialog, folder item-count status bar; fix files list scroll jump on multi-select; cold login after session timeout no longer shows timeout banner |
+| `2.1.2` | Files: **Upload ▾** menu (Files… / Folder…), drop files/folders/mix on the panel (no upload modal), File System Access API with Safari/Firefox classic-input fallbacks; nested trees + progress unchanged |
 
-Image tags: `latest`, `2.1.1`, `sha-…`.
+Image tags: `latest`, `2.1.2`, `sha-…`.
 
 Quick start (Docker)
 --------------------

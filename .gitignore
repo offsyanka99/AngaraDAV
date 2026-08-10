@@ -29,6 +29,9 @@ Core/BuildInfo.php
 # Others
 .DS_Store
 
+# Local working notes (not committed)
+*.local.md
+
 # IDE
 nbproject
 

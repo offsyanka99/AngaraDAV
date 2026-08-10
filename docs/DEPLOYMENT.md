@@ -9,7 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
-| `ghcr.io/offsyanka99/angaradav:2.1.0` | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:2.1.2` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -767,6 +767,13 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.1.2
+
+- **Product version** `2.1.2`.
+- **Files — Upload UX:** toolbar **Upload ▾** with **Files…** and **Folder…** (two browse modes; browsers have no single mixed picker). Drop files, folders, or a mix onto the **files panel** (upload modal removed). Nested folder trees and multi-file **progress** dialog unchanged.
+- **Files — Progressive enhancement:** File System Access API (`showOpenFilePicker` / `showDirectoryPicker` / drop handles) when available; classic `<input type="file">` / `webkitdirectory` and `webkitGetAsEntry` fallbacks for Safari/Firefox and restricted contexts.
+- **Files — Ops:** copy, move, rename, and delete remain available for both files and folders (row actions + bulk bar).
 
 ### 2.1.1
 
