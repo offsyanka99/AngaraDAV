@@ -8,3 +8,4 @@ export {
 } from "./tree";
 export { renderTasksTab } from "./render";
 export { runBulkTaskAction, onSaveTask, syncEditingTaskFromForm } from "./actions";
+export { handleTasksAction } from "./actionsRouter";

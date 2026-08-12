@@ -12,13 +12,19 @@ import { readRepeatFromForm } from "./eventModal";
 export async function onShare(host: CalendarsHost, form: HTMLFormElement) {
   if (host.state.selectedId === null) return;
   const fd = new FormData(form);
-  const username = String(fd.get("username") ?? "");
+  const username = String(fd.get("username") ?? "").trim();
   const access = String(fd.get("access") ?? "read") as "read" | "readwrite";
+  if (!username) {
+    host.setFlash("error", "Select a user to share with");
+    host.render();
+    return;
+  }
   host.state.calModalOpen = true;
   host.state.busy = true;
   host.clearFlash();
   host.render();
   try {
+    // addOrUpdateShare adds this user without removing existing sharees
     await api.share(host.state.selectedId, username, access);
     await loadShares(host, host.state.selectedId);
     host.setFlash("success", `Shared with ${username}`);

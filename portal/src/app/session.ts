@@ -123,6 +123,8 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   hooks.unbindFilesUploadMenuOutside();
   state.filesUploadDropActive = false;
   state.filesUploadConflict = null;
+  state.confirmDelete = null;
+  state.dtPickerDocClick = null;
   state.checkedFilePaths = [];
   state.photoPreview = null;
   state.photoBase64Pending = null;

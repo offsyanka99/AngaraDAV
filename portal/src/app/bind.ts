@@ -6,6 +6,7 @@ import { onAction } from "./onAction";
 import * as files from "./files";
 import * as admin from "./admin";
 import * as calendars from "./calendars";
+import { bindDtPickerOutside, unbindDtPickerOutside } from "./shell";
 
 export function bind(o: AppOrchestrator) {
   const { state, root, render, setFlash } = o;
@@ -38,6 +39,10 @@ export function bind(o: AppOrchestrator) {
   o.unbindUserMenuOutside();
   if (state.userMenuOpen) {
     o.bindUserMenuOutside();
+  }
+  unbindDtPickerOutside(state);
+  if (state.eventDtPicker) {
+    bindDtPickerOutside(state, render);
   }
   o.unbindFilesUploadMenuOutside();
   if (state.filesUploadMenuOpen) {
@@ -123,9 +128,15 @@ export function bind(o: AppOrchestrator) {
         render();
         return;
       }
+      if (state.confirmDelete) {
+        state.confirmDelete = null;
+        render();
+        return;
+      }
       o.closeInfoModal();
       if (state.eventDtPicker) {
         state.eventDtPicker = null;
+        unbindDtPickerOutside(state);
         render();
         return;
       }

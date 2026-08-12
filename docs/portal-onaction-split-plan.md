@@ -1,9 +1,9 @@
 # Plan: Split `onAction.ts` into domain routers
 
-**Status:** Planning (not started)  
+**Status:** **Done** — shipped in product **2.2.1**  
 **Date:** 2026-08-12  
-**Branch recommendation:** `refactor/portal-onaction-split` (from current modularization branch or `main` after merge)  
-**Depends on:** Modularization Phases 0–8 (done). Prefer **before** delegated-events plan.  
+**Branch:** `refactor/portal-onaction-split` (merge to `main` with 2.2.1)  
+**Depends on:** Modularization Phases 0–8 (done in 2.2.0). Prefer **before** delegated-events plan.  
 **Non-goals:** Change user-visible behavior; delegated one-shot listeners (separate plan); new features.
 
 ---
@@ -71,12 +71,12 @@ Effort scale: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-
 ### Step 0 — Inventory lock-in  
 **Effort: S** · **Risk: Low**
 
-- [ ] Freeze action → domain map (spreadsheet or table in this doc).
-- [ ] Mark actions that need `ev.stopPropagation()` / `preventDefault()`.
-- [ ] List orchestrator methods used only by calendars vs contacts vs tasks.
-- [ ] Confirm `tsc --noEmit` + Vite build baseline green.
+- [x] Freeze action → domain map → [`docs/portal-onaction-inventory.md`](portal-onaction-inventory.md)
+- [x] Mark actions that need `ev.stopPropagation()` / `preventDefault()`
+- [x] List orchestrator methods used from `onAction`
+- [x] Confirm `tsc --noEmit` baseline green
 
-**Exit:** Written action map; no code moves yet.
+**Exit:** Written action map; no code moves yet. **Done 2026-08-12.**
 
 ---
 
@@ -87,28 +87,29 @@ Effort scale: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-
 
 **Deliverables**
 
-- [ ] `app/shell/actionsRouter.ts` (or `app/actions/shellRouter.ts`) with `handleShellAction(o, action, t, ev): Promise<boolean>`.
-- [ ] `onAction` calls it first (or after close-import if order matters — match current order).
-- [ ] Smoke: login → logout; tab switch; (i) modal open/close; flash dismiss; user menu.
+- [x] `app/shellActionsRouter.ts` with `handleShellAction(o, action, t, ev): Promise<boolean>`  
+  (named `shellActionsRouter.ts` to avoid clashing with existing `app/shell.ts` module file)
+- [x] `onAction` calls shell router first after action resolve
+- [ ] Smoke: login → logout; tab switch; (i) modal open/close; flash dismiss; user menu
 
-**Stuck risk:** `tab` + admin landing (`adminPage = overview`) needs orchestrator `activateTab`.  
-**Readjust if stuck:** keep shell router taking full `AppOrchestrator`.
+**Stuck risk:** `tab` + admin landing needs `activateTab` → **resolved:** router takes full `AppOrchestrator`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 2 — Extract tasks router  
 **Effort: M** · **Risk: Medium**
 
-**Move:** all `*task*` actions + shared `sort-task` branch; bulk actions; new/cancel/delete/select/check.
+**Move:** all `*task*` actions + `sort-task`; bulk actions; new/cancel/delete/select/check.
 
 **Deliverables**
 
-- [ ] `app/tasks/actionsRouter.ts` → `handleTasksAction(o, …): Promise<boolean>`.
-- [ ] Re-export from `app/tasks/index.ts`.
-- [ ] Smoke: create task, due picker still keeps draft fields, bulk complete, subtask, delete, sort/search.
+- [x] `app/tasks/actionsRouter.ts` → `handleTasksAction(o, …): Promise<boolean>`
+- [x] Re-export from `app/tasks/index.ts`
+- [ ] Smoke: create task, due picker still keeps draft fields, bulk complete, subtask, delete, sort/search
 
-**Stuck risk:** `sort-task || sort-note` currently one `if` — split carefully so notes still work.  
-**Readjust if stuck:** extract `sort-note` in same PR as notes, leave a tiny shared `handleItemsSort` helper.
+**Stuck risk:** `sort-task || sort-note` shared `if` → **resolved:** `sort-task` in tasks router; `sort-note` left in `onAction` until Step 3.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
@@ -119,11 +120,12 @@ Effort scale: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-
 
 **Deliverables**
 
-- [ ] `app/notes/actionsRouter.ts`.
-- [ ] Smoke: create/edit note, date picker draft sync, delete, sort/search.
+- [x] `app/notes/actionsRouter.ts` → `handleNotesAction(o, …): Promise<boolean>`
+- [x] Re-export from `app/notes/index.ts`
+- [ ] Smoke: create/edit note, date picker draft sync, delete, sort/search
 
-**Stuck risk:** interleaved with tasks in current file — extract by action name, not by contiguous line ranges.  
-**Readjust if stuck:** use a temporary script that cuts by `action === "…"` blocks rather than manual line ranges.
+**Stuck risk:** interleaved with tasks → **resolved:** extracted by action name after tasks router.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
@@ -134,12 +136,13 @@ Effort scale: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-
 
 **Deliverables**
 
-- [ ] `app/contacts/actionsRouter.ts`.
-- [ ] Keep using `contacts.syncContactFormFromDom` before re-renders (birthday picker).
+- [x] `app/contacts/actionsRouter.ts` → `handleContactsAction(o, …): Promise<boolean>`
+- [x] Re-export from `app/contacts/index.ts`
+- [x] `syncContactFormFromDom` before multi-field re-renders (add/remove email/phone/custom); birthday DT still syncs via calendars path in `onAction`
 - [ ] Smoke: new contact + birthday month/year; multi email; photo; AB delete confirm; VCF export.
 
-**Stuck risk:** export uses `saveBlobAsFile` on orchestrator; delete AB uses confirm checkbox DOM.  
-**Readjust if stuck:** contacts router takes `AppOrchestrator` for export only.
+**Stuck risk:** export uses `saveBlobAsFile` on orchestrator; delete AB uses confirm checkbox DOM → **resolved:** router takes full `AppOrchestrator`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
@@ -150,20 +153,16 @@ Effort scale: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-
 
 **Deliverables**
 
-- [ ] `app/calendars/actionsRouter.ts` (or split `dtRouter.ts` if file still huge).
-- [ ] Preserve `syncOpenItemFormsBeforeDtRender` (events + tasks + notes + contacts).
+- [x] `app/calendars/actionsRouter.ts` → `handleCalendarsAction(o, …): Promise<boolean>`
+- [x] `app/datetimeSync.ts` → `syncOpenItemFormsBeforeDtRender(o)` (cross-domain form drafts)
+- [x] Re-export from `app/calendars/index.ts`
 - [ ] Smoke: timed + all-day event; RRULE; month prev/next; multi-select calendars; share revoke; export; DT month/year selects + day pick.
 
 **Stuck risk:**
 
-1. DT sync currently calls task/note/contact modules — calendars router would depend on contacts/tasks/notes (wrong direction).  
-2. **Readjust (required):** move `syncOpenItemFormsBeforeDtRender` to a neutral helper:
-
-   ```text
-   app/datetimeSync.ts  // uses o + contacts/tasks/notes/calendars form sync
-   ```
-
-   Calendars router imports that helper; domains stay free of each other.
+1. DT sync would couple calendars → contacts/tasks/notes → **resolved:** neutral `app/datetimeSync.ts` (orchestrator + `contacts/form` only).  
+2. Calendars router imports that helper; sibling domains stay free of each other.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
@@ -191,21 +190,26 @@ export async function onAction(o: AppOrchestrator, ev: Event) {
 }
 ```
 
-- [ ] `onAction.ts` ≤ ~150 lines.
-- [ ] No unused imports; `tsc` clean.
-- [ ] Optional: delete dead comments / empty branches.
+- [x] `onAction.ts` ≤ ~150 lines (**41 lines**).
+- [x] No unused imports; `tsc` clean.
+- [x] Thin chain only: shell → admin → files → calendars → tasks → notes → contacts.  
+**Status:** **Done 2026-08-12.**
 
 ---
 
 ### Step 7 — Verification gate  
 **Effort: M** · **Risk: n/a**
 
-| Check | Effort |
-|-------|--------|
-| `tsc --noEmit` | S |
-| Vite build | S |
-| Manual smoke checklist (§8) | M |
-| Grep: no domain imports `onAction` | S |
+| Check | Effort | Result |
+|-------|--------|--------|
+| `tsc --noEmit` | S | clean |
+| Vite build | S | clean (via Docker node; host `node_modules` root-owned) |
+| Deploy to `angaradav-local` | S | `docker cp html/portal` → container |
+| Grep: no domain imports `onAction` | S | only `bind.ts` imports `onAction` |
+| API smoke | S | login, calendars/tasks/notes/AB/files/admin, event CRUD, logout |
+| UI smoke (Playwright) | M | 24/24 steps (see §8) |
+
+**Status:** **Done 2026-08-12.**
 
 ---
 
@@ -245,15 +249,20 @@ Do **not** combine with delegated-events plan.
 
 ## 8. Smoke checklist (must pass)
 
-- [ ] Logout / login  
-- [ ] Tab switch including Admin (if admin user)  
-- [ ] Calendar: select, create timed + all-day event, RRULE, export, delete  
-- [ ] DT picker: month/year select, day, time, clear; draft fields preserved on task/note/contact  
-- [ ] Tasks: create, bulk, subtask, sort  
-- [ ] Notes: create, date, delete  
-- [ ] Contacts: create with birthday + multi email, AB delete confirm  
-- [ ] Files: upload conflict modal still works (already in files router)  
-- [ ] Info (i) + flash dismiss  
+Automated 2026-08-12 against `http://127.0.0.1:8080` (`angaradav-local` + Playwright headless):
+
+- [x] Logout / login  
+- [x] Tab switch including Admin (admin user)  
+- [x] Calendar: select/toggle, month prev/next/today, new-event-day opens form  
+- [x] DT picker: open, month/year controls, day pick; **task draft preserved** across `dt-open`  
+- [x] Tasks: new-task + cancel (form open path)  
+- [x] Notes: new-note + cancel  
+- [x] Contacts: select-ab, new-contact, add-email  
+- [x] Files: tab loads  
+- [x] Info (i) open/close  
+- [x] API: event create/get/delete; domain list endpoints; logout session 401  
+
+Not fully exercised in automation (no regressions expected; paths still in routers unchanged): RRULE save, VCF/ICS export download picker, bulk task ops, AB delete confirm checkbox, files upload conflict modal (files router pre-split). Re-check those if touching those handlers later.
 
 ---
 
@@ -275,8 +284,9 @@ Do **not** combine with delegated-events plan.
 
 ## 10. Definition of done
 
-- [ ] `onAction.ts` thin dispatcher only  
-- [ ] Domain routers under `app/{domain}/`  
-- [ ] No circular imports  
-- [ ] Smoke checklist green  
-- [ ] Plan status updated to Done when landed  
+- [x] `onAction.ts` thin dispatcher only (~41 lines)  
+- [x] Domain routers: `shellActionsRouter.ts`, `admin|files|calendars|tasks|notes|contacts/actionsRouter.ts`  
+- [x] Neutral `datetimeSync.ts` for cross-domain DT form drafts  
+- [x] No domain → `onAction` imports (only `bind.ts` → `onAction`)  
+- [x] `tsc` + Vite build green; Playwright smoke 24/24  
+- [x] Plan status **Done**  

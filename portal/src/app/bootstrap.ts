@@ -100,30 +100,37 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void> {
   }
   try {
     const me = await api.me();
-    state.user = me.user;
-    applyPortalUi(state, me.ui);
-    if (typeof me.version === "string" && me.version.trim() !== "") {
-      state.appVersion = me.version.trim();
-    }
-    log.event("bootstrap.session", { username: state.user?.username ?? null });
-    bumpSessionIdleTimer(state, (m) => deps.handleSessionExpired(m));
-    if (userIsAdmin(state)) {
-      try {
-        await deps.loadAdminCapabilities();
-      } catch (e) {
-        log.warn("admin.capabilities bootstrap", e instanceof Error ? e.message : e);
+    // Anonymous bootstrap returns HTTP 200 with user:null (no console 401).
+    if (!me.user) {
+      deps.clearPortalSessionState();
+      applyPortalUi(state, me.ui);
+      if (typeof me.version === "string" && me.version.trim() !== "") {
+        state.appVersion = me.version.trim();
       }
+      log.event("bootstrap.anonymous");
+    } else {
+      state.user = me.user;
+      applyPortalUi(state, me.ui);
+      if (typeof me.version === "string" && me.version.trim() !== "") {
+        state.appVersion = me.version.trim();
+      }
+      log.event("bootstrap.session", { username: state.user?.username ?? null });
+      bumpSessionIdleTimer(state, (m) => deps.handleSessionExpired(m));
+      if (userIsAdmin(state)) {
+        try {
+          await deps.loadAdminCapabilities();
+        } catch (e) {
+          log.warn("admin.capabilities bootstrap", e instanceof Error ? e.message : e);
+        }
+      }
+      deps.normalizeActiveTab();
+      deps.persistTab(state.activeTab, state.adminPage);
+      await deps.loadHome();
+      await loadAdminForActivePage(deps);
     }
-    deps.normalizeActiveTab();
-    deps.persistTab(state.activeTab, state.adminPage);
-    await deps.loadHome();
-    await loadAdminForActivePage(deps);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
-      // Anonymous visit or expired cookie on first paint — never keep a stale shell.
-      // Do not flash “session timed out” here: the user never had an active SPA
-      // session this page load (browser reopen, restored cookie, new tab). That
-      // message is only for mid-session expiry (see handleSessionExpired).
+      // Legacy servers may still 401; treat as anonymous (no session-timeout flash).
       deps.clearPortalSessionState();
       log.event("bootstrap.anonymous");
     } else {

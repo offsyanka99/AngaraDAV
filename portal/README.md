@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.2.0`
+**Version:** `2.2.1`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -14,6 +14,7 @@ split into `src/app/` per the plan in
 | Module | Role |
 |--------|------|
 | `app/constants.ts` | Storage keys, version fallback, docs URL |
+| `app/onAction.ts` | Thin data-action chain → domain `*actionsRouter.ts` |
 | `app/types.ts` | `TabId`, `AdminPageId`, `Flash` |
 | `app/sectionInfo.ts` | `(i)` help copy + title row |
 | `app/format.ts` | Display formatters, sort headers |

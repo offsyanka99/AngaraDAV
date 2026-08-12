@@ -313,7 +313,29 @@ function planFileUploads(destBase: string, fileItems: FilesUploadItem[]): Planne
 }
 
 /**
- * List which planned uploads would overwrite an existing file (or clash with a folder name).
+ * Drop duplicate destinations within the same batch (keep first).
+ * Flat drops of two folders can yield the same basename at the same parent.
+ */
+function dedupePlannedByDest(planned: PlannedUpload[]): PlannedUpload[] {
+  const seen = new Set<string>();
+  const out: PlannedUpload[] = [];
+  for (const p of planned) {
+    const key = uploadDestKey(p.parentPath, p.fileName);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * List which planned uploads would overwrite an existing **file**
+ * (or clash with an existing folder name at the same path).
+ *
+ * Important: only names in the **same parent folder** count. Nested files under
+ * `Folder/` must list `Folder/`, not the current view root — otherwise every
+ * basename that also exists at root is a false conflict and "Skip existing"
+ * drops the whole batch.
  */
 export async function findUploadConflicts(
   _destBase: string,
@@ -328,29 +350,27 @@ export async function findUploadConflicts(
   }
   const conflicts: PlannedUpload[] = [];
   for (const [parentPath, group] of byParent) {
-    let names = new Set<string>();
+    /** name → "file" | "dir" in this parent only */
+    let byName = new Map<string, "file" | "dir">();
     try {
-      // Current folder may already be loaded; still re-list for accuracy after navigation
       const res = await api.filesList(parentPath);
-      names = new Set(
-        res.entries
-          .filter((e) => e.type === "file" || e.type === "dir")
-          .map((e) => e.name),
-      );
+      byName = new Map();
+      for (const e of res.entries) {
+        if (e.type === "file" || e.type === "dir") {
+          byName.set(e.name, e.type);
+        }
+      }
     } catch {
       // Parent may not exist yet (nested folder upload) → no conflicts there
-      names = new Set();
+      byName = new Map();
     }
-    // Same batch can also collide with itself (two sources same relative name)
-    const seenInBatch = new Set<string>();
     for (const p of group) {
-      if (names.has(p.fileName) || seenInBatch.has(p.fileName)) {
+      // Server conflict only when that name already exists in this parent folder
+      if (byName.has(p.fileName)) {
         conflicts.push(p);
       }
-      seenInBatch.add(p.fileName);
     }
   }
-  // Prefer stable order for the confirm dialog
   conflicts.sort((a, b) => a.displayName.localeCompare(b.displayName));
   return conflicts;
 }
@@ -360,14 +380,18 @@ type PendingUploadConflict = {
   planned: PlannedUpload[];
   emptyDirs: FilesUploadItem[];
   destBase: string;
-  conflicts: PlannedUpload[];
+  /** Dest keys that already exist (same as state.filesUploadConflict.conflictKeys). */
+  conflictKeys: string[];
 };
 
-let pendingUploadConflict: PendingUploadConflict | null = null;
+/** Keyed by AppState so re-renders / HMR never orphan the File batch. */
+const pendingByState = new WeakMap<object, PendingUploadConflict>();
 
 function clearPendingUploadConflict(host?: FilesHost): void {
-  pendingUploadConflict = null;
-  if (host) host.state.filesUploadConflict = null;
+  if (host) {
+    pendingByState.delete(host.state);
+    host.state.filesUploadConflict = null;
+  }
 }
 
 /**
@@ -377,12 +401,8 @@ export function resolveFilesUploadConflict(
   host: FilesHost,
   choice: "overwrite" | "skip" | "cancel",
 ): void {
-  const pending = pendingUploadConflict;
-  if (!pending) {
-    host.state.filesUploadConflict = null;
-    host.render();
-    return;
-  }
+  const pending = pendingByState.get(host.state);
+  const conflictMeta = host.state.filesUploadConflict;
 
   if (choice === "cancel") {
     clearPendingUploadConflict(host);
@@ -391,22 +411,51 @@ export function resolveFilesUploadConflict(
     return;
   }
 
+  if (!pending) {
+    // Modal open but File batch lost (should not happen) — close cleanly
+    host.state.filesUploadConflict = null;
+    host.setFlash("error", "Upload session expired — drop or choose the files again");
+    host.render();
+    return;
+  }
+
+  // Prefer keys stored on state (survives identity issues); fall back to pending
+  const conflictKeys = new Set(
+    (conflictMeta?.conflictKeys?.length ? conflictMeta.conflictKeys : pending.conflictKeys) ?? [],
+  );
+
   let planned = pending.planned;
   let overwriteKeys = new Set<string>();
+  let skipped = 0;
+
   if (choice === "overwrite") {
-    overwriteKeys = new Set(
-      pending.conflicts.map((c) => uploadDestKey(c.parentPath, c.fileName)),
-    );
+    overwriteKeys = new Set(conflictKeys);
   } else {
-    const skipKeys = new Set(
-      pending.conflicts.map((c) => uploadDestKey(c.parentPath, c.fileName)),
-    );
-    planned = pending.planned.filter(
-      (p) => !skipKeys.has(uploadDestKey(p.parentPath, p.fileName)),
-    );
+    // Skip ONLY destinations that already exist — keep every other planned file.
+    const kept: PlannedUpload[] = [];
+    for (const p of pending.planned) {
+      const key = uploadDestKey(p.parentPath, p.fileName);
+      if (conflictKeys.has(key)) {
+        skipped += 1;
+      } else {
+        kept.push(p);
+      }
+    }
+    planned = kept;
+    log.event("files.upload.skip_existing", {
+      skipped,
+      remaining: planned.length,
+      total: pending.planned.length,
+      conflictKeys: conflictKeys.size,
+    });
     if (planned.length === 0 && pending.emptyDirs.length === 0) {
       clearPendingUploadConflict(host);
-      host.setFlash("info", "Upload cancelled — all selected files already exist");
+      host.setFlash(
+        "info",
+        skipped === 1
+          ? "Nothing to upload — the selected file already exists"
+          : `Nothing to upload — all ${skipped} selected files already exist`,
+      );
       host.render();
       return;
     }
@@ -428,7 +477,18 @@ export async function startFilesUpload(host: FilesHost, items: FilesUploadItem[]
   const fileItems = items.filter((it) => it.file && !it.isEmptyDir);
   const emptyDirs = items.filter((it) => it.isEmptyDir && it.relativePath);
   const destBase = host.state.filesPath;
-  const planned = planFileUploads(destBase, fileItems);
+  const planned = dedupePlannedByDest(planFileUploads(destBase, fileItems));
+
+  log.event("files.upload.plan", {
+    destBase: destBase || "/",
+    files: planned.length,
+    emptyDirs: emptyDirs.length,
+    sample: planned.slice(0, 5).map((p) => ({
+      display: p.displayName,
+      parent: p.parentPath || "/",
+      name: p.fileName,
+    })),
+  });
 
   // Verify destinations before starting progress / network work.
   // Clear banners first so a leftover success/error flash does not appear
@@ -440,17 +500,24 @@ export async function startFilesUpload(host: FilesHost, items: FilesUploadItem[]
     try {
       const conflicts = await findUploadConflicts(destBase, planned);
       if (conflicts.length > 0) {
-        pendingUploadConflict = {
+        const conflictKeys = conflicts.map((c) => uploadDestKey(c.parentPath, c.fileName));
+        pendingByState.set(host.state, {
           planned,
           emptyDirs,
           destBase,
-          conflicts,
-        };
+          conflictKeys,
+        });
         host.state.filesUploadConflict = {
           names: conflicts.map((c) => c.displayName),
           totalFiles: planned.length,
           conflictCount: conflicts.length,
+          conflictKeys,
         };
+        log.event("files.upload.conflicts", {
+          total: planned.length,
+          conflicts: conflicts.length,
+          names: conflicts.slice(0, 12).map((c) => c.displayName),
+        });
         host.state.busy = false;
         host.render();
         return;

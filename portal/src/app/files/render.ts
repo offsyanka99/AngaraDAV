@@ -296,10 +296,17 @@ export function renderFilesTab(host: FilesHost): string {
     ? (() => {
         const c = host.state.filesUploadConflict;
         const n = c.conflictCount;
+        const rest = Math.max(0, c.totalFiles - n);
         const head =
           n === 1
             ? "1 file already exists in the destination."
             : `${n} of ${c.totalFiles} files already exist in the destination.`;
+        const restHint =
+          rest > 0
+            ? rest === 1
+              ? " Skip existing keeps the other 1 new file."
+              : ` Skip existing keeps the other ${rest} new files.`
+            : " Skip existing cancels the upload (nothing new to send).";
         const list = c.names
           .slice(0, 12)
           .map((name) => `<li><span class="mono">${esc(name)}</span></li>`)
@@ -315,13 +322,13 @@ export function renderFilesTab(host: FilesHost): string {
           closeAction: "files-upload-conflict-cancel",
           size: "sm",
           body: `
-              <p style="margin:0 0 0.75rem">${esc(head)}</p>
+              <p style="margin:0 0 0.75rem">${esc(head)}${esc(restHint)}</p>
               <ul class="files-delete-list muted small" style="margin:0 0 0.85rem;max-height:12rem;overflow:auto">
                 ${list}
                 ${more}
               </ul>
               <p class="muted small" style="margin:0">
-                Choose whether to replace the existing files, skip them, or cancel the upload.
+                Replace the existing files, skip only those listed above, or cancel the whole upload.
               </p>`,
           footer: [
             { label: "Cancel", action: "files-upload-conflict-cancel", variant: "ghost" },

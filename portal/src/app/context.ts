@@ -30,6 +30,7 @@ import {
 } from "../api";
 import type { FlashType } from "../ui";
 import { APP_VERSION_FALLBACK } from "./constants";
+import type { ConfirmDeleteState } from "./confirmDelete";
 import type { AdminPageId, Flash, TabId } from "./types";
 
 /** Full-screen import progress dialog state. */
@@ -72,6 +73,11 @@ export type FilesUploadConflict = {
   names: string[];
   totalFiles: number;
   conflictCount: number;
+  /**
+   * Dest keys (`parentPath\\0fileName`) for files that already exist on the server.
+   * Skip keeps planned items whose key is NOT in this list.
+   */
+  conflictKeys: string[];
 };
 
 export type InstallGate = {
@@ -225,6 +231,10 @@ export type AppState = {
   filesMkdirOpen: boolean;
   checkedFilePaths: string[];
   filesUploadConflict: FilesUploadConflict | null;
+  /** Themed delete confirm (event/task/note/contact/bulk/revoke). */
+  confirmDelete: ConfirmDeleteState | null;
+  /** Document click handler while datetime popover is open. */
+  dtPickerDocClick: ((ev: MouseEvent) => void) | null;
 };
 
 export type AppContext = {
@@ -371,6 +381,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesMkdirOpen: false,
     checkedFilePaths: [],
     filesUploadConflict: null,
+    confirmDelete: null,
+    dtPickerDocClick: null,
   };
 }
 
@@ -466,6 +478,8 @@ export const APP_STATE_KEYS = [
   "filesLoading",
   "filesMkdirOpen",
   "filesUploadConflict",
+  "confirmDelete",
+  "dtPickerDocClick",
   "filesStatus",
   "filesPath",
   "checkedTaskKeys",

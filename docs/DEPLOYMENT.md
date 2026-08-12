@@ -9,7 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
-| `ghcr.io/offsyanka99/angaradav:2.2.0` | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:2.2.1` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -767,6 +767,14 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.2.1
+
+- **Product version** `2.2.1`.
+- **Portal — `onAction` split:** thin dispatcher (`portal/src/app/onAction.ts`) chains domain routers (`shellActionsRouter`, `calendars` / `tasks` / `notes` / `contacts` / files / admin `actionsRouter`); cross-domain DT form drafts via `datetimeSync.ts`. See [portal-onaction-split-plan.md](portal-onaction-split-plan.md).
+- **Calendar share:** multi-user share no longer overwrites when principal emails collide; share href is unique per username (`mailto:{user}@users.local`). Share UI remains one user + access per Share click; table lists all sharees.
+- **Files upload:** mixed drag-and-drop merges folder walks with root-level `FileList` entries; **Skip existing** only skips true server conflicts (not the whole batch).
+- **UX:** themed delete confirm modal (events/tasks/notes/contacts/bulk/revoke); datetime picker closes on outside click; anonymous `GET /api/me` returns **200** with `user: null` (no console 401 on login screen); admin System settings `portal_admin_users` uses `autocomplete="off"`.
 
 ### 2.2.0
 

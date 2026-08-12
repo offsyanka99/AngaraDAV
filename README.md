@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.2.0`
+**Version:** `2.2.1`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
@@ -68,8 +68,9 @@ Legacy release history
 | `2.1.1` | Files: single **Upload** (files, folders, or mix via drop/browse; nested trees), **upload progress** dialog, folder item-count status bar; fix files list scroll jump on multi-select; cold login after session timeout no longer shows timeout banner |
 | `2.1.2` | Files: **Upload ▾** menu (Files… / Folder…), drop files/folders/mix on the panel (no upload modal), File System Access API with Safari/Firefox classic-input fallbacks; nested trees + progress unchanged |
 | `2.2.0` | Portal SPA modularization (`portal/src/app/*` domains + thin orchestrator); same user-visible Files/Admin/CalDAV/CardDAV behavior as 2.1.2 |
+| `2.2.1` | Portal `onAction` domain routers; multi-user calendar share href fix; Files drop merge + Skip existing; themed delete confirms; DT picker outside-click; anonymous `/api/me` 200 |
 
-Image tags: `latest`, `2.2.0`, `sha-…`.
+Image tags: `latest`, `2.2.1`, `sha-…`.
 
 Quick start (Docker)
 --------------------
