@@ -1,14 +1,15 @@
 /**
  * Mount-time portal event registration (delegated-events plan).
  *
- * Step 1: Escape on document.
- * Step 2: click → onAction (no per-element re-bind).
- * Later: submit / change / input / row keydown still post-render bind until enabled.
+ * Step 1: Escape · Step 2: click · Step 3: submit · Step 4: change + input
+ * Still post-render: row keydown, files drop, avatar error, outside menus.
  */
 import { log } from "../log";
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
 import * as admin from "./admin";
+import * as calendars from "./calendars";
+import * as contacts from "./contacts";
 import * as files from "./files";
 import { unbindDtPickerOutside } from "./shell";
 
@@ -141,25 +142,235 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
 }
 
 /**
- * Step 1 scaffold — real change map in Step 4.
+ * Step 4: delegated change (DT, deletes, imports, photos, cal selects, color, holidays…).
  */
 function onRootChange(o: AppOrchestrator, ev: Event): void {
   const el = ev.target as HTMLElement | null;
   if (!el || !o.root.contains(el)) return;
-  const action = el.closest<HTMLElement>("[data-action]")?.dataset.action;
-  if (action) log.debug("portalEvents.change.scaffold", { action });
-  // Step 4: DT selects, delete confirms, admin-db-backend, task/note cal, etc.
+  const { state, root, render } = o;
+
+  // --- data-action controls ---
+  const actionEl = el.closest<HTMLElement>("[data-action]");
+  const action = actionEl?.dataset.action ?? "";
+
+  if (action === "dt-set-month" || action === "dt-set-year") {
+    ev.stopPropagation();
+    log.debug("portalEvents.change", { action });
+    void onAction(o, ev);
+    return;
+  }
+
+  if (action === "admin-db-backend" && el instanceof HTMLSelectElement) {
+    state.adminDbFormBackend = el.value === "pgsql" ? "pgsql" : "sqlite";
+    render();
+    return;
+  }
+
+  if (action === "files-upload-pick-files" && el instanceof HTMLInputElement) {
+    files.onFilesUploadInput(o.filesHost, el, false);
+    return;
+  }
+  if (action === "files-upload-pick-folder" && el instanceof HTMLInputElement) {
+    files.onFilesUploadInput(o.filesHost, el, true);
+    return;
+  }
+
+  if (action === "import-cal" && el instanceof HTMLInputElement) {
+    void calendars.onImportFile(o.calendarsHost, el);
+    return;
+  }
+  if (action === "import-create-cal" && el instanceof HTMLInputElement) {
+    void calendars.onImportCreateCal(o.calendarsHost, el);
+    return;
+  }
+  if (action === "import-ab" && el instanceof HTMLInputElement) {
+    void o.calendarsHost.onImportContacts(el);
+    return;
+  }
+  if (action === "contact-photo" && el instanceof HTMLInputElement) {
+    void contacts.onContactPhotoPicked(o.contactsHost, el);
+    return;
+  }
+
+  // Delete calendar / address book confirm checkboxes
+  if (el instanceof HTMLInputElement && el.id === "delete-cal-confirm") {
+    const delSubmit = root.querySelector<HTMLButtonElement>("#delete-cal-submit");
+    if (delSubmit) delSubmit.disabled = !el.checked || state.busy;
+    return;
+  }
+  if (el instanceof HTMLInputElement && el.id === "delete-ab-confirm") {
+    const delAbSubmit = root.querySelector<HTMLButtonElement>("#delete-ab-submit");
+    if (delAbSubmit) delAbSubmit.disabled = !el.checked || state.busy;
+    return;
+  }
+
+  // Event repeat selects
+  if (
+    el instanceof HTMLSelectElement &&
+    (el.name === "repeatFreq" || el.name === "repeatEndMode")
+  ) {
+    const eventForm = el.closest<HTMLFormElement>('[data-form="edit-event"]');
+    if (eventForm && state.editingEvent) {
+      const fd = new FormData(eventForm);
+      state.editingEvent = {
+        ...state.editingEvent,
+        repeat: calendars.readRepeatFromForm(fd),
+        hasRrule: !!String(fd.get("repeatFreq") ?? "").trim(),
+      };
+      render();
+    }
+    return;
+  }
+
+  // Task / note calendar select while creating
+  if (el instanceof HTMLSelectElement && el.name === "instanceId") {
+    const taskForm = el.closest<HTMLFormElement>('[data-form="task"]');
+    if (taskForm && state.creatingTask && state.editingTask) {
+      const id = Number(el.value);
+      if (!Number.isFinite(id) || id <= 0) return;
+      o.syncEditingTaskFromForm(taskForm);
+      const parentUid = state.editingTask.parentUid;
+      state.editingTask = {
+        ...state.editingTask,
+        instanceId: id,
+        parentUid:
+          parentUid &&
+          state.tasks.some((x) => x.uid === parentUid && x.instanceId === id)
+            ? parentUid
+            : null,
+      };
+      render();
+      return;
+    }
+    const noteForm = el.closest<HTMLFormElement>('[data-form="note"]');
+    if (noteForm && state.creatingNote && state.editingNote) {
+      const id = Number(el.value);
+      if (!Number.isFinite(id) || id <= 0) return;
+      o.syncEditingNoteFromForm(noteForm);
+      state.editingNote = { ...state.editingNote, instanceId: id };
+      render();
+      return;
+    }
+  }
+
+  // Create-cal holidays checkbox
+  if (
+    el instanceof HTMLInputElement &&
+    el.name === "holidays" &&
+    el.closest('[data-form="create-cal"]')
+  ) {
+    calendars.syncHolidaysToggle(o.calendarsHost);
+    return;
+  }
+
+  // Color hex text field
+  if (el instanceof HTMLInputElement && el.name === "color") {
+    const form = el.closest("form");
+    const picker = form?.querySelector<HTMLInputElement>('input[name="color_picker"]');
+    if (picker) {
+      let v = el.value.trim();
+      if (v && !v.startsWith("#")) v = `#${v}`;
+      if (/^#[0-9A-Fa-f]{6}/.test(v)) {
+        picker.value = v.slice(0, 7);
+        el.value = v.toUpperCase();
+      }
+    }
+    return;
+  }
 }
 
 /**
- * Step 1 scaffold — real input map in Step 4.
+ * Step 4: delegated input (search debounce, admin live fields, color picker).
  */
 function onRootInput(o: AppOrchestrator, ev: Event): void {
   const el = ev.target as HTMLElement | null;
   if (!el || !o.root.contains(el)) return;
-  const action = el.closest<HTMLElement>("[data-action]")?.dataset.action;
-  if (action) log.debug("portalEvents.input.scaffold", { action });
-  // Step 4: search debounce, admin confirm/reset fields
+  const { state, root, render, setFlash } = o;
+
+  // Color picker → hex text
+  if (el instanceof HTMLInputElement && el.name === "color_picker") {
+    const form = el.closest("form");
+    const text = form?.querySelector<HTMLInputElement>('input[name="color"]');
+    if (text) text.value = el.value.toUpperCase();
+    return;
+  }
+
+  const action = el.closest<HTMLElement>("[data-action]")?.dataset.action ?? "";
+
+  if (action === "contact-search" && el instanceof HTMLInputElement) {
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    const value = el.value;
+    state.searchTimer = setTimeout(() => {
+      state.contactSearch = value;
+      void (async () => {
+        try {
+          if (state.selectedAbId !== null) await o.loadContacts(state.selectedAbId);
+          render();
+        } catch (e) {
+          setFlash("error", e instanceof Error ? e.message : "Search failed");
+          render();
+        }
+      })();
+    }, 250);
+    return;
+  }
+
+  if (action === "task-search" && el instanceof HTMLInputElement) {
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    const value = el.value;
+    state.searchTimer = setTimeout(() => {
+      state.taskSearch = value;
+      void (async () => {
+        try {
+          await o.loadTasks();
+          render();
+        } catch (e) {
+          setFlash("error", e instanceof Error ? e.message : "Search failed");
+          render();
+        }
+      })();
+    }, 250);
+    return;
+  }
+
+  if (action === "note-search" && el instanceof HTMLInputElement) {
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    const value = el.value;
+    state.searchTimer = setTimeout(() => {
+      state.noteSearch = value;
+      void (async () => {
+        try {
+          await o.loadNotes();
+          render();
+        } catch (e) {
+          setFlash("error", e instanceof Error ? e.message : "Search failed");
+          render();
+        }
+      })();
+    }, 250);
+    return;
+  }
+
+  if (action === "admin-db-confirm-input" && el instanceof HTMLInputElement) {
+    state.adminDbConfirmText = el.value;
+    const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-db-confirm-save"]');
+    if (btn) {
+      btn.disabled = state.busy || state.adminDbConfirmText.trim() !== "CONFIRM";
+    }
+    return;
+  }
+
+  if (action === "admin-reset-password" && el instanceof HTMLInputElement) {
+    state.adminResetPassword = el.value;
+    const btn = root.querySelector<HTMLButtonElement>('[data-action="admin-reset-confirm"]');
+    if (btn) {
+      btn.disabled =
+        state.busy ||
+        !state.adminResetConfirmChecked ||
+        state.adminResetPassword.trim() === "";
+    }
+    return;
+  }
 }
 
 /**

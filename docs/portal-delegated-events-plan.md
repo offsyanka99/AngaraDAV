@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–3 done; 4–8 pending)  
+**Status:** In progress (Steps 0–4 done; 5–8 pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -160,19 +160,13 @@ Map `data-form` → handler (mirror current bind):
 ### Step 4 — Delegate change + input  
 **Effort: M–L** · **Risk: High**
 
-- [ ] `change` on root:
-  - `data-action` present → `onAction` (DT month/year, admin-db-backend, etc.)
-  - `#delete-cal-confirm` / `#delete-ab-confirm` → enable submit buttons
-  - `select[name=instanceId]` inside task/note form → draft sync (today’s bind logic)
-  - admin confirm text / reset password live enable
-- [ ] `input` on root:
-  - `data-action="contact-search" | task-search | note-search"` → debounced load (reuse `state.searchTimer`)
-  - admin-db-confirm-input, admin-reset-password if currently input-bound
-- [ ] Remove matching per-element listeners from `bind`.
+- [x] `change` on root: DT month/year → onAction; admin-db-backend; delete confirms; task/note instanceId; event repeat; holidays; color text; import/photo/files upload inputs
+- [x] `input` on root: contact/task/note search (250ms debounce); admin-db-confirm; admin-reset-password; color_picker
+- [x] Remove matching listeners from `bind.ts` / files upload inputs; holidays change via `syncHolidaysToggle`
+- [ ] Smoke: DT month/year; searches; create-cal holidays; task calendar switch on create; files upload browse; contact photo
 
-**Stuck risk:** search debounce + rapid re-render clearing input focus — already an issue; do not worsen (don’t re-render on every key if avoidable).  
-**Stuck risk:** DT month select `click stopPropagation` — keep on change path only.  
-**Readjust:** if admin live fields are too many edge cases, keep `admin.bindAdminDom` for one more phase.
+**Stuck risk:** search debounce + re-render focus — same as before.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 

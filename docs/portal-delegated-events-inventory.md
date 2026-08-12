@@ -279,6 +279,8 @@ Step 0 is documentation-only — **no runtime change**.
 
 **Step 2 (done):** root `click` → `onAction`; per-element `[data-action]` click re-bind removed.
 
-**Step 3 (done):** root `submit` → 19 `data-form` handlers; form submit re-binds removed from bind/files/admin.
+**Step 3 (done):** root `submit` → 19 `data-form` handlers.
 
-**Next:** Step 4 — root `change` + `input` (DT, search, confirms, cal selects, color pair).
+**Step 4 (done):** root `change` + `input` for DT, search, confirms, imports, photo, files pick, color, holidays, task/note cal select.
+
+**Next:** Step 5 — row keydown + Escape already at mount; enable Enter/Space on rows in events.ts.

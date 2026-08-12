@@ -14,29 +14,29 @@ export function fileToBase64(_host: ContactsHost, file: File): Promise<string> {
   });
 }
 
-export function bindContactPhotoInput(host: ContactsHost) {
-  const input = host.root.querySelector<HTMLInputElement>('input[data-action="contact-photo"]');
-  if (!input) return;
-  input.addEventListener("change", () => {
-    void (async () => {
-      const file = input.files?.[0];
-      input.value = "";
-      if (!file) return;
-      if (file.size > 2.5 * 1024 * 1024) {
-        host.setFlash("error", "Photo is too large (max ~2 MB)");
-        host.render();
-        return;
-      }
-      try {
-        const b64 = await fileToBase64(host, file);
-        host.state.photoBase64Pending = b64;
-        host.state.photoPreview = `data:${file.type || "image/jpeg"};base64,${b64}`;
-        host.state.removePhotoPending = false;
-        host.render();
-      } catch (e) {
-        host.setFlash("error", e instanceof Error ? e.message : "Failed to read photo");
-        host.render();
-      }
-    })();
-  });
+/** Handle contact photo file pick (used by root change delegation Step 4). */
+export async function onContactPhotoPicked(host: ContactsHost, input: HTMLInputElement): Promise<void> {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (file.size > 2.5 * 1024 * 1024) {
+    host.setFlash("error", "Photo is too large (max ~2 MB)");
+    host.render();
+    return;
+  }
+  try {
+    const b64 = await fileToBase64(host, file);
+    host.state.photoBase64Pending = b64;
+    host.state.photoPreview = `data:${file.type || "image/jpeg"};base64,${b64}`;
+    host.state.removePhotoPending = false;
+    host.render();
+  } catch (e) {
+    host.setFlash("error", e instanceof Error ? e.message : "Failed to read photo");
+    host.render();
+  }
+}
+
+/** Post-render: no-op — contact-photo change is delegated (events.ts Step 4). */
+export function bindContactPhotoInput(_host: ContactsHost): void {
+  // contact-photo handled in onRootChange
 }

@@ -1,6 +1,6 @@
 /**
- * Files tab post-render DOM (upload inputs, panel drop).
- * Form submits are delegated on root (events.ts Step 3).
+ * Files tab post-render DOM: panel drop + indeterminate select-all.
+ * Form submits and upload file inputs are delegated on root (events.ts Steps 3–4).
  */
 import {
   dataTransferHasFiles,
@@ -8,7 +8,6 @@ import {
 } from "../../filesUploadPick";
 import type { FilesHost } from "./host";
 import {
-  onFilesUploadInput,
   startFilesUpload,
   unbindFilesUploadMenuOutside,
 } from "./upload";
@@ -16,24 +15,6 @@ import {
 export function bindFilesDom(host: FilesHost): void {
   const { root, state } = host;
 
-  root
-    .querySelectorAll<HTMLInputElement>(
-      'input[type="file"][data-action="files-upload-pick-files"]',
-    )
-    .forEach((input) => {
-      input.addEventListener("change", () => {
-        onFilesUploadInput(host, input, false);
-      });
-    });
-  root
-    .querySelectorAll<HTMLInputElement>(
-      'input[type="file"][data-action="files-upload-pick-folder"]',
-    )
-    .forEach((input) => {
-      input.addEventListener("change", () => {
-        onFilesUploadInput(host, input, true);
-      });
-    });
   // Drag-and-drop on the files panel: files, folders, or a mix
   const dropTarget = root.querySelector<HTMLElement>("[data-files-drop-target]");
   if (dropTarget && state.activeTab === "files" && !state.busy && !state.filesUploadProgress) {
