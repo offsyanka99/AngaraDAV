@@ -5,3 +5,4 @@ export { syncContactFormFromDom, contactBodyFromForm } from "./form";
 export { onImportContacts } from "./import";
 export { onSaveContact, onCreateAb, onEditAb } from "./actions";
 export { renderContactsHome } from "./home";
+export { handleContactsAction } from "./actionsRouter";

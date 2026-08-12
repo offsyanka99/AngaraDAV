@@ -106,7 +106,9 @@ export function renderAdminSettingsShell(host: AdminHost): string {
             Array.isArray(s.portal_admin_users)
               ? s.portal_admin_users.join(", ")
               : String(s.portal_admin_users || ""),
-          )}" placeholder="empty = DAV user admin" ${host.state.busy || s.writable === false ? "disabled" : ""} />
+          )}" placeholder="empty = DAV user admin"
+            autocomplete="off" spellcheck="false"
+            ${host.state.busy || s.writable === false ? "disabled" : ""} />
         </label>
 
         <h3 class="admin-subsection-title">WebDAV-Push</h3>

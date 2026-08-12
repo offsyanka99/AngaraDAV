@@ -455,7 +455,18 @@ class App {
         }
 
         if ($method === 'GET' && ($path === '/me' || $path === '')) {
-            $username = $this->auth->requireUser();
+            // Anonymous bootstrap is normal on first paint (login screen).
+            // Return 200 with user:null so browsers do not log a spurious 401.
+            $username = $this->auth->username();
+            if ($username === null) {
+                return [
+                    'user'      => null,
+                    'csrfToken' => null,
+                    'version'   => defined('BAIKAL_VERSION') ? BAIKAL_VERSION : null,
+                    'davPath'   => '/dav.php/',
+                    'ui'        => $this->portalUiSettings(),
+                ];
+            }
             $profile = $this->enrichProfile($this->auth->profile($username));
             $profile['csrfToken'] = $this->auth->csrfToken();
 

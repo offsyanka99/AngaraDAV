@@ -108,6 +108,7 @@ export function renderHome(o: AppOrchestrator): void {
       state.filesTransfer !== null ||
       state.filesMkdirOpen ||
       state.filesUploadConflict !== null ||
+      state.confirmDelete !== null ||
       state.adminUserCreateOpen ||
       state.adminUserEditOpen ||
       state.adminUserDeleteUsername !== null ||

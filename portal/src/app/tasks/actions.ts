@@ -48,13 +48,7 @@ export async function runBulkTaskAction(host: TasksHost, action:
   const items = selected.map((t) => ({ instanceId: t.instanceId, uri: t.uri }));
 
   if (action === "bulk-task-delete") {
-    if (
-      !confirm(
-        `Delete ${selected.length} task${selected.length === 1 ? "" : "s"}? CalDAV clients will sync the removal.`,
-      )
-    ) {
-      return;
-    }
+    // Confirmation is handled by the themed confirmDelete modal (shell router).
     host.state.busy = true;
     host.clearFlash();
     host.render();

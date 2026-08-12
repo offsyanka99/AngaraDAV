@@ -965,13 +965,14 @@ export const api = {
     }),
   me: async () => {
     const data = await request<{
-      user: PortalUser;
-      csrfToken?: string;
+      /** null when not signed in (anonymous bootstrap — HTTP 200, not 401). */
+      user: PortalUser | null;
+      csrfToken?: string | null;
       version: string | null;
       davPath: string;
       ui?: PortalUi;
     }>("/me");
-    setCsrfToken(data.csrfToken || data.user?.csrfToken);
+    setCsrfToken(data.csrfToken || data.user?.csrfToken || "");
     return data;
   },
   login: async (username: string, password: string) => {

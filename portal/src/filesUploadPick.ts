@@ -66,14 +66,15 @@ function isAbortError(e: unknown): boolean {
 /** Build upload items from a plain multi-file picker (no relative tree). */
 export function itemsFromFileList(
   list: FileList | File[],
-  preferRelative: boolean,
+  _preferRelative: boolean = true,
 ): FilesUploadItem[] {
   const files = Array.from(list);
   return files.map((file) => {
-    const rel =
-      preferRelative && file.webkitRelativePath
-        ? file.webkitRelativePath.replace(/\\/g, "/")
-        : file.name;
+    // Always prefer webkitRelativePath when the browser provides it (folder picks /
+    // some drops). Ignoring it flattens trees to basenames and causes false
+    // "already exists" conflicts against unrelated root files with the same name.
+    const fromWebkit = (file.webkitRelativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+    const rel = fromWebkit || file.name;
     return { file, relativePath: rel || file.name };
   });
 }
@@ -232,15 +233,20 @@ export async function pickFolderForUpload(): Promise<FilesPickResult> {
   }
 }
 
+function normalizeRelPath(rel: string): string {
+  return rel.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
 /**
  * Resolve a DataTransfer drop into upload items.
- * Order: File System Access handles → webkitGetAsEntry tree → flat FileList.
+ *
+ * Chromium often yields directory handles for selected folders via `items`, while
+ * sibling loose files only appear reliably on `dt.files`. Returning early after
+ * walking the folder used to drop those root-level files — merge both sources.
  */
 export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUploadItem[]> {
   const rawItems = dt.items ? Array.from(dt.items) : [];
-  const out: FilesUploadItem[] = [];
-  let usedHandles = false;
-  let usedEntries = false;
+  const fromItems: FilesUploadItem[] = [];
 
   for (const item of rawItems) {
     if (item.kind !== "file") continue;
@@ -251,17 +257,16 @@ export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUplo
       try {
         const handle = await anyItem.getAsFileSystemHandle();
         if (handle) {
-          usedHandles = true;
           if (handle.kind === "file") {
             const file = await (handle as FileSystemFileHandle).getFile();
-            out.push({ file, relativePath: file.name });
+            fromItems.push({ file, relativePath: file.name });
           } else if (handle.kind === "directory") {
-            out.push(...(await walkDirectoryHandle(handle as FileSystemDirectoryHandle, "")));
+            fromItems.push(...(await walkDirectoryHandle(handle as FileSystemDirectoryHandle, "")));
           }
           continue;
         }
       } catch {
-        // Fall through to entry / FileList path
+        // Fall through to entry path
       }
     }
 
@@ -269,20 +274,38 @@ export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUplo
     if (typeof anyItem.webkitGetAsEntry === "function") {
       const entry = anyItem.webkitGetAsEntry();
       if (entry) {
-        usedEntries = true;
-        out.push(...(await walkFileSystemEntry(entry, "")));
+        fromItems.push(...(await walkFileSystemEntry(entry, "")));
         continue;
       }
     }
   }
 
-  if ((usedHandles || usedEntries) && out.length > 0) return out;
+  // 3) Always merge FileList — loose files next to a dropped folder often only
+  // appear here (and folder children may also appear with webkitRelativePath).
+  const fromList =
+    dt.files && dt.files.length > 0 ? itemsFromFileList(dt.files, true) : [];
 
-  // 3) Flat files only
-  if (dt.files && dt.files.length > 0) {
-    return itemsFromFileList(dt.files, false);
+  // Prefer handle/entry walks (full tree + empty dirs); fill gaps from FileList
+  // (root-level files that never got a DataTransferItem handle).
+  const byRel = new Map<string, FilesUploadItem>();
+  for (const it of fromList) {
+    const key = normalizeRelPath(it.relativePath || it.file?.name || "");
+    if (!key) continue;
+    byRel.set(key, it);
   }
-  return out;
+  for (const it of fromItems) {
+    const key = normalizeRelPath(it.relativePath || it.file?.name || "");
+    if (!key && it.isEmptyDir) {
+      // keep empty-dir markers under their path
+      const k = normalizeRelPath(it.relativePath);
+      if (k) byRel.set(k, it);
+      continue;
+    }
+    if (!key) continue;
+    byRel.set(key, it);
+  }
+
+  return Array.from(byRel.values());
 }
 
 /** True when a drag event may carry files (for drop-target highlighting). */

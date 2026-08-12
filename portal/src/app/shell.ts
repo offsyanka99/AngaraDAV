@@ -3,6 +3,7 @@
  */
 import { esc } from "../ui";
 import { DOCS_URL } from "./constants";
+import { renderConfirmDeleteModal } from "./confirmDelete";
 import type { AppState } from "./context";
 import { renderFlashBanner } from "./flash";
 import { infoModalHtml } from "./sectionInfo";
@@ -83,7 +84,8 @@ export function shell(
     state.filesTransfer !== null ||
     state.filesMkdirOpen ||
     state.filesUploadConflict !== null ||
-    state.filesUploadProgress !== null
+    state.filesUploadProgress !== null ||
+    state.confirmDelete !== null
   );
   const flashHtml = flashOnMain ? renderFlashBanner(state) : "";
 
@@ -127,6 +129,7 @@ export function shell(
       </main>
       ${footer}
       ${infoModalHtml()}
+      ${renderConfirmDeleteModal(state)}
       ${progress.renderImportProgressModal()}
       ${progress.renderFilesUploadProgressModal()}`;
 }
@@ -151,6 +154,35 @@ export function bindUserMenuOutside(state: AppState, render: () => void): void {
   const handler = state.userMenuDocClick;
   setTimeout(() => {
     if (state.userMenuOpen && state.userMenuDocClick === handler) {
+      document.addEventListener("click", handler, true);
+    }
+  }, 0);
+}
+
+export function unbindDtPickerOutside(state: AppState): void {
+  if (state.dtPickerDocClick) {
+    document.removeEventListener("click", state.dtPickerDocClick, true);
+    state.dtPickerDocClick = null;
+  }
+}
+
+/** Close the portal date/time popover when the user clicks outside it. */
+export function bindDtPickerOutside(state: AppState, render: () => void): void {
+  unbindDtPickerOutside(state);
+  if (!state.eventDtPicker) return;
+  state.dtPickerDocClick = (ev: MouseEvent) => {
+    const t = ev.target as HTMLElement | null;
+    // Stay open for interactions inside the open field / popover (incl. month/year selects)
+    if (t?.closest?.(".dt-field.is-open, .dt-popover, [data-dt-popover]")) return;
+    // Opening another dt-open button is handled by onAction; don't double-close here first
+    if (t?.closest?.('[data-action="dt-open"]')) return;
+    state.eventDtPicker = null;
+    unbindDtPickerOutside(state);
+    render();
+  };
+  const handler = state.dtPickerDocClick;
+  setTimeout(() => {
+    if (state.eventDtPicker && state.dtPickerDocClick === handler) {
       document.addEventListener("click", handler, true);
     }
   }, 0);

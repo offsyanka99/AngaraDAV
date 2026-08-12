@@ -1540,18 +1540,37 @@ class ShareService {
             throw new ApiException('User not found: ' . $username, 404);
         }
         $email = trim((string) ($row['email'] ?? ''));
-        if ($email === '') {
-            // sabre share_href uniqueness; mailto still required by CalDAV sharing UX
-            $email = $username . '@local';
-        }
+        $displayname = (string) ($row['displayname'] ?: $username);
+
+        // sabre/dav keys sharees by share_href. If two users share the same principal
+        // email (or both use a placeholder like no@thank.you), the second Share call
+        // UPDATES the first row instead of inserting — only one share remains.
+        // Prefer a real unique email; otherwise use a username-scoped mailto href.
+        $href = $this->uniqueShareHref($username, $email);
 
         return [
             'username'    => (string) $row['username'],
             'principal'   => $principal,
-            'href'        => 'mailto:' . $email,
-            'displayname' => (string) ($row['displayname'] ?: $username),
-            'email'       => $email,
+            'href'        => $href,
+            'displayname' => $displayname,
+            'email'       => $email !== '' ? $email : $username . '@local',
         ];
+    }
+
+    /**
+     * Build a share_href that is unique per username (CalDAV mailto: style).
+     *
+     * Always username-scoped — never key shares by principal email alone.
+     * Multiple users often share a placeholder email (e.g. no@thank.you); sabre
+     * matches sharees by href, so colliding mailto: addresses made the second
+     * Share overwrite the first.
+     */
+    private function uniqueShareHref(string $username, string $email): string {
+        unset($email); // email is for display only; must not define share identity
+        $safe = preg_replace('/[^a-zA-Z0-9._+-]+/', '-', $username) ?? 'user';
+        $safe = trim($safe, '-') ?: 'user';
+
+        return 'mailto:' . $safe . '@users.local';
     }
 
     private function parseAccess(string $access): int {
