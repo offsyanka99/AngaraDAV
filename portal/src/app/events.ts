@@ -7,7 +7,8 @@
 import { log } from "../log";
 import {
   dataTransferHasFiles,
-  itemsFromDataTransfer,
+  itemsFromDropSnapshot,
+  snapshotDataTransfer,
 } from "../filesUploadPick";
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
@@ -467,9 +468,21 @@ function onRootDrag(o: AppOrchestrator, kind: "enter" | "over" | "leave" | "drop
   if (!dt || state.busy || state.filesUploadProgress) return;
   state.filesUploadMenuOpen = false;
   o.unbindFilesUploadMenuOutside();
+  // CRITICAL: snapshot DataTransferItemList synchronously before any await —
+  // Chromium drops all but the first item once the drop handler yields.
+  const snap = snapshotDataTransfer(dt);
+  log.event("files.drop.snapshot", {
+    handles: snap.handlePromises.length,
+    entries: snap.entries.filter(Boolean).length,
+    files: snap.files.length,
+  });
   void (async () => {
     try {
-      const items = await itemsFromDataTransfer(dt);
+      const items = await itemsFromDropSnapshot(snap);
+      log.event("files.drop.items", {
+        count: items.length,
+        sample: items.slice(0, 8).map((it) => it.relativePath),
+      });
       if (items.length === 0) {
         o.setFlash("info", "Nothing to upload from that drop");
         o.render();
