@@ -3442,13 +3442,53 @@ section.stack {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.35rem;
+  gap: 0.25rem;
   margin-bottom: 0.45rem;
 }
 
 .dt-cal-title {
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.dt-cal-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.dt-month-select,
+.dt-year-select {
+  appearance: auto;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.2rem 0.25rem;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.dt-month-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dt-year-select {
+  flex: 0 0 auto;
+  width: 4.6rem;
+}
+
+.dt-month-select:focus,
+.dt-year-select:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 1px;
 }
 
 .dt-dow-row,

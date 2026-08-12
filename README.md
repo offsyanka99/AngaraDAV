@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.1.2`
+**Version:** `2.2.0`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
@@ -32,9 +32,6 @@ AngaraDAV includes:
 - `/dav.php/` kept as classic browser and combined CalDAV/CardDAV/WebDAV endpoint
 - Day-to-day admin and install live in the **portal** (`/portal/`, `/portal/install/`)
 
-Upstream ancestry: [sabre-io/Baikal](https://github.com/sabre-io/Baikal).
-
-Upstream Baïkal docs: [sabre.io/baikal](https://sabre.io/baikal/).
 
 Compatibility
 -------------
@@ -70,8 +67,9 @@ Legacy release history
 | `2.1.0` | **Mainline 2.1:** portal Administration cutover on `main`; Files Copy/Move destination **folder tree**; cross-folder copy keeps original filename; export download fix; calendar Owned empty-hint + list Export; CI skips for classic Formal admin browser tests |
 | `2.1.1` | Files: single **Upload** (files, folders, or mix via drop/browse; nested trees), **upload progress** dialog, folder item-count status bar; fix files list scroll jump on multi-select; cold login after session timeout no longer shows timeout banner |
 | `2.1.2` | Files: **Upload ▾** menu (Files… / Folder…), drop files/folders/mix on the panel (no upload modal), File System Access API with Safari/Firefox classic-input fallbacks; nested trees + progress unchanged |
+| `2.2.0` | Portal SPA modularization (`portal/src/app/*` domains + thin orchestrator); same user-visible Files/Admin/CalDAV/CardDAV behavior as 2.1.2 |
 
-Image tags: `latest`, `2.1.2`, `sha-…`.
+Image tags: `latest`, `2.2.0`, `sha-…`.
 
 Quick start (Docker)
 --------------------
@@ -129,14 +127,6 @@ User portal
 More detail: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#user-portal).  
 `/dav.php/` remains available as the original sabre browser (and for all CalDAV/CardDAV clients).
 
-Home Assistant
---------------
-
-Point the CalDAV integration at `http(s)://host/dav.php/` (or `/cal.php/`).
-AngaraDAV accepts Baïkal's plain calendar timezone ids on expand queries, so
-you do **not** need ckulka’s `APPLY_HOME_ASSISTANT_FIX` env var. Details:
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#home-assistant--calendar-timezone).
-
 Generic WebDAV file storage
 ---------------------------
 
@@ -190,15 +180,6 @@ Configuration, allowlists, quotas, non-Docker worker setup, and troubleshooting:
 [`docs/DEPLOYMENT.md#webdav-push`](docs/DEPLOYMENT.md#webdav-push).
 For a LAN-only AngaraDAV host, see the [local network example](docs/DEPLOYMENT.md#local-network-example).
 
-Upgrading from Baïkal
----------------------
-
-Follow [upstream upgrade instructions](https://sabre.io/baikal/upgrade/).  
-Admin passwords using the old SHA-256 scheme are upgraded automatically on next successful login.
-
-After `composer install` / `composer update`, vendor patches (including the
-calendar-timezone fix) are applied automatically via
-[`scripts/apply-vendor-patches.sh`](scripts/apply-vendor-patches.sh).
 
 Changelog
 ---------

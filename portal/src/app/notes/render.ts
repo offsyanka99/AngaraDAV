@@ -1,0 +1,118 @@
+/** Notes tab UI (Phase 7). */
+import { esc } from "../../ui";
+import { toLocalInputValue } from "../datetime";
+import { formatWhen, sortHeader } from "../format";
+import { itemKey } from "../keys";
+import { infoTitle } from "../sectionInfo";
+import type { NotesHost } from "./host";
+
+export function renderNotesTab(host: NotesHost): string {
+  const rows =
+    host.state.notes.length === 0
+      ? `<tr class="contacts-empty-row"><td colspan="3" class="muted">${
+          host.state.noteSearch ? "No notes match your search." : "No notes yet. Add one below."
+        }</td></tr>`
+      : host.state.notes
+          .map((n) => {
+            const key = itemKey(n.instanceId, n.uri);
+            const active = !host.state.creatingNote && key === host.state.selectedNoteKey ? " is-selected" : "";
+            const preview = (n.description || "").replace(/\s+/g, " ").slice(0, 80);
+            return `<tr class="contact-table-row${active}" data-action="select-note" data-instance="${n.instanceId}" data-uri="${esc(n.uri)}" tabindex="0" role="button">
+              <td class="col-note-title">
+                <span class="contact-name-primary">${esc(n.summary || n.uri)}</span>
+                ${preview ? `<span class="muted small contact-name-secondary">${esc(preview)}${n.description.length > 80 ? "…" : ""}</span>` : ""}
+                ${n.readOnly ? '<span class="badge">read-only</span>' : ""}
+              </td>
+              <td class="col-note-date muted small">${esc(formatWhen(n.dtstart))}</td>
+              <td class="col-note-cal muted small">${esc(n.calendarName)}</td>
+            </tr>`;
+          })
+          .join("");
+
+  const n = host.state.editingNote;
+  const calOpts = host.state.noteCalendars
+    .map(
+      (c) =>
+        `<option value="${c.id}" ${n && n.instanceId === c.id ? "selected" : ""}>${esc(c.displayname)}</option>`,
+    )
+    .join("");
+  const form =
+    n
+      ? `<div class="card">
+          ${infoTitle(host.state.creatingNote ? "New note" : "Edit note", "notes")}
+          <form class="stack" data-form="note" style="margin-top:1rem">
+            ${
+              host.state.creatingNote
+                ? `<label>Calendar
+                    <select name="instanceId" required ${host.state.noteCalendars.length === 0 ? "disabled" : ""}>
+                      <option value="">${host.state.noteCalendars.length ? "Select calendar…" : "No writable calendars"}</option>
+                      ${calOpts}
+                    </select>
+                  </label>`
+                : `<p class="muted small">Calendar: <strong>${esc(n.calendarName)}</strong>${n.readOnly ? " · read-only" : ""}</p>`
+            }
+            <label>Title
+              <input type="text" name="summary" required maxlength="500" value="${esc(n.summary)}" ${n.readOnly && !host.state.creatingNote ? "readonly" : ""} />
+            </label>
+            ${host.renderPortalDateTimeField({
+              field: "dtstart",
+              name: "dtstart",
+              label: "Date",
+              value: toLocalInputValue(n.dtstart),
+              dateOnly: false,
+              disabled: !!(n.readOnly && !host.state.creatingNote),
+              allowClear: true,
+            })}
+            <label>Body
+              <textarea name="description" rows="8" maxlength="20000" ${n.readOnly && !host.state.creatingNote ? "readonly" : ""}>${esc(n.description)}</textarea>
+            </label>
+            <div class="form-actions-row">
+              ${
+                host.state.creatingNote || n.canWrite
+                  ? `<button type="submit" class="btn btn-primary" ${host.state.busy ? "disabled" : ""}>${host.state.creatingNote ? "Create note" : "Save note"}</button>`
+                  : ""
+              }
+              ${
+                !host.state.creatingNote && n.canWrite
+                  ? `<button type="button" class="btn btn-danger" data-action="delete-note" ${host.state.busy ? "disabled" : ""}>Delete</button>`
+                  : host.state.creatingNote
+                    ? `<button type="button" class="btn btn-ghost" data-action="cancel-note">Cancel</button>`
+                    : ""
+              }
+            </div>
+          </form>
+        </div>`
+      : `<div class="card"><p class="muted">Select a note or click <strong>Add note</strong>.</p></div>`;
+
+  return `<div class="portal-grid portal-grid-items">
+    <section class="card contacts-main-card items-list-card">
+      ${infoTitle("Notes", "notes")}
+      <div class="contact-toolbar" style="margin-top:0.75rem">
+        <input type="search" data-action="note-search" placeholder="Search notes…" value="${esc(host.state.noteSearch)}" aria-label="Search notes" ${host.state.busy ? "disabled" : ""} />
+        <button type="button" class="btn btn-primary" data-action="new-note" ${host.state.busy || host.state.noteCalendars.length === 0 ? "disabled" : ""}>Add note</button>
+      </div>
+      ${
+        host.state.noteCalendars.length === 0
+          ? `<p class="muted small" style="margin-top:0.75rem">No writable calendars with notes (VJOURNAL) enabled. Enable Notes in Admin settings and ensure calendars include VJOURNAL.</p>`
+          : ""
+      }
+      <div class="contacts-table-wrap items-table-wrap" style="margin-top:0.75rem">
+        <table class="contacts-table">
+          <thead>
+            <tr>
+              ${sortHeader("Title", "summary", host.state.noteSort, host.state.noteOrder, "note", "col-note-title")}
+              ${sortHeader("Date", "dtstart", host.state.noteSort, host.state.noteOrder, "note", "col-note-date")}
+              ${sortHeader("Calendar", "calendar", host.state.noteSort, host.state.noteOrder, "note", "col-note-cal")}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="stack items-edit-panel">
+      ${form}
+    </section>
+  </div>`;
+}
+
+/** Full re-render replaces DOM and would reset scroll; capture/restore so list clicks stay put. */

@@ -9,7 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
-| `ghcr.io/offsyanka99/angaradav:2.1.2` | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:2.2.0` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -767,6 +767,12 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.2.0
+
+- **Product version** `2.2.0`.
+- **Portal SPA modularization:** split `portal/src/app.ts` into domain modules (`app/files`, `admin`, `calendars`, `contacts`, `tasks`, `notes`, shell/session/login) with a thin orchestrator (`AppOrchestrator`). Intended as a behavior-freeze refactor for maintainability.
+- User-visible Files / Calendar / Contacts / Tasks / Notes / Admin features match **2.1.2**.
 
 ### 2.1.2
 
