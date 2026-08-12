@@ -1,13 +1,12 @@
 /**
- * Files tab DOM listeners (upload inputs, panel drop, form submits) (Phase 4).
+ * Files tab post-render DOM (upload inputs, panel drop).
+ * Form submits are delegated on root (events.ts Step 3).
  */
 import {
   dataTransferHasFiles,
   itemsFromDataTransfer,
 } from "../../filesUploadPick";
 import type { FilesHost } from "./host";
-import { onFilesMkdir, onFilesRename } from "./actions";
-import { onFilesTransfer } from "./transfer";
 import {
   onFilesUploadInput,
   startFilesUpload,
@@ -16,24 +15,6 @@ import {
 
 export function bindFilesDom(host: FilesHost): void {
   const { root, state } = host;
-
-  const filesRenameForm = root.querySelector<HTMLFormElement>('[data-form="files-rename"]');
-  filesRenameForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void onFilesRename(host, filesRenameForm);
-  });
-  const filesTransferForm = root.querySelector<HTMLFormElement>(
-    '[data-form="files-transfer"]',
-  );
-  filesTransferForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void onFilesTransfer(host, filesTransferForm);
-  });
-  const filesMkdirForm = root.querySelector<HTMLFormElement>('[data-form="files-mkdir"]');
-  filesMkdirForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void onFilesMkdir(host, filesMkdirForm);
-  });
 
   root
     .querySelectorAll<HTMLInputElement>(

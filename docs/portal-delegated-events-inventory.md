@@ -279,4 +279,6 @@ Step 0 is documentation-only — **no runtime change**.
 
 **Step 2 (done):** root `click` → `onAction`; per-element `[data-action]` click re-bind removed.
 
-**Next:** Step 3 — root `submit` + `data-form` map; drop per-form submit binds.
+**Step 3 (done):** root `submit` → 19 `data-form` handlers; form submit re-binds removed from bind/files/admin.
+
+**Next:** Step 4 — root `change` + `input` (DT, search, confirms, cal selects, color pair).

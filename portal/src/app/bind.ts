@@ -70,25 +70,10 @@ export function bind(o: AppOrchestrator) {
       img.replaceWith(span);
     });
   });
-  // Escape is registered once in registerPortalEvents (Step 1) — not re-bound here.
+  // Escape (Step 1) + form submit (Step 3) are registered once in registerPortalEvents.
 
-  // Forms use data-form="…" (not #id) — must match render templates
-  const loginForm = root.querySelector<HTMLFormElement>('[data-form="login"]');
-  loginForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onLogin(loginForm);
-  });
-
-  const shareForm = root.querySelector<HTMLFormElement>('[data-form="share"]');
-  shareForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onShare(shareForm);
-  });
+  // Non-submit form field listeners still re-bound until Step 4
   const eventForm = root.querySelector<HTMLFormElement>('[data-form="edit-event"]');
-  eventForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onSaveEvent(eventForm);
-  });
   eventForm
     ?.querySelectorAll<HTMLSelectElement>(
       'select[name="repeatFreq"], select[name="repeatEndMode"]',
@@ -106,40 +91,12 @@ export function bind(o: AppOrchestrator) {
       });
     });
   const editCalForm = root.querySelector<HTMLFormElement>('[data-form="edit-cal"]');
-  editCalForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onEditCal(editCalForm);
-  });
   if (editCalForm) o.bindColorPair(editCalForm);
   const createCalForm = root.querySelector<HTMLFormElement>('[data-form="create-cal"]');
-  createCalForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onCreateCal(createCalForm);
-  });
   if (createCalForm) o.bindColorPair(createCalForm);
 
-  const contactForm = root.querySelector<HTMLFormElement>('[data-form="contact"]');
-  contactForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onSaveContact(contactForm);
-  });
-  const createAbForm = root.querySelector<HTMLFormElement>('[data-form="create-ab"]');
-  createAbForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onCreateAb(createAbForm);
-  });
-  const editAbForm = root.querySelector<HTMLFormElement>('[data-form="edit-ab"]');
-  editAbForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onEditAb(editAbForm);
-  });
-
-  const taskForm = root.querySelector<HTMLFormElement>('[data-form="task"]');
-  taskForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onSaveTask(taskForm);
-  });
   // When calendar changes on create, keep draft fields and refresh parent options
+  const taskForm = root.querySelector<HTMLFormElement>('[data-form="task"]');
   if (taskForm) {
     const calSelect = taskForm.querySelector<HTMLSelectElement>('select[name="instanceId"]');
     calSelect?.addEventListener("change", () => {
@@ -160,12 +117,8 @@ export function bind(o: AppOrchestrator) {
       render();
     });
   }
-  const noteForm = root.querySelector<HTMLFormElement>('[data-form="note"]');
-  noteForm?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    void o.onSaveNote(noteForm);
-  });
   // Preserve note draft when calendar changes on create
+  const noteForm = root.querySelector<HTMLFormElement>('[data-form="note"]');
   if (noteForm) {
     const calSelect = noteForm.querySelector<HTMLSelectElement>('select[name="instanceId"]');
     calSelect?.addEventListener("change", () => {

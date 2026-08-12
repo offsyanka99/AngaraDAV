@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–2 done; 3–8 pending)  
+**Status:** In progress (Steps 0–3 done; 4–8 pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -146,13 +146,14 @@ Map `data-form` → handler (mirror current bind):
 | `files-rename` / `files-mkdir` / `files-transfer` | files handlers |
 | `admin-*` | admin bind handlers |
 
-- [ ] Root `submit`: `preventDefault` always for portal forms; dispatch by `form.dataset.form` or `getAttribute('data-form')`.
-- [ ] Remove per-form submit listeners from `bind.ts`, `files/bind.ts`, `admin/bind.ts` (or make those no-ops).
-- [ ] Smoke: login; create event; create task; create contact; files mkdir/rename; admin user create if applicable.
+- [x] Root `submit`: `preventDefault` for portal `form[data-form]`; dispatch 19 form kinds in `events.ts`
+- [x] Remove per-form submit listeners from `bind.ts`, `files/bind.ts`; `admin.bindAdminDom` no-op
+- [x] Keep `bindColorPair` + task/note calendar-select + event repeat change until Step 4
+- [ ] Smoke: login; create event; create task; create contact; files mkdir/rename; admin settings if admin
 
-**Stuck risk:** `bindColorPair` is not submit — keep per-form after render **or** use event delegation on `input` for color fields.  
-**Stuck risk:** task calendar `<select name="instanceId">` change handler (draft sync) — needs **change** delegation (Step 4).  
-**Readjust:** leave `bindColorPair` + task/note calendar-select in a tiny `bindAfterRender(o)` until Step 4.
+**Stuck risk:** `bindColorPair` — kept post-render until Step 4.  
+**Stuck risk:** task/note `instanceId` change — kept post-render until Step 4.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 

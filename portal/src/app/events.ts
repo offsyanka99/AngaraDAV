@@ -8,6 +8,7 @@
 import { log } from "../log";
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
+import * as admin from "./admin";
 import * as files from "./files";
 import { unbindDtPickerOutside } from "./shell";
 
@@ -63,13 +64,80 @@ function onRootClick(o: AppOrchestrator, ev: Event): void {
 }
 
 /**
- * Step 1 scaffold — real submit map in Step 3.
+ * Step 3: delegated submit → data-form dispatch (replaces per-form submit re-bind).
  */
 function onRootSubmit(o: AppOrchestrator, ev: Event): void {
   const form = (ev.target as HTMLElement | null)?.closest?.<HTMLFormElement>("form[data-form]");
   if (!form || !o.root.contains(form)) return;
-  log.debug("portalEvents.submit.scaffold", { form: form.dataset.form });
-  // Step 3: preventDefault + dispatch by data-form
+
+  const kind = form.dataset.form ?? "";
+  if (!kind) return;
+
+  // Always prevent native navigation for portal forms
+  ev.preventDefault();
+  log.debug("portalEvents.submit", { form: kind });
+
+  switch (kind) {
+    case "login":
+      void o.onLogin(form);
+      return;
+    case "share":
+      void o.onShare(form);
+      return;
+    case "edit-event":
+      void o.onSaveEvent(form);
+      return;
+    case "edit-cal":
+      void o.onEditCal(form);
+      return;
+    case "create-cal":
+      void o.onCreateCal(form);
+      return;
+    case "contact":
+      void o.onSaveContact(form);
+      return;
+    case "create-ab":
+      void o.onCreateAb(form);
+      return;
+    case "edit-ab":
+      void o.onEditAb(form);
+      return;
+    case "task":
+      void o.onSaveTask(form);
+      return;
+    case "note":
+      void o.onSaveNote(form);
+      return;
+    case "files-rename":
+      void files.onFilesRename(o.filesHost, form);
+      return;
+    case "files-transfer":
+      void files.onFilesTransfer(o.filesHost, form);
+      return;
+    case "files-mkdir":
+      void files.onFilesMkdir(o.filesHost, form);
+      return;
+    case "admin-user-create":
+      void admin.onAdminUserCreate(o.adminHost, form);
+      return;
+    case "admin-user-edit":
+      void admin.onAdminUserEdit(o.adminHost, form);
+      return;
+    case "admin-cal":
+      void admin.onAdminCalSave(o.adminHost, form);
+      return;
+    case "admin-ab":
+      void admin.onAdminAbSave(o.adminHost, form);
+      return;
+    case "admin-settings":
+      void admin.onAdminSettingsSave(o.adminHost, form);
+      return;
+    case "admin-database":
+      admin.onAdminDatabaseFormSubmit(o.adminHost, form);
+      return;
+    default:
+      log.debug("portalEvents.submit.unknown", { form: kind });
+  }
 }
 
 /**
