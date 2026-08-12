@@ -30,20 +30,21 @@ Behavior freeze.
 
 ## 2. Current bind inventory (pre-flight)
 
-| Kind | What | Count (approx) | Delegation strategy |
+**Full lock-in:** [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md) (Step 0). Summary:
+
+| Kind | What | Count (locked) | Delegation strategy |
 |------|------|----------------|---------------------|
-| **click** | All `[data-action]` → `onAction` | Many (full re-query each render) | **Yes** — single `root` click |
-| **change** | `dt-set-month` / `dt-set-year` → `onAction` | 2 selectors | **Yes** — `root` change if `data-action` set |
-| **change** | `#delete-cal-confirm`, `#delete-ab-confirm` enable submit | 2 | **Yes** — change on root, match id/action |
-| **change** | Admin DB backend select, confirm inputs, reset password | several | **Yes** — already `data-action` on some |
-| **input** | contact/task/note search (debounced) | 3 | **Yes** — `input` on root + debounce |
-| **submit** | login, share, event, cal, contact, ab, task, note | ~11 forms | **Yes** — `submit` on root, `closest('form[data-form]')` |
-| **keydown** | Enter/Space on table/cal rows | per row | **Yes** — `keydown` on root for matching selectors |
-| **error** | contact avatar fallback | per img | **Hard** — error does not bubble; keep per-element or use capture on root carefully |
-| **document click** | user menu outside, files upload menu outside | 1 each when open | **Keep** module helpers (already not every-node) |
-| **document keydown Escape** | large modal close matrix | once via `escapeBound` | **Move** to `registerGlobalKeys(o)` at mount |
-| **files domain** | `bindFilesDom`: upload inputs change, drop, rename/mkdir/transfer submit | domain | **Partial:** form submits can be root-delegated; file input + drag need care |
-| **admin domain** | `bindAdminDom`: form submits | domain | **Yes** — fold into root submit or keep domain bind once |
+| **click** | All `[data-action]` → `onAction` | per-element each render | **Yes** — single `root` click |
+| **change** | DT month/year, delete confirms, admin-db-backend, task/note cal, repeat | many | **Yes** — root change |
+| **input** | contact/task/note search; admin confirm/reset | 5 | **Yes** — root input + debounce |
+| **submit** | login/share/event/cal/contact/ab/task/note + files×3 + admin×6 | **19** forms | **Yes** — root submit |
+| **keydown** | Enter/Space on contact/cal/month rows | per row | **Yes** — root keydown |
+| **error** | contact avatar fallback | per img | **Hard** — capture or post-render |
+| **document click** | user menu, DT picker, files upload menu outside | when open | **Keep** helpers |
+| **document Escape** | modal matrix | once via `escapeBound` | **Move** to mount |
+| **files** | upload inputs, drop, forms | `files/bind.ts` | **Partial** — hybrid drop |
+| **admin** | form submits | `admin/bind.ts` | **Yes** |
+| **helpers** | import inputs, holidays, photo, color pair | domain | change/input hybrid |
 
 **Critical insight:** Full re-render uses `root.innerHTML = …`, so old nodes and their listeners die. Double-fire is **less** of a risk than “missed first bind after structural HTML change.” Delegation still helps cost and centralization.
 
