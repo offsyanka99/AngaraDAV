@@ -1,9 +1,9 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** Planning (not started)  
+**Status:** In progress (Step 0 done; 1–8 pending)  
 **Date:** 2026-08-12  
-**Branch recommendation:** `refactor/portal-delegated-events`  
-**Depends on:** Prefer **after** `docs/portal-onaction-split-plan.md` lands (thinner action surface). Can run alone but debugging is harder.  
+**Branch:** `refactor/portal-delegated-events`  
+**Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
 **Non-goals:** Split `onAction` domains (separate plan); change action names or UI design; rewrite Escape modal matrix.
 
 ---
@@ -69,12 +69,13 @@ Effort: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-day.
 ### Step 0 — Baseline + harness  
 **Effort: S** · **Risk: Low**
 
-- [ ] Document current bind call sites (`render()` → `bindApp(o)` in `app.ts`).
-- [ ] List every `addEventListener` in `bind.ts`, `files/bind.ts`, `admin/bind.ts`.
-- [ ] Optional: temporary `log.debug('bind')` counter to prove re-bind frequency before/after.
-- [ ] Smoke baseline on current build (login, one action per tab).
+- [x] Document current bind call sites (`render()` → `bindApp(o)` in `app.ts`).
+- [x] List every `addEventListener` in `bind.ts`, `files/bind.ts`, `admin/bind.ts` (+ domain helpers).
+- [x] Optional bind counter — skipped (optional); method documented in inventory §7.
+- [x] Smoke baseline — product baseline is 2.2.1 (prior smoke); Step 0 is docs-only.
 
-**Exit:** Inventory table complete (this doc §2 is the start).
+**Exit:** Inventory complete → [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
+**Status:** **Done 2026-08-12.**
 
 ---
 
