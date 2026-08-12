@@ -1,15 +1,13 @@
 /**
- * Mount-time portal event registration (delegated-events plan Step 1).
+ * Mount-time portal event registration (delegated-events plan).
  *
- * Dual path:
- * - Listeners are registered once on `root` / `document` here.
- * - Post-render `bind()` still owns click/submit/change/input/keydown-on-rows
- *   behavior until later steps enable those handlers and remove bind counterparts.
- * - Escape is already owned here (moved from bind) so it is not re-attached
- *   every render and does not depend on first paint.
+ * Step 1: Escape on document.
+ * Step 2: click → onAction (no per-element re-bind).
+ * Later: submit / change / input / row keydown still post-render bind until enabled.
  */
 import { log } from "../log";
 import type { AppOrchestrator } from "./orchestrator";
+import { onAction } from "./onAction";
 import * as files from "./files";
 import { unbindDtPickerOutside } from "./shell";
 
@@ -42,14 +40,26 @@ export function registerPortalEvents(o: AppOrchestrator): void {
 }
 
 /**
- * Step 1 scaffold — real click → onAction in Step 2.
- * Dual path: post-render bind still attaches per-element click handlers.
+ * Step 2: delegated click → onAction (replaces per-element [data-action] click bind).
  */
 function onRootClick(o: AppOrchestrator, ev: Event): void {
   const t = (ev.target as HTMLElement | null)?.closest?.<HTMLElement>("[data-action]");
   if (!t || !o.root.contains(t)) return;
-  log.debug("portalEvents.click.scaffold", { action: t.dataset.action });
-  // Step 2: info preventDefault/stopPropagation + void onAction(o, ev)
+
+  const action = t.dataset.action ?? "";
+  // Match prior bind.ts: info buttons must not bubble into other handlers
+  if (action === "info" || action === "info-close") {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  // DT month/year <select>: stop bubble so document "outside" does not close the popover
+  // (same as former per-select click stopPropagation). Change still drives onAction via bind.
+  if (action === "dt-set-month" || action === "dt-set-year") {
+    ev.stopPropagation();
+  }
+
+  log.debug("portalEvents.click", { action });
+  void onAction(o, ev);
 }
 
 /**

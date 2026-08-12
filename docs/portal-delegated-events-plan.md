@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–1 done; 2–8 pending)  
+**Status:** In progress (Steps 0–2 done; 3–8 pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -119,21 +119,14 @@ export function registerPortalEvents(o: AppOrchestrator): void {
 ### Step 2 — Delegate click → drop per-element click bind  
 **Effort: M** · **Risk: Medium**
 
-- [ ] Root `click` handler:
+- [x] Root `click` → `closest("[data-action]")` → info prevent/stop + DT select stop + `onAction`
+- [x] Remove per-element `[data-action]` click re-bind from `bind.ts`
+- [x] DT month/year still use **change** via post-render bind (Step 4 will move)
+- [ ] Smoke: calendar day click, event chip, tabs, files row actions, admin subnav, info buttons
 
-  ```ts
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-action]");
-  if (!t || !o.root.contains(t)) return;
-  // info stopPropagation behavior from current bind
-  void onAction(o, ev);
-  ```
-
-- [ ] Remove `querySelectorAll("[data-action]").forEach(click…)` from post-render `bind`.
-- [ ] Smoke: calendar day click, event chip, tabs, files row actions, admin subnav, info buttons.
-
-**Stuck risk:** Clicks on child of button (icon span) — `closest` handles.  
-**Stuck risk:** Label wrapping checkbox fires twice? Match current behavior.  
-**Readjust:** if a control relies on non-bubbling path, special-case.
+**Stuck risk:** Clicks on child of button (icon span) → **resolved:** `closest`.  
+**Stuck risk:** Label wrapping checkbox — match prior bubble to `[data-action]`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 

@@ -275,6 +275,8 @@ Step 0 is documentation-only — **no runtime change**.
 | Optional bind counter | Skipped (optional) |
 | Inventory exit criteria | **Met** |
 
-**Step 1 (done):** `registerPortalEvents(o)` in `app/events.ts` — mount-time registration; Escape live; other handlers scaffold; `bind()` still re-attaches element listeners.
+**Step 1 (done):** `registerPortalEvents(o)` — Escape live; other handlers scaffold.
 
-**Next:** Step 2 — root click → `onAction`; drop per-element click bind.
+**Step 2 (done):** root `click` → `onAction`; per-element `[data-action]` click re-bind removed.
+
+**Next:** Step 3 — root `submit` + `data-form` map; drop per-form submit binds.

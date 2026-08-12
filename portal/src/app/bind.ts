@@ -1,10 +1,7 @@
 /**
- * DOM listeners after each render (Phase 8 extract).
- */
-/**
- * Post-render DOM bind (Phase 8). Called after every render().
- * Escape is owned by registerPortalEvents (delegated-events Step 1).
- * Click/submit/change/input still attached here until Steps 2–4.
+ * Post-render DOM bind. Called after every render().
+ * Owned by registerPortalEvents: Escape (Step 1), click → onAction (Step 2).
+ * Still re-binds: change/input/submit/keydown-rows/files drop/etc. until later steps.
  */
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
@@ -16,17 +13,9 @@ import { bindDtPickerOutside, unbindDtPickerOutside } from "./shell";
 export function bind(o: AppOrchestrator) {
   const { state, root, render, setFlash } = o;
 
-  root.querySelectorAll("[data-action]").forEach((el) => {
-    el.addEventListener("click", (ev) => {
-      const target = (ev.target as HTMLElement).closest<HTMLElement>("[data-action]");
-      if (target?.dataset.action === "info" || target?.dataset.action === "info-close") {
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
-      void onAction(o, ev);
-    });
-  });
-  // Date picker month/year <select>s use change (not click)
+  // Click → onAction is delegated on root (events.ts Step 2).
+
+  // Date picker month/year <select>s use change (not click) for onAction
   root
     .querySelectorAll<HTMLSelectElement>(
       'select[data-action="dt-set-month"], select[data-action="dt-set-year"]',
@@ -35,10 +24,6 @@ export function bind(o: AppOrchestrator) {
       sel.addEventListener("change", (ev) => {
         ev.stopPropagation();
         void onAction(o, ev);
-      });
-      // Keep popover open / avoid treating select interaction as outside click noise
-      sel.addEventListener("click", (ev) => {
-        ev.stopPropagation();
       });
     });
   o.unbindUserMenuOutside();
