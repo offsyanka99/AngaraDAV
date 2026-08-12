@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–4 done; 5–8 pending)  
+**Status:** In progress (Steps 0–6 done; 7–8 pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -173,25 +173,24 @@ Map `data-form` → handler (mirror current bind):
 ### Step 5 — Escape once + optional keydown delegation  
 **Effort: M** · **Risk: Medium–High**
 
-- [ ] Move Escape matrix from `if (!state.escapeBound)` inside `bind` to `registerPortalEvents`.
-- [ ] Remove `escapeBound` flag **or** keep as “registered” guard only at mount.
-- [ ] Root `keydown` for Enter/Space on `tr.contact-table-row`, `.cal-row`, `.month-cell` with `[data-action]`.
-- [ ] Smoke: Escape closes event modal, contact modal, files modals, upload conflict, import progress when done; does **not** close mid-upload/import.
+- [x] Escape matrix at mount (`events.ts` Step 1) — `escapeBound` / `portalEventsBound` guards
+- [x] Root `keydown` Enter/Space on contact/cal/month rows with `[data-action]`
+- [ ] Smoke: Escape matrix + keyboard activation of rows
 
-**Stuck risk:** Escape order regressions (import running must block). Copy order exactly from current `bind.ts`.  
-**Readjust:** keep Escape on `document` as today; only change registration timing.
+**Stuck risk:** Escape order — preserved from bind.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 6 — Files drop + avatar error  
 **Effort: M** · **Risk: Medium**
 
-- [ ] **Drop:** root-level `dragenter/dragover/dragleave/drop` with `ev.target.closest('[data-files-drop-target]')` and depth counter **or** re-bind only drop target after render (acceptable hybrid).
-- [ ] **Avatar error:** try capture-phase `error` on `root`; if unreliable, keep post-render `querySelectorAll('img.contact-avatar[data-avatar-fallback]')`.
-- [ ] File input `change` via root delegation.
+- [x] **Drop:** root drag* with `closest('[data-files-drop-target]')`; depth on `state.filesDropDepth`
+- [x] **Avatar error:** capture-phase `error` on `root` for `.contact-avatar[data-avatar-fallback]`
+- [x] File input `change` already via Step 4
 
-**Stuck risk:** drag depth counter state must live on `o` or module, not on discarded DOM.  
-**Readjust:** hybrid — delegate click/submit/change; keep `files.bindFilesDom` for drop only.
+**Stuck risk:** drag depth on discarded DOM → **resolved:** `state.filesDropDepth`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 

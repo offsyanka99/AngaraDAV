@@ -1,78 +1,13 @@
 /**
- * Files tab post-render DOM: panel drop + indeterminate select-all.
- * Form submits and upload file inputs are delegated on root (events.ts Steps 3–4).
+ * Files tab post-render hooks.
+ * Drop and upload inputs are mount-time (events.ts Steps 4–6).
+ * Here: indeterminate "select all" only (must re-apply after each render).
  */
-import {
-  dataTransferHasFiles,
-  itemsFromDataTransfer,
-} from "../../filesUploadPick";
 import type { FilesHost } from "./host";
-import {
-  startFilesUpload,
-  unbindFilesUploadMenuOutside,
-} from "./upload";
 
 export function bindFilesDom(host: FilesHost): void {
-  const { root, state } = host;
+  const { root } = host;
 
-  // Drag-and-drop on the files panel: files, folders, or a mix
-  const dropTarget = root.querySelector<HTMLElement>("[data-files-drop-target]");
-  if (dropTarget && state.activeTab === "files" && !state.busy && !state.filesUploadProgress) {
-    let dragDepth = 0;
-    const setDrag = (on: boolean) => {
-      if (state.filesUploadDropActive === on) return;
-      state.filesUploadDropActive = on;
-      dropTarget.classList.toggle("is-dragover", on);
-    };
-    dropTarget.addEventListener("dragenter", (ev) => {
-      if (!dataTransferHasFiles(ev.dataTransfer)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      dragDepth += 1;
-      setDrag(true);
-    });
-    dropTarget.addEventListener("dragover", (ev) => {
-      if (!dataTransferHasFiles(ev.dataTransfer)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
-      setDrag(true);
-    });
-    dropTarget.addEventListener("dragleave", (ev) => {
-      if (!dataTransferHasFiles(ev.dataTransfer)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      dragDepth = Math.max(0, dragDepth - 1);
-      if (dragDepth === 0) setDrag(false);
-    });
-    dropTarget.addEventListener("drop", (ev) => {
-      if (!dataTransferHasFiles(ev.dataTransfer)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      dragDepth = 0;
-      setDrag(false);
-      const dt = ev.dataTransfer;
-      if (!dt || state.busy || state.filesUploadProgress) return;
-      state.filesUploadMenuOpen = false;
-      unbindFilesUploadMenuOutside(host);
-      void (async () => {
-        try {
-          const items = await itemsFromDataTransfer(dt);
-          if (items.length === 0) {
-            host.setFlash("info", "Nothing to upload from that drop");
-            host.render();
-            return;
-          }
-          await startFilesUpload(host, items);
-        } catch (e) {
-          host.setFlash("error", e instanceof Error ? e.message : "Drop failed");
-          host.render();
-        }
-      })();
-    });
-  }
-
-  // Indeterminate "select all" for files multi-select
   root
     .querySelectorAll<HTMLInputElement>(
       'input[data-action="files-select-all"][data-indeterminate="1"]',

@@ -281,6 +281,10 @@ Step 0 is documentation-only — **no runtime change**.
 
 **Step 3 (done):** root `submit` → 19 `data-form` handlers.
 
-**Step 4 (done):** root `change` + `input` for DT, search, confirms, imports, photo, files pick, color, holidays, task/note cal select.
+**Step 4 (done):** root `change` + `input`.
 
-**Next:** Step 5 — row keydown + Escape already at mount; enable Enter/Space on rows in events.ts.
+**Step 5 (done):** root row Enter/Space; Escape already at mount (Step 1).
+
+**Step 6 (done):** root files drop + avatar error capture; `files.bindFilesDom` = indeterminate only.
+
+**Next:** Step 7 — shrink post-render bind / rename afterRender; Step 8 verify.

@@ -1,10 +1,14 @@
 /**
  * Mount-time portal event registration (delegated-events plan).
  *
- * Step 1: Escape · Step 2: click · Step 3: submit · Step 4: change + input
- * Still post-render: row keydown, files drop, avatar error, outside menus.
+ * Steps 1–6: Escape, click, submit, change/input, row keydown, files drop, avatar error.
+ * Still post-render: outside menus, indeterminate select-all, holidays initial sync.
  */
 import { log } from "../log";
+import {
+  dataTransferHasFiles,
+  itemsFromDataTransfer,
+} from "../filesUploadPick";
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
 import * as admin from "./admin";
@@ -37,6 +41,13 @@ export function registerPortalEvents(o: AppOrchestrator): void {
   root.addEventListener("input", (ev) => onRootInput(o, ev));
   root.addEventListener("keydown", (ev) => onRootKeydown(o, ev));
   document.addEventListener("keydown", (ev) => onDocumentKeydown(o, ev));
+
+  // Step 6: files drop (depth on state) + avatar error (capture)
+  root.addEventListener("dragenter", (ev) => onRootDrag(o, "enter", ev as DragEvent));
+  root.addEventListener("dragover", (ev) => onRootDrag(o, "over", ev as DragEvent));
+  root.addEventListener("dragleave", (ev) => onRootDrag(o, "leave", ev as DragEvent));
+  root.addEventListener("drop", (ev) => onRootDrag(o, "drop", ev as DragEvent));
+  root.addEventListener("error", (ev) => onRootErrorCapture(o, ev), true);
 
   log.event("portalEvents.registered");
 }
@@ -374,16 +385,136 @@ function onRootInput(o: AppOrchestrator, ev: Event): void {
 }
 
 /**
- * Step 1 scaffold — Enter/Space on rows in Step 5.
+ * Step 5: Enter/Space on actionable rows (replaces per-row keydown re-bind).
  */
 function onRootKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   if (ev.key !== "Enter" && ev.key !== " ") return;
   const row = (ev.target as HTMLElement | null)?.closest?.(
     "tr.contact-table-row[data-action], .cal-row[data-action], .month-cell[data-action]",
-  );
-  if (!row || !o.root.contains(row as Node)) return;
-  log.debug("portalEvents.keydown.scaffold", { action: (row as HTMLElement).dataset.action });
-  // Step 5: preventDefault + row.click()
+  ) as HTMLElement | null;
+  if (!row || !o.root.contains(row)) return;
+  // Only when focus is on the row itself (not a nested button/input)
+  if (ev.target !== row && (ev.target as HTMLElement).closest("button, a, input, select, textarea")) {
+    return;
+  }
+  ev.preventDefault();
+  log.debug("portalEvents.keydown.row", { action: row.dataset.action });
+  row.click();
+}
+
+/**
+ * Step 6: files panel drag-and-drop on root (depth counter on state).
+ */
+function onRootDrag(o: AppOrchestrator, kind: "enter" | "over" | "leave" | "drop", ev: DragEvent): void {
+  const { state, root } = o;
+  if (state.activeTab !== "files" || state.busy || state.filesUploadProgress) return;
+  if (!dataTransferHasFiles(ev.dataTransfer)) return;
+
+  const zone = (ev.target as HTMLElement | null)?.closest?.<HTMLElement>("[data-files-drop-target]");
+  if (!zone || !root.contains(zone)) {
+    // Left the drop zone entirely
+    if (kind === "leave" && state.filesDropDepth > 0) {
+      const related = ev.relatedTarget as Node | null;
+      const stillInside =
+        related &&
+        related instanceof Node &&
+        root.querySelector("[data-files-drop-target]")?.contains(related);
+      if (!stillInside) {
+        state.filesDropDepth = 0;
+        clearFilesDragUi(o);
+      }
+    }
+    return;
+  }
+
+  if (kind === "enter") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    state.filesDropDepth += 1;
+    setFilesDragUi(o, zone, true);
+    return;
+  }
+
+  if (kind === "over") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+    setFilesDragUi(o, zone, true);
+    return;
+  }
+
+  if (kind === "leave") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const related = ev.relatedTarget as Node | null;
+    if (related && zone.contains(related)) {
+      // Moving between children inside the drop target
+      return;
+    }
+    state.filesDropDepth = Math.max(0, state.filesDropDepth - 1);
+    if (state.filesDropDepth === 0) {
+      setFilesDragUi(o, zone, false);
+    }
+    return;
+  }
+
+  // drop
+  ev.preventDefault();
+  ev.stopPropagation();
+  state.filesDropDepth = 0;
+  setFilesDragUi(o, zone, false);
+  const dt = ev.dataTransfer;
+  if (!dt || state.busy || state.filesUploadProgress) return;
+  state.filesUploadMenuOpen = false;
+  o.unbindFilesUploadMenuOutside();
+  void (async () => {
+    try {
+      const items = await itemsFromDataTransfer(dt);
+      if (items.length === 0) {
+        o.setFlash("info", "Nothing to upload from that drop");
+        o.render();
+        return;
+      }
+      await files.startFilesUpload(o.filesHost, items);
+    } catch (e) {
+      o.setFlash("error", e instanceof Error ? e.message : "Drop failed");
+      o.render();
+    }
+  })();
+}
+
+function setFilesDragUi(o: AppOrchestrator, dropTarget: HTMLElement, on: boolean): void {
+  if (o.state.filesUploadDropActive === on) {
+    dropTarget.classList.toggle("is-dragover", on);
+    return;
+  }
+  o.state.filesUploadDropActive = on;
+  dropTarget.classList.toggle("is-dragover", on);
+}
+
+function clearFilesDragUi(o: AppOrchestrator): void {
+  o.state.filesUploadDropActive = false;
+  o.root.querySelectorAll("[data-files-drop-target].is-dragover").forEach((el) => {
+    el.classList.remove("is-dragover");
+  });
+}
+
+/**
+ * Step 6: contact avatar load error (capture — error does not bubble).
+ */
+function onRootErrorCapture(_o: AppOrchestrator, ev: Event): void {
+  const img = ev.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  if (!img.classList.contains("contact-avatar")) return;
+  if (!img.dataset.avatarFallback) return;
+  if (!img.isConnected) return;
+
+  const letter = img.dataset.avatarFallback || "?";
+  const span = document.createElement("span");
+  span.className = "contact-avatar contact-avatar-fallback";
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = letter;
+  img.replaceWith(span);
 }
 
 /**

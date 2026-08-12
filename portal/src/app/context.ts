@@ -193,6 +193,8 @@ export type AppState = {
   filesUploadMenuOpen: boolean;
   filesUploadMenuDocClick: ((ev: MouseEvent) => void) | null;
   filesUploadDropActive: boolean;
+  /** Drag depth for files panel drop (lives on state so drop listeners can be mount-time). */
+  filesDropDepth: number;
   escapeBound: boolean;
   /** True after registerPortalEvents(o) at mount (delegated-events plan). */
   portalEventsBound: boolean;
@@ -341,6 +343,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesUploadMenuOpen: false,
     filesUploadMenuDocClick: null,
     filesUploadDropActive: false,
+    filesDropDepth: 0,
     escapeBound: false,
     portalEventsBound: false,
     portalUi: {
@@ -434,6 +437,7 @@ export const APP_STATE_KEYS = [
   "adminUsers",
   "adminPage",
   "filesUploadDropActive",
+  "filesDropDepth",
   "filesUploadMenuOpen",
   "filesUploadProgress",
   "filesTransferDest",
