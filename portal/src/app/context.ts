@@ -194,6 +194,8 @@ export type AppState = {
   filesUploadMenuDocClick: ((ev: MouseEvent) => void) | null;
   filesUploadDropActive: boolean;
   escapeBound: boolean;
+  /** True after registerPortalEvents(o) at mount (delegated-events plan). */
+  portalEventsBound: boolean;
   portalUi: PortalUiState;
   searchTimer: ReturnType<typeof setTimeout> | null;
   sessionIdleSeconds: number;
@@ -340,6 +342,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesUploadMenuDocClick: null,
     filesUploadDropActive: false,
     escapeBound: false,
+    portalEventsBound: false,
     portalUi: {
       timeFormat: "auto",
       weekStart: "auto",
@@ -499,6 +502,7 @@ export const APP_STATE_KEYS = [
   "noteSort",
   "bulkDueValue",
   "escapeBound",
+  "portalEventsBound",
   "searchTimer",
   "portalUi",
   "appVersion",

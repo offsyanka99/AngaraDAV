@@ -275,4 +275,6 @@ Step 0 is documentation-only — **no runtime change**.
 | Optional bind counter | Skipped (optional) |
 | Inventory exit criteria | **Met** |
 
-**Next:** Step 1 — `registerPortalEvents(o)` dual path (still call full `bind()` after render).
+**Step 1 (done):** `registerPortalEvents(o)` in `app/events.ts` — mount-time registration; Escape live; other handlers scaffold; `bind()` still re-attaches element listeners.
+
+**Next:** Step 2 — root click → `onAction`; drop per-element click bind.

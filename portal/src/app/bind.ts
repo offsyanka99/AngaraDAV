@@ -1,6 +1,11 @@
 /**
  * DOM listeners after each render (Phase 8 extract).
  */
+/**
+ * Post-render DOM bind (Phase 8). Called after every render().
+ * Escape is owned by registerPortalEvents (delegated-events Step 1).
+ * Click/submit/change/input still attached here until Steps 2–4.
+ */
 import type { AppOrchestrator } from "./orchestrator";
 import { onAction } from "./onAction";
 import * as files from "./files";
@@ -80,138 +85,7 @@ export function bind(o: AppOrchestrator) {
       img.replaceWith(span);
     });
   });
-  if (!state.escapeBound) {
-    document.addEventListener("keydown", (ev: KeyboardEvent) => {
-      if (ev.key !== "Escape") return;
-      if (
-        state.importProgress &&
-        (state.importProgress.phase === "done" || state.importProgress.phase === "error")
-      ) {
-        o.closeImportProgress();
-        return;
-      }
-      if (state.importProgress) return;
-      if (
-        state.filesUploadProgress &&
-        (state.filesUploadProgress.phase === "done" || state.filesUploadProgress.phase === "error")
-      ) {
-        o.closeFilesUploadProgress();
-        return;
-      }
-      if (state.filesUploadProgress) return;
-      if (state.filesUploadMenuOpen) {
-        state.filesUploadMenuOpen = false;
-        o.unbindFilesUploadMenuOutside();
-        render();
-        return;
-      }
-      if (state.userMenuOpen) {
-        state.userMenuOpen = false;
-        o.unbindUserMenuOutside();
-        render();
-        return;
-      }
-      if (state.filesUploadConflict !== null) {
-        files.resolveFilesUploadConflict(o.filesHost, "cancel");
-        return;
-      }
-      if (
-        state.filesRenamePath !== null ||
-        state.filesDeletePaths !== null ||
-        state.filesTransfer !== null ||
-        state.filesMkdirOpen
-      ) {
-        state.filesRenamePath = null;
-        state.filesDeletePaths = null;
-        o.resetFilesTransferTree();
-        state.filesMkdirOpen = false;
-        render();
-        return;
-      }
-      if (state.confirmDelete) {
-        state.confirmDelete = null;
-        render();
-        return;
-      }
-      o.closeInfoModal();
-      if (state.eventDtPicker) {
-        state.eventDtPicker = null;
-        unbindDtPickerOutside(state);
-        render();
-        return;
-      }
-      if (state.eventModalOpen) {
-        state.eventModalOpen = false;
-        state.editingEvent = null;
-        state.creatingEvent = false;
-        state.eventDtPicker = null;
-        render();
-        return;
-      }
-      if (state.contactModalOpen) {
-        state.contactModalOpen = false;
-        state.editingContact = null;
-        state.creatingContact = false;
-        state.photoPreview = null;
-        state.photoBase64Pending = null;
-        state.removePhotoPending = false;
-        render();
-        return;
-      }
-      if (state.abModalOpen) {
-        state.abModalOpen = false;
-        render();
-        return;
-      }
-      if (
-        state.calModalOpen ||
-        state.createCalModalOpen ||
-        state.deleteConfirmId !== null ||
-        state.deleteAbConfirmId !== null
-      ) {
-        state.calModalOpen = false;
-        state.createCalModalOpen = false;
-        state.deleteConfirmId = null;
-        state.deleteAbConfirmId = null;
-        render();
-        return;
-      }
-      if (
-        state.adminUserCreateOpen ||
-        state.adminUserEditOpen ||
-        state.adminUserDeleteUsername !== null
-      ) {
-        state.adminUserCreateOpen = false;
-        state.adminUserEditOpen = false;
-        state.adminUserDeleteUsername = null;
-        render();
-        return;
-      }
-      if (state.adminResetModalOpen) {
-        state.adminResetModalOpen = false;
-        render();
-        return;
-      }
-      if (state.adminDbConfirmOpen) {
-        state.adminDbConfirmOpen = false;
-        state.adminDbConfirmText = "";
-        state.adminDbPendingBody = null;
-        render();
-        return;
-      }
-      if (
-        state.adminCalModal !== null ||
-        state.adminAbModal !== null ||
-        state.adminResourceDelete !== null
-      ) {
-        state.adminCalModal = null;
-        state.adminAbModal = null;
-        state.adminResourceDelete = null;
-        render();
-      }
-    });
-    state.escapeBound = true;
-  }
+  // Escape is registered once in registerPortalEvents (Step 1) — not re-bound here.
 
   // Forms use data-form="…" (not #id) — must match render templates
   const loginForm = root.querySelector<HTMLFormElement>('[data-form="login"]');

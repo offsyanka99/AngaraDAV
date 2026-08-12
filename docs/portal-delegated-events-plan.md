@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Step 0 done; 1–8 pending)  
+**Status:** In progress (Steps 0–1 done; 2–8 pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -97,15 +97,22 @@ export function registerPortalEvents(o: AppOrchestrator): void {
 }
 ```
 
-**Initially:** each handler only forwards to existing logic (thin wrappers), still call full `bind()` after render for safety (**dual path** for one PR).
+**Initially:** dual path without double-firing actions:
 
-- [ ] Wire `registerPortalEvents(o)` once at end of `mountApp` after `o` is built.
-- [ ] `portalEventsBound` (or module flag) prevents double registration on HMR if needed.
+- Root/document listeners registered once in `app/events.ts`.
+- Click/submit/change/input/row-keydown handlers are **scaffolds** (debug log only) until Steps 2–5.
+- **Escape** is fully owned at mount (moved out of `bind.ts`) so it is not re-attached after every render.
+- Post-render `bind()` still attaches all other element-level listeners.
 
-**Stuck risk:** HMR / re-calling `mountApp` doubles listeners.  
-**Readjust:** module-level `WeakMap<root, bound>` or teardown function.
+- [x] Wire `registerPortalEvents(o)` once at end of `mountApp` after `o` is built.
+- [x] `portalEventsBound` + `WeakMap<root>` prevent double registration.
+- [x] Escape matrix in `events.ts`; removed from `bind.ts`.
 
-**Exit:** Dual path works; no regressions; still re-binds.
+**Stuck risk:** HMR / re-calling `mountApp` doubles listeners → **resolved** with WeakMap.  
+**Readjust if stuck:** module-level `WeakMap<root, bound>` or teardown function.
+
+**Exit:** Dual path works; no regressions; still re-binds.  
+**Status:** **Done 2026-08-12** (code).
 
 ---
 
