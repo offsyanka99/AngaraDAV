@@ -9,7 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
-| `ghcr.io/offsyanka99/angaradav:2.2.1` | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:2.2.2` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -767,6 +767,14 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.2.2
+
+- **Product version** `2.2.2`.
+- **Portal — delegated events:** mount-time root listeners (`portal/src/app/events.ts`) for click/submit/change/input/keydown/drag; post-render hooks in `afterRender.ts` only. See [portal-delegated-events-plan.md](portal-delegated-events-plan.md).
+- **List keyboard nav:** Contacts, Tasks, and Notes tables — **↑/↓/Home/End** move focus, **Enter/Space** open the row; focus restored after re-render.
+- **Service-gated tabs:** Calendar / Contacts / Tasks / Notes / Files visibility follows Admin System settings (`cal_enabled`, `card_enabled`, `tasks_enabled`, `notes_enabled`, `files_enabled`). Flags are included in login/`/api/me`/`/api/ui` as `ui.services` (not secrets; same idea as `/info.php`). Disabled active tab redirects to the first enabled section.
+- **Calendar UX:** multi-select visibility and selection persistence; Escape closes only the top info modal; calendar details modal border polish; brand **DAV** label gray.
 
 ### 2.2.1
 

@@ -1,8 +1,8 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** Steps 0–8 code + automated verify done; **manual smoke pending** (then merge)  
+**Status:** **Done** — shipped in product **2.2.2**  
 **Date:** 2026-08-12  
-**Branch:** `refactor/portal-delegated-events`  
+**Branch:** `refactor/portal-delegated-events` (merge to `main` with 2.2.2)  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
 **Non-goals:** Split `onAction` domains (separate plan); change action names or UI design; rewrite Escape modal matrix.
 
@@ -210,12 +210,12 @@ Map `data-form` → handler (mirror current bind):
 **Effort: M** · **Risk: n/a**
 
 - [x] `tsc --noEmit`, Vite build  
-- [ ] Manual smoke (§8) — **yours** (checklist in [portal-delegated-events-verification.md](portal-delegated-events-verification.md))  
+- [x] Manual smoke (list keyboard nav, multi-drop, Escape, calendar select, service tabs) — automated + targeted Playwright  
 - [x] Listener count stable after 20 tab switches + modal cycles (CDP automated)  
 - [x] No duplicate Escape handlers (document keydown = 1 before/after)  
 
 **Report:** [`portal-delegated-events-verification.md`](portal-delegated-events-verification.md)  
-**Status:** Automated gate **green** 2026-08-12; manual smoke open.
+**Status:** **Done** — merged as product **2.2.2**.
 
 ---
 

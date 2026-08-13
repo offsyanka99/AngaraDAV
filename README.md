@@ -6,7 +6,7 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.2.1`
+**Version:** `2.2.2`
 **Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
@@ -24,8 +24,9 @@ AngaraDAV includes:
 - **User portal** (`/portal/`) — TypeScript SPA + PHP API:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
-  - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks)
+  - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks); Contacts/Tasks/Notes tables support **↑/↓/Enter** keyboard navigation
   - **Files** tab: browse/upload (toolbar **Upload ▾** Files…/Folder…, drop mix onto list)/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
+  - User tabs (**Calendar / Contacts / Tasks / Notes / Files**) follow Admin **DAV services** toggles (CalDAV, CardDAV, Tasks, Notes, Files); disabled services hide the matching tab
   - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
   - Info **(i)** modals; optional 12h/24h, week-start, and portal debug log level prefs
@@ -69,8 +70,9 @@ Legacy release history
 | `2.1.2` | Files: **Upload ▾** menu (Files… / Folder…), drop files/folders/mix on the panel (no upload modal), File System Access API with Safari/Firefox classic-input fallbacks; nested trees + progress unchanged |
 | `2.2.0` | Portal SPA modularization (`portal/src/app/*` domains + thin orchestrator); same user-visible Files/Admin/CalDAV/CardDAV behavior as 2.1.2 |
 | `2.2.1` | Portal `onAction` domain routers; multi-user calendar share href fix; Files drop merge + Skip existing; themed delete confirms; DT picker outside-click; anonymous `/api/me` 200 |
+| `2.2.2` | Portal delegated event listeners; list keyboard nav; tabs gated by DAV services; calendar multi-select + Escape/modal polish |
 
-Image tags: `latest`, `2.2.1`, `sha-…`.
+Image tags: `latest`, `2.2.2`, `sha-…`.
 
 Quick start (Docker)
 --------------------

@@ -1,7 +1,7 @@
 # Portal delegated-events — Step 8 verification
 
 **Date:** 2026-08-12  
-**Branch:** `refactor/portal-delegated-events`  
+**Branch:** `refactor/portal-delegated-events` → release **2.2.2**  
 **Product baseline:** builds on 2.2.1 SPA  
 
 ---

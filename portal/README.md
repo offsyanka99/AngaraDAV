@@ -1,53 +1,57 @@
 # AngaraDAV user portal
 
-**Version:** `2.2.1`
+**Version:** `2.2.2`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
 
-## Module layout (WIP)
+User tabs follow Admin **DAV services** (CalDAV → Calendar, CardDAV → Contacts,
+Tasks/Notes/Files toggles). Contacts, Tasks, and Notes lists support **↑/↓/Enter**
+keyboard navigation.
 
-`src/app.ts` is still the main orchestrator (`mountApp`). Pure helpers are being
-split into `src/app/` per the plan in
-[`docs/portal-app-refactor-plan.md`](../docs/portal-app-refactor-plan.md):
+## Module layout
+
+`src/app.ts` is the thin orchestrator (`mountApp`). Domain code lives under
+`src/app/` per [`docs/portal-app-refactor-plan.md`](../docs/portal-app-refactor-plan.md):
 
 | Module | Role |
 |--------|------|
 | `app/constants.ts` | Storage keys, version fallback, docs URL |
 | `app/onAction.ts` | Thin data-action chain → domain `*actionsRouter.ts` |
+| `app/events.ts` | Mount-time delegated listeners (click/submit/change/input/keydown/drag) |
+| `app/afterRender.ts` | Post-render hooks (menus, indeterminate, list keyboard focus) |
 | `app/types.ts` | `TabId`, `AdminPageId`, `Flash` |
 | `app/sectionInfo.ts` | `(i)` help copy + title row |
 | `app/format.ts` | Display formatters, sort headers |
 | `app/paths.ts` | WebDAV storage path join/basename |
 | `app/datetime.ts` | Pure date/time + popover HTML helpers |
-| `app/context.ts` | `AppState`, `AppContext`, `createAppState` (Phase 2) |
-| `app/flash.ts` | Flash banner set/clear/render (Phase 3) |
-| `app/scroll.ts` | Scroll capture/restore across re-renders (Phase 3) |
-| `app/session.ts` | Idle timeout, install gate, session wipe (Phase 3) |
-| `app/shell.ts` | Topnav / tabs / footer chrome (Phase 3) |
-| `app/login.ts` | **Sign-in screen** copy and form (Phase 3) |
-| `app/bootstrap.ts` | Bootstrap + login submit flow (Phase 3) |
-| `app/files/*` | Files tab (Phase 4): load, transfer, upload, render, actions |
-| `app/admin/*` | Administration (Phase 5): overview, users, settings, database |
-| `app/calendars/*` | Calendars (Phase 6): month grid, events, import progress, ICS import |
-| `app/keys.ts` | Shared `itemKey` for tasks/notes (Phase 7) |
-| `app/notes/*` | Notes tab (Phase 7): load, render, save |
-| `app/tasks/*` | Tasks tab (Phase 7): tree, bulk, load, render, save |
-| `app/contacts/*` | Contacts tab (Phase 7): loaders, form, photo, VCF import, save |
-| `app/orchestrator.ts` | Shared `AppOrchestrator` bag (Phase 8) |
-| `app/home.ts` | Shell + tab switch (Phase 8) |
-| `app/onAction.ts` / `app/bind.ts` | Action dispatcher + DOM bind (Phase 8) |
-| `app/navigation.ts` | `loadHome` / `activateTab` (Phase 8) |
-| `app/datetimeFields.ts` | Date/time field helpers (Phase 8) |
-| `app/routing.ts` / `app/badges.ts` | Hash/tab storage + badges (Phase 8) |
+| `app/context.ts` | `AppState`, `AppContext`, `createAppState` |
+| `app/flash.ts` | Flash banner set/clear/render |
+| `app/scroll.ts` | Scroll capture/restore across re-renders |
+| `app/session.ts` | Idle timeout, install gate, session wipe, service-tab helpers |
+| `app/shell.ts` | Topnav / tabs / footer chrome |
+| `app/login.ts` | Sign-in screen copy and form |
+| `app/bootstrap.ts` | Bootstrap + login submit flow |
+| `app/files/*` | Files tab: load, transfer, upload, render, actions |
+| `app/admin/*` | Administration: overview, users, settings, database |
+| `app/calendars/*` | Calendars: month grid, events, import progress, ICS import |
+| `app/keys.ts` | Shared `itemKey` for tasks/notes |
+| `app/notes/*` | Notes tab: load, render, save |
+| `app/tasks/*` | Tasks tab: tree, bulk, load, render, save |
+| `app/contacts/*` | Contacts tab: loaders, form, photo, VCF import, save |
+| `app/orchestrator.ts` | Shared `AppOrchestrator` bag |
+| `app/home.ts` | Shell + tab switch (service-gated tab buttons) |
+| `app/navigation.ts` | `loadHome` / `activateTab` / `normalizeActiveTab` |
+| `app/datetimeFields.ts` | Date/time field helpers |
+| `app/routing.ts` / `app/badges.ts` | Hash/tab storage + badges |
 
-Optional follow-ups (not required for modularization):  
-[`docs/portal-onaction-split-plan.md`](../docs/portal-onaction-split-plan.md) · [`docs/portal-delegated-events-plan.md`](../docs/portal-delegated-events-plan.md)
+Plans:  
+[`docs/portal-onaction-split-plan.md`](../docs/portal-onaction-split-plan.md) (done in 2.2.1) ·  
+[`docs/portal-delegated-events-plan.md`](../docs/portal-delegated-events-plan.md) (done in 2.2.2)
 
-`mountApp` (`app.ts`, ~350 lines) creates `state`, domain hosts, and one `AppOrchestrator` (`o`), then bootstraps.
-All UI state is `state.*`. Domain modules and `home`/`onAction`/`bind` take `o` or hosts — they do not import `app.ts`.
-
-Branch for this work: `refactor/portal-app-modules`.
+`mountApp` creates `state`, domain hosts, and one `AppOrchestrator` (`o`), registers
+events once, then bootstraps. All UI state is `state.*`. Domain modules take `o` or
+hosts — they do not import `app.ts`.
 
 ## Tabs
 

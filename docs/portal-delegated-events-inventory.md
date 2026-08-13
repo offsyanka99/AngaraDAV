@@ -3,7 +3,8 @@
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** 2.2.1 onAction split (done)  
-**Baseline product:** AngaraDAV **2.2.1** · `tsc --noEmit` clean on `main`  
+**Shipped in:** **2.2.2**  
+**Baseline product (Step 0):** AngaraDAV **2.2.1** · `tsc --noEmit` clean on `main`  
 **Code freeze for this doc:** current `portal/src` on this branch tip at Step 0 start  
 
 This freezes **where listeners are attached today** before mount-time delegation (Steps 1+).  
