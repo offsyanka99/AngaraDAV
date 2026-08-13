@@ -771,7 +771,7 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 ### 2.2.2
 
 - **Product version** `2.2.2`.
-- **Portal — delegated events:** mount-time root listeners (`portal/src/app/events.ts`) for click/submit/change/input/keydown/drag; post-render hooks in `afterRender.ts` only. See [portal-delegated-events-plan.md](portal-delegated-events-plan.md).
+- **Portal — delegated events:** mount-time root listeners (`portal/src/app/events.ts`) for click/submit/change/input/keydown/drag; post-render hooks in `afterRender.ts` only.
 - **List keyboard nav:** Contacts, Tasks, and Notes tables — **↑/↓/Home/End** move focus, **Enter/Space** open the row; focus restored after re-render.
 - **Service-gated tabs:** Calendar / Contacts / Tasks / Notes / Files visibility follows Admin System settings (`cal_enabled`, `card_enabled`, `tasks_enabled`, `notes_enabled`, `files_enabled`). Flags are included in login/`/api/me`/`/api/ui` as `ui.services` (not secrets; same idea as `/info.php`). Disabled active tab redirects to the first enabled section.
 - **Calendar UX:** multi-select visibility and selection persistence; Escape closes only the top info modal; calendar details modal border polish; brand **DAV** label gray.
@@ -779,7 +779,7 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 ### 2.2.1
 
 - **Product version** `2.2.1`.
-- **Portal — `onAction` split:** thin dispatcher (`portal/src/app/onAction.ts`) chains domain routers (`shellActionsRouter`, `calendars` / `tasks` / `notes` / `contacts` / files / admin `actionsRouter`); cross-domain DT form drafts via `datetimeSync.ts`. See [portal-onaction-split-plan.md](portal-onaction-split-plan.md).
+- **Portal — `onAction` split:** thin dispatcher (`portal/src/app/onAction.ts`) chains domain routers (`shellActionsRouter`, `calendars` / `tasks` / `notes` / `contacts` / files / admin `actionsRouter`); cross-domain DT form drafts via `datetimeSync.ts`.
 - **Calendar share:** multi-user share no longer overwrites when principal emails collide; share href is unique per username (`mailto:{user}@users.local`). Share UI remains one user + access per Share click; table lists all sharees.
 - **Files upload:** mixed drag-and-drop merges folder walks with root-level `FileList` entries; **Skip existing** only skips true server conflicts (not the whole batch).
 - **UX:** themed delete confirm modal (events/tasks/notes/contacts/bulk/revoke); datetime picker closes on outside click; anonymous `GET /api/me` returns **200** with `user: null` (no console 401 on login screen); admin System settings `portal_admin_users` uses `autocomplete="off"`.

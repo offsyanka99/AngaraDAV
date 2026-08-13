@@ -32,6 +32,12 @@ Core/BuildInfo.php
 # Local working notes (not committed)
 *.local.md
 
+# Portal internal refactor plans/inventories (local only; not published)
+docs/portal-*-plan.md
+docs/portal-*-inventory.md
+docs/portal-*-verification.md
+docs/portal-app-refactor-plan.md
+
 # IDE
 nbproject
 

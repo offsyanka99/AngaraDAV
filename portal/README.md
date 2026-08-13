@@ -12,7 +12,7 @@ keyboard navigation.
 ## Module layout
 
 `src/app.ts` is the thin orchestrator (`mountApp`). Domain code lives under
-`src/app/` per [`docs/portal-app-refactor-plan.md`](../docs/portal-app-refactor-plan.md):
+`src/app/`:
 
 | Module | Role |
 |--------|------|
@@ -44,10 +44,6 @@ keyboard navigation.
 | `app/navigation.ts` | `loadHome` / `activateTab` / `normalizeActiveTab` |
 | `app/datetimeFields.ts` | Date/time field helpers |
 | `app/routing.ts` / `app/badges.ts` | Hash/tab storage + badges |
-
-Plans:  
-[`docs/portal-onaction-split-plan.md`](../docs/portal-onaction-split-plan.md) (done in 2.2.1) ·  
-[`docs/portal-delegated-events-plan.md`](../docs/portal-delegated-events-plan.md) (done in 2.2.2)
 
 `mountApp` creates `state`, domain hosts, and one `AppOrchestrator` (`o`), registers
 events once, then bootstraps. All UI state is `state.*`. Domain modules take `o` or
