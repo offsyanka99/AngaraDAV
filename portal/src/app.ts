@@ -50,7 +50,7 @@ import {
 import { accessBadge as accessBadgeFn, formatImportResult as formatImportResultFn } from "./app/badges";
 import type { AppOrchestrator } from "./app/orchestrator";
 import { renderHome } from "./app/home";
-import { bind as bindApp } from "./app/bind";
+import { bindAfterRender } from "./app/afterRender";
 import { registerPortalEvents } from "./app/events";
 import {
   activateAdminPage as activateAdminPageNav,
@@ -98,7 +98,7 @@ export function mountApp(root: HTMLElement): void {
     } else {
       renderHome(o);
     }
-    bindApp(o);
+    bindAfterRender(o);
     restoreScrollRoot(root, scroll);
     requestAnimationFrame(() => {
       dt.positionDtPopovers(o);

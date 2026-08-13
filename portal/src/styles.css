@@ -113,9 +113,9 @@ a:hover {
   line-height: 1.2;
 }
 
-/* “DAV” segment of AngaraDAV — same blue as primary buttons */
+/* “DAV” segment of AngaraDAV — medium gray */
 .brand-dav {
-  color: var(--primary);
+  color: #9ca3af;
 }
 
 .brand-sep {

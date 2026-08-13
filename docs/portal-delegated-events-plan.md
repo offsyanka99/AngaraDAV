@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–6 done; 7–8 pending)  
+**Status:** In progress (Steps 0–7 done; 8 verify pending)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -197,10 +197,12 @@ Map `data-form` → handler (mirror current bind):
 ### Step 7 — Remove dual path; shrink `bind.ts`  
 **Effort: S–M** · **Risk: Medium**
 
-- [ ] `render()` no longer calls full `bindApp(o)` **or** calls only `bindAfterRender(o)` for leftovers (outside menus, indeterminate checkboxes, color pair if any).
-- [ ] Outside-click for user/files menus: still call bind/unbind when open state flips (can run from `onAction` when toggling menus, or from a small `syncOutsideListeners(o)` after render).
-- [ ] Target: `bind.ts` ≤ ~100 lines or renamed `afterRender.ts`.
-- [ ] Full smoke checklist (§8).
+- [x] `render()` calls `bindAfterRender(o)` only (`app/afterRender.ts`)
+- [x] Outside-click menus + indeterminate + holidays sync remain post-render
+- [x] Renamed/thin after-render module (~35 lines); old `bind.ts` removed
+- [ ] Full smoke checklist (§8) — with Step 8
+
+**Status:** **Done 2026-08-12** (code).
 
 ---
 

@@ -385,21 +385,53 @@ function onRootInput(o: AppOrchestrator, ev: Event): void {
   }
 }
 
+const LIST_ROW_SEL =
+  'tr.contact-table-row[data-action="select-contact"], tr.contact-table-row[data-action="select-task"], tr.contact-table-row[data-action="select-note"]';
+const ACTION_ROW_SEL =
+  "tr.contact-table-row[data-action], .cal-row[data-action], .month-cell[data-action]";
+
 /**
- * Step 5: Enter/Space on actionable rows (replaces per-row keydown re-bind).
+ * Step 5 + list keyboard nav: ArrowUp/Down move focus; Enter/Space activate.
  */
 function onRootKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
+  const target = ev.target as HTMLElement | null;
+  if (!target || !o.root.contains(target)) return;
+
+  // Nested controls keep default keyboard behavior
+  if (target.closest("button, a, input, select, textarea, [contenteditable=true]")) {
+    if (!target.matches(ACTION_ROW_SEL) && !target.matches(LIST_ROW_SEL)) return;
+  }
+
+  // Contacts / Tasks / Notes list tables: ↑ ↓ move focus between records
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    const listRow = target.closest(LIST_ROW_SEL) as HTMLElement | null;
+    if (!listRow || !o.root.contains(listRow)) return;
+    ev.preventDefault();
+    const scope = listRow.closest("tbody") ?? listRow.parentElement;
+    if (!scope) return;
+    const rows = Array.from(scope.querySelectorAll<HTMLElement>(LIST_ROW_SEL));
+    const idx = rows.indexOf(listRow);
+    if (idx < 0) return;
+    const next = ev.key === "ArrowDown" ? rows[idx + 1] : rows[idx - 1];
+    if (next) {
+      next.focus();
+      next.scrollIntoView({ block: "nearest" });
+    }
+    return;
+  }
+
   if (ev.key !== "Enter" && ev.key !== " ") return;
-  const row = (ev.target as HTMLElement | null)?.closest?.(
-    "tr.contact-table-row[data-action], .cal-row[data-action], .month-cell[data-action]",
-  ) as HTMLElement | null;
+  const row = target.closest(ACTION_ROW_SEL) as HTMLElement | null;
   if (!row || !o.root.contains(row)) return;
   // Only when focus is on the row itself (not a nested button/input)
-  if (ev.target !== row && (ev.target as HTMLElement).closest("button, a, input, select, textarea")) {
+  if (
+    ev.target !== row &&
+    (ev.target as HTMLElement).closest("button, a, input, select, textarea")
+  ) {
     return;
   }
   ev.preventDefault();
-  log.debug("portalEvents.keydown.row", { action: row.dataset.action });
+  log.debug("portalEvents.keydown.row", { action: row.dataset.action, key: ev.key });
   row.click();
 }
 

@@ -285,6 +285,10 @@ Step 0 is documentation-only — **no runtime change**.
 
 **Step 5 (done):** root row Enter/Space; Escape already at mount (Step 1).
 
-**Step 6 (done):** root files drop + avatar error capture; `files.bindFilesDom` = indeterminate only.
+**Step 6 (done):** root files drop + avatar error capture.
 
-**Next:** Step 7 — shrink post-render bind / rename afterRender; Step 8 verify.
+**Step 7 (done):** `bindAfterRender` in `afterRender.ts` (~35 lines); mount-time events cover interactions.
+
+**Also:** Contacts/Tasks/Notes table rows — ArrowUp/Down focus, Enter/Space open.
+
+**Next:** Step 8 verification gate.
