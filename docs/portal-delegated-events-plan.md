@@ -1,6 +1,6 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** In progress (Steps 0–7 done; 8 verify pending)  
+**Status:** Steps 0–8 code + automated verify done; **manual smoke pending** (then merge)  
 **Date:** 2026-08-12  
 **Branch:** `refactor/portal-delegated-events`  
 **Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
@@ -209,10 +209,13 @@ Map `data-form` → handler (mirror current bind):
 ### Step 8 — Verification gate  
 **Effort: M** · **Risk: n/a**
 
-- [ ] `tsc --noEmit`, Vite build  
-- [ ] Manual smoke (§8)  
-- [ ] DevTools: listener count on `#app` / root stable across 20 re-renders (tab switch / open modal)  
-- [ ] No duplicate Escape handlers (`getEventListeners` in Chromium)  
+- [x] `tsc --noEmit`, Vite build  
+- [ ] Manual smoke (§8) — **yours** (checklist in [portal-delegated-events-verification.md](portal-delegated-events-verification.md))  
+- [x] Listener count stable after 20 tab switches + modal cycles (CDP automated)  
+- [x] No duplicate Escape handlers (document keydown = 1 before/after)  
+
+**Report:** [`portal-delegated-events-verification.md`](portal-delegated-events-verification.md)  
+**Status:** Automated gate **green** 2026-08-12; manual smoke open.
 
 ---
 
@@ -302,12 +305,12 @@ Not: `render → full bind everything`.
 
 ## 10. Definition of done
 
-- [ ] Portal events registered once per mount  
-- [ ] Post-render work limited to outside-menus / drop hybrid / avatar if required  
-- [ ] Smoke checklist green  
-- [ ] Listener count stable across re-renders  
-- [ ] Plan status → Done when landed  
-- [ ] Cross-link from `docs/portal-app-refactor-plan.md` Phase 8 optional items checked  
+- [x] Portal events registered once per mount  
+- [x] Post-render work limited to outside-menus / indeterminate / holidays sync (`afterRender.ts`)  
+- [ ] Smoke checklist green (manual)  
+- [x] Listener count stable across re-renders (automated)  
+- [ ] Plan status → Done when landed on main  
+- [x] Cross-link from `docs/portal-app-refactor-plan.md` Phase 8 optional items  
 
 ---
 

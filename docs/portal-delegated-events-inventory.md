@@ -291,4 +291,4 @@ Step 0 is documentation-only — **no runtime change**.
 
 **Also:** Contacts/Tasks/Notes table rows — ArrowUp/Down focus, Enter/Space open.
 
-**Next:** Step 8 verification gate.
+**Step 8:** Automated gate green — [portal-delegated-events-verification.md](portal-delegated-events-verification.md). Manual smoke open before merge.
