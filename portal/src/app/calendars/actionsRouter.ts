@@ -27,10 +27,36 @@ export async function handleCalendarsAction(
 ): Promise<boolean> {
   const { state, root, render, setFlash, clearFlash } = o;
 
-  if (action === "select-cal" || action === "toggle-cal") {
+  if (action === "toggle-cal") {
+    // Checkbox only — toggle month-grid visibility (must not be blocked by stopPropagation)
     const id = Number(t.dataset.id);
     if (!Number.isFinite(id)) return true;
+    ev.stopPropagation();
     o.toggleCalendarSelected(id);
+    state.calendarSelectionSeeded = true;
+    state.busy = true;
+    clearFlash();
+    render();
+    try {
+      await o.loadMonthEvents();
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Failed to load calendar");
+    } finally {
+      state.busy = false;
+      render();
+    }
+    return true;
+  }
+
+  if (action === "select-cal") {
+    // Row click: ensure visible + set as primary for new events (do not toggle off)
+    const id = Number(t.dataset.id);
+    if (!Number.isFinite(id)) return true;
+    if (!state.selectedIds.includes(id)) {
+      state.selectedIds = [...state.selectedIds, id];
+    }
+    state.selectedId = id;
+    state.calendarSelectionSeeded = true;
     state.busy = true;
     clearFlash();
     render();

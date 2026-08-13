@@ -110,15 +110,24 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     state.calModalOpen = false;
     state.deleteConfirmId = null;
   }
+  // Seed default visibility only once (login / first home load). After that, an empty
+  // selectedIds means "show no month events" — do not re-check the first/default calendar.
   if (state.selectedIds.length === 0) {
-    const def = o.pickDefaultCalendar();
-    if (def) {
-      state.selectedIds = [def.id];
-      state.selectedId = def.id;
-    } else if (state.calendars.length > 0) {
-      state.selectedIds = [state.calendars[0].id];
-      state.selectedId = state.calendars[0].id;
+    if (!state.calendarSelectionSeeded) {
+      const def = o.pickDefaultCalendar();
+      if (def) {
+        state.selectedIds = [def.id];
+        state.selectedId = def.id;
+      } else if (state.calendars.length > 0) {
+        state.selectedIds = [state.calendars[0].id];
+        state.selectedId = state.calendars[0].id;
+      }
+      state.calendarSelectionSeeded = true;
+    } else {
+      state.selectedId = null;
     }
+  } else {
+    state.calendarSelectionSeeded = true;
   }
   if (state.selectedId === null && state.selectedIds.length > 0) {
     state.selectedId = state.selectedIds[0];

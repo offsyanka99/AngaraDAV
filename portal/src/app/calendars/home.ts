@@ -26,7 +26,7 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
           ? `<span class="badge badge-admin">holidays ${esc(c.holidaysCountry)}</span>`
           : "");
       return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="Toggle on the month grid">
-        <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+        <label class="cal-row-check" title="Show events on the month grid">
           <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${state.busy ? "disabled" : ""} />
         </label>
         ${color}
@@ -57,7 +57,7 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
           ? "Shared with you · full access — check to show events; click to set as primary for new events"
           : "Shared with you · read-only — check to show events";
       return `<div class="cal-row${active}${primary}" data-action="select-cal" data-id="${c.id}" role="button" tabindex="0" title="${esc(accessHint)}">
-        <label class="cal-row-check" title="Show events on the month grid" onclick="event.stopPropagation()">
+        <label class="cal-row-check" title="Show events on the month grid">
           <input type="checkbox" data-action="toggle-cal" data-id="${c.id}" ${visible ? "checked" : ""} ${state.busy ? "disabled" : ""} />
         </label>
         ${color}

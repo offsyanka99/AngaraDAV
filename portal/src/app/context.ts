@@ -158,6 +158,11 @@ export type AppState = {
   holidayCountries: HolidayCountry[];
   selectedId: number | null;
   selectedIds: number[];
+  /**
+   * After first loadHome seed of selectedIds, keep empty multi-select as intentional
+   * (do not re-check the default calendar when the user unchecks everything).
+   */
+  calendarSelectionSeeded: boolean;
   shares: Share[];
   installGate: InstallGate | null;
   calModalOpen: boolean;
@@ -308,6 +313,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     holidayCountries: [],
     selectedId: null,
     selectedIds: [],
+    calendarSelectionSeeded: false,
     shares: [],
     installGate: null,
     calModalOpen: false,
@@ -471,6 +477,7 @@ export const APP_STATE_KEYS = [
   "monthEvents",
   "holidayCountries",
   "selectedIds",
+  "calendarSelectionSeeded",
   "selectedId",
   "installGate",
   "userMenuDocClick",
