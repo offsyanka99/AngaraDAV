@@ -620,7 +620,12 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     render();
     return;
   }
-  o.closeInfoModal();
+  // Info modal stacks above other dialogs — close only it first (do not fall through)
+  const infoModal = o.root.querySelector<HTMLElement>("#info-modal");
+  if (infoModal && !infoModal.hidden) {
+    o.closeInfoModal();
+    return;
+  }
   if (state.eventDtPicker) {
     state.eventDtPicker = null;
     unbindDtPickerOutside(state);

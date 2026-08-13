@@ -213,7 +213,7 @@ From `bind.ts` document `keydown` (first match wins):
 7. Files upload **conflict** modal → resolve cancel
 8. Files rename / delete / transfer / mkdir open → clear + render
 9. `confirmDelete` → clear + render
-10. Info modal → `closeInfoModal`
+10. Info modal open → `closeInfoModal` **and return** (must not close underlying modal)
 11. DT picker → clear + unbind outside
 12. Event modal → clear editing event
 13. Contact modal → clear contact edit/photo

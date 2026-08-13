@@ -3781,6 +3781,12 @@ body.cal-modal-open {
   margin-top: 0;
 }
 
+/* Avoid double rule: table last row border-bottom + next section border-top */
+.cal-modal-body .table-wrap table tr:last-child td,
+.cal-modal-body .table-wrap table tr:last-child th {
+  border-bottom: none;
+}
+
 .cal-modal-footer {
   display: flex;
   justify-content: flex-end;
