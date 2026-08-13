@@ -1,9 +1,21 @@
 /**
  * Shell composition: tabs + active domain home (Phase 8).
  */
+import type { AppState } from "./context";
 import type { AppOrchestrator } from "./orchestrator";
 import { renderCalendarsHome } from "./calendars/home";
 import { renderContactsHome } from "./contacts/home";
+import { isUserTabEnabled } from "./session";
+import type { TabId } from "./types";
+
+function userTabButton(state: AppState, tab: TabId, label: string): string {
+  if (!isUserTabEnabled(state, tab)) return "";
+  const active = state.activeTab === tab;
+  return `<button type="button" role="tab" class="tab-btn${active ? " is-active" : ""}"
+            data-action="tab" data-tab="${tab}" aria-selected="${active}">
+            ${label}
+          </button>`;
+}
 
 export function renderHome(o: AppOrchestrator): void {
   const { state, root } = o;
@@ -15,19 +27,29 @@ export function renderHome(o: AppOrchestrator): void {
   let mainTab: string;
   switch (state.activeTab) {
     case "calendars":
-      mainTab = renderCalendarsHome(o);
+      mainTab = isUserTabEnabled(state, "calendars")
+        ? renderCalendarsHome(o)
+        : renderDisabledServicePanel("Calendar", "CalDAV");
       break;
     case "contacts":
-      mainTab = renderContactsHome(o);
+      mainTab = isUserTabEnabled(state, "contacts")
+        ? renderContactsHome(o)
+        : renderDisabledServicePanel("Contacts", "CardDAV");
       break;
     case "tasks":
-      mainTab = o.renderTasksTab();
+      mainTab = isUserTabEnabled(state, "tasks")
+        ? o.renderTasksTab()
+        : renderDisabledServicePanel("Tasks", "Tasks (VTODO)");
       break;
     case "notes":
-      mainTab = o.renderNotesTab();
+      mainTab = isUserTabEnabled(state, "notes")
+        ? o.renderNotesTab()
+        : renderDisabledServicePanel("Notes", "Notes (VJOURNAL)");
       break;
     case "files":
-      mainTab = o.renderFilesTab();
+      mainTab = isUserTabEnabled(state, "files")
+        ? o.renderFilesTab()
+        : renderDisabledServicePanel("Files", "WebDAV file storage");
       break;
     case "admin":
       mainTab = o.renderAdminSection();
@@ -66,26 +88,11 @@ export function renderHome(o: AppOrchestrator): void {
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
         </div>`
       : `<div class="tabs" role="tablist" aria-label="Portal sections">
-          <button type="button" role="tab" class="tab-btn${state.activeTab === "calendars" ? " is-active" : ""}"
-            data-action="tab" data-tab="calendars" aria-selected="${state.activeTab === "calendars"}">
-            Calendar
-          </button>
-          <button type="button" role="tab" class="tab-btn${state.activeTab === "contacts" ? " is-active" : ""}"
-            data-action="tab" data-tab="contacts" aria-selected="${state.activeTab === "contacts"}">
-            Contacts
-          </button>
-          <button type="button" role="tab" class="tab-btn${state.activeTab === "tasks" ? " is-active" : ""}"
-            data-action="tab" data-tab="tasks" aria-selected="${state.activeTab === "tasks"}">
-            Tasks
-          </button>
-          <button type="button" role="tab" class="tab-btn${state.activeTab === "notes" ? " is-active" : ""}"
-            data-action="tab" data-tab="notes" aria-selected="${state.activeTab === "notes"}">
-            Notes
-          </button>
-          <button type="button" role="tab" class="tab-btn${state.activeTab === "files" ? " is-active" : ""}"
-            data-action="tab" data-tab="files" aria-selected="${state.activeTab === "files"}">
-            Files
-          </button>
+          ${userTabButton(state, "calendars", "Calendar")}
+          ${userTabButton(state, "contacts", "Contacts")}
+          ${userTabButton(state, "tasks", "Tasks")}
+          ${userTabButton(state, "notes", "Notes")}
+          ${userTabButton(state, "files", "Files")}
           <button type="button" class="info-btn tab-info" data-action="info"
             data-info="${tabInfoKey}"
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
@@ -126,4 +133,12 @@ export function renderHome(o: AppOrchestrator): void {
   );
   document.body.classList.toggle("layout-files", state.activeTab === "files");
   document.body.classList.toggle("layout-admin", state.activeTab === "admin");
+}
+
+function renderDisabledServicePanel(section: string, settingLabel: string): string {
+  return `<div class="panel empty-panel">
+    <h2>${section}</h2>
+    <p class="muted">${section} is disabled in system settings (Enable ${settingLabel}).
+    An administrator can re-enable it under Administration → System settings.</p>
+  </div>`;
 }

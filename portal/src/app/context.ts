@@ -97,10 +97,23 @@ export type EventDtPicker = {
   name: string;
 };
 
+export type PortalUiServicesState = {
+  caldav: boolean;
+  carddav: boolean;
+  tasks: boolean;
+  notes: boolean;
+  files: boolean;
+};
+
 export type PortalUiState = {
   timeFormat: "auto" | "12h" | "24h";
   weekStart: "auto" | "monday" | "sunday";
   logLevel: string;
+  /**
+   * null = services not yet known (fail-open: show all user tabs).
+   * object = from login/me/ui; hide tabs for disabled services.
+   */
+  services: PortalUiServicesState | null;
 };
 
 export type AdminResourceDelete =
@@ -158,6 +171,16 @@ export type AppState = {
   holidayCountries: HolidayCountry[];
   selectedId: number | null;
   selectedIds: number[];
+  /**
+   * After first loadHome seed of selectedIds, keep empty multi-select as intentional
+   * (do not re-check the default calendar when the user unchecks everything).
+   */
+  calendarSelectionSeeded: boolean;
+  /**
+   * When true, restore focus to the selected Contacts/Tasks/Notes list row after
+   * re-render so ↑/↓ keyboard navigation keeps working.
+   */
+  listKeyboardFocus: boolean;
   shares: Share[];
   installGate: InstallGate | null;
   calModalOpen: boolean;
@@ -193,7 +216,11 @@ export type AppState = {
   filesUploadMenuOpen: boolean;
   filesUploadMenuDocClick: ((ev: MouseEvent) => void) | null;
   filesUploadDropActive: boolean;
+  /** Drag depth for files panel drop (lives on state so drop listeners can be mount-time). */
+  filesDropDepth: number;
   escapeBound: boolean;
+  /** True after registerPortalEvents(o) at mount (delegated-events plan). */
+  portalEventsBound: boolean;
   portalUi: PortalUiState;
   searchTimer: ReturnType<typeof setTimeout> | null;
   sessionIdleSeconds: number;
@@ -304,6 +331,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     holidayCountries: [],
     selectedId: null,
     selectedIds: [],
+    calendarSelectionSeeded: false,
+    listKeyboardFocus: false,
     shares: [],
     installGate: null,
     calModalOpen: false,
@@ -339,11 +368,14 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesUploadMenuOpen: false,
     filesUploadMenuDocClick: null,
     filesUploadDropActive: false,
+    filesDropDepth: 0,
     escapeBound: false,
+    portalEventsBound: false,
     portalUi: {
       timeFormat: "auto",
       weekStart: "auto",
       logLevel: "off",
+      services: null,
     },
     searchTimer: null,
     sessionIdleSeconds: 900,
@@ -431,6 +463,7 @@ export const APP_STATE_KEYS = [
   "adminUsers",
   "adminPage",
   "filesUploadDropActive",
+  "filesDropDepth",
   "filesUploadMenuOpen",
   "filesUploadProgress",
   "filesTransferDest",
@@ -464,6 +497,8 @@ export const APP_STATE_KEYS = [
   "monthEvents",
   "holidayCountries",
   "selectedIds",
+  "calendarSelectionSeeded",
+  "listKeyboardFocus",
   "selectedId",
   "installGate",
   "userMenuDocClick",
@@ -499,6 +534,7 @@ export const APP_STATE_KEYS = [
   "noteSort",
   "bulkDueValue",
   "escapeBound",
+  "portalEventsBound",
   "searchTimer",
   "portalUi",
   "appVersion",

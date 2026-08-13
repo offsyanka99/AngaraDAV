@@ -50,7 +50,8 @@ import {
 import { accessBadge as accessBadgeFn, formatImportResult as formatImportResultFn } from "./app/badges";
 import type { AppOrchestrator } from "./app/orchestrator";
 import { renderHome } from "./app/home";
-import { bind as bindApp } from "./app/bind";
+import { bindAfterRender } from "./app/afterRender";
+import { registerPortalEvents } from "./app/events";
 import {
   activateAdminPage as activateAdminPageNav,
   activateTab as activateTabNav,
@@ -97,7 +98,7 @@ export function mountApp(root: HTMLElement): void {
     } else {
       renderHome(o);
     }
-    bindApp(o);
+    bindAfterRender(o);
     restoreScrollRoot(root, scroll);
     requestAnimationFrame(() => {
       dt.positionDtPopovers(o);
@@ -346,6 +347,10 @@ export function mountApp(root: HTMLElement): void {
 
   ctx = { root, state, api, render, setFlash, clearFlash };
   void ctx;
+
+  // Mount-time listeners once (delegated-events Step 1 dual path).
+  // Post-render bindApp(o) still attaches element-level handlers until later steps.
+  registerPortalEvents(o);
 
   void bootstrapPortal(bootstrapDeps());
 }

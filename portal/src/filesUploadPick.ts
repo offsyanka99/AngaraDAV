@@ -238,55 +238,95 @@ function normalizeRelPath(rel: string): string {
 }
 
 /**
- * Resolve a DataTransfer drop into upload items.
+ * Synchronous capture of a drop's DataTransfer.
  *
- * Chromium often yields directory handles for selected folders via `items`, while
- * sibling loose files only appear reliably on `dt.files`. Returning early after
- * walking the folder used to drop those root-level files — merge both sources.
+ * Chromium invalidates DataTransferItemList after the first await (or after the
+ * drop handler returns). Only the first file/folder was uploaded when we awaited
+ * getAsFileSystemHandle() inside a loop. Call this **synchronously** in the drop
+ * handler, then process the snapshot asynchronously.
  */
-export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUploadItem[]> {
-  const rawItems = dt.items ? Array.from(dt.items) : [];
-  const fromItems: FilesUploadItem[] = [];
+export type DropSnapshot = {
+  /** One promise per file-kind item (may resolve null). Started synchronously. */
+  handlePromises: Promise<FileSystemHandle | null>[];
+  /** webkitGetAsEntry() results captured synchronously (parallel to handles). */
+  entries: Array<FileSystemEntry | null>;
+  /** FileList snapshot (may flatten multi-folder drops). */
+  files: File[];
+};
 
+export function snapshotDataTransfer(dt: DataTransfer): DropSnapshot {
+  const files = dt.files ? Array.from(dt.files) : [];
+  const handlePromises: Promise<FileSystemHandle | null>[] = [];
+  const entries: Array<FileSystemEntry | null> = [];
+
+  const rawItems = dt.items ? Array.from(dt.items) : [];
   for (const item of rawItems) {
     if (item.kind !== "file") continue;
     const anyItem = item as DataTransferItemWithHandles;
 
-    // 1) File System Access handles (Chromium; some Safari builds)
+    // Start handle resolution now — do not await between items
     if (typeof anyItem.getAsFileSystemHandle === "function") {
+      handlePromises.push(
+        anyItem.getAsFileSystemHandle().catch(() => null) as Promise<FileSystemHandle | null>,
+      );
+    } else {
+      handlePromises.push(Promise.resolve(null));
+    }
+
+    // Entry API must also be called synchronously for every item
+    let entry: FileSystemEntry | null = null;
+    if (typeof anyItem.webkitGetAsEntry === "function") {
       try {
-        const handle = await anyItem.getAsFileSystemHandle();
-        if (handle) {
-          if (handle.kind === "file") {
-            const file = await (handle as FileSystemFileHandle).getFile();
-            fromItems.push({ file, relativePath: file.name });
-          } else if (handle.kind === "directory") {
-            fromItems.push(...(await walkDirectoryHandle(handle as FileSystemDirectoryHandle, "")));
-          }
-          continue;
-        }
+        entry = anyItem.webkitGetAsEntry();
       } catch {
-        // Fall through to entry path
+        entry = null;
+      }
+    }
+    entries.push(entry);
+  }
+
+  return { handlePromises, entries, files };
+}
+
+/**
+ * Build upload items from a previously captured drop snapshot.
+ */
+export async function itemsFromDropSnapshot(snap: DropSnapshot): Promise<FilesUploadItem[]> {
+  const fromItems: FilesUploadItem[] = [];
+  const handles = await Promise.all(snap.handlePromises);
+
+  for (let i = 0; i < Math.max(handles.length, snap.entries.length); i++) {
+    const handle = handles[i] ?? null;
+    if (handle) {
+      try {
+        if (handle.kind === "file") {
+          const file = await (handle as FileSystemFileHandle).getFile();
+          fromItems.push({ file, relativePath: file.name });
+        } else if (handle.kind === "directory") {
+          fromItems.push(
+            ...(await walkDirectoryHandle(handle as FileSystemDirectoryHandle, "")),
+          );
+        }
+        continue;
+      } catch {
+        // Fall through to entry for this index
       }
     }
 
-    // 2) Legacy directory entries (widely supported, including Firefox/Safari)
-    if (typeof anyItem.webkitGetAsEntry === "function") {
-      const entry = anyItem.webkitGetAsEntry();
-      if (entry) {
+    const entry = snap.entries[i];
+    if (entry) {
+      try {
         fromItems.push(...(await walkFileSystemEntry(entry, "")));
-        continue;
+      } catch {
+        /* skip broken entry */
       }
     }
   }
 
-  // 3) Always merge FileList — loose files next to a dropped folder often only
-  // appear here (and folder children may also appear with webkitRelativePath).
-  const fromList =
-    dt.files && dt.files.length > 0 ? itemsFromFileList(dt.files, true) : [];
+  // Merge FileList: fills root-level files that only appear there, and covers
+  // browsers where handle/entry walks failed entirely.
+  const fromList = itemsFromFileList(snap.files, true);
 
-  // Prefer handle/entry walks (full tree + empty dirs); fill gaps from FileList
-  // (root-level files that never got a DataTransferItem handle).
   const byRel = new Map<string, FilesUploadItem>();
   for (const it of fromList) {
     const key = normalizeRelPath(it.relativePath || it.file?.name || "");
@@ -295,17 +335,19 @@ export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUplo
   }
   for (const it of fromItems) {
     const key = normalizeRelPath(it.relativePath || it.file?.name || "");
-    if (!key && it.isEmptyDir) {
-      // keep empty-dir markers under their path
-      const k = normalizeRelPath(it.relativePath);
-      if (k) byRel.set(k, it);
-      continue;
-    }
     if (!key) continue;
-    byRel.set(key, it);
+    byRel.set(key, it); // prefer handle/entry tree over flat list
   }
 
   return Array.from(byRel.values());
+}
+
+/**
+ * Resolve a live DataTransfer (snapshots first, then walks). Prefer calling
+ * snapshotDataTransfer + itemsFromDropSnapshot from the sync drop handler.
+ */
+export async function itemsFromDataTransfer(dt: DataTransfer): Promise<FilesUploadItem[]> {
+  return itemsFromDropSnapshot(snapshotDataTransfer(dt));
 }
 
 /** True when a drag event may carry files (for drop-target highlighting). */

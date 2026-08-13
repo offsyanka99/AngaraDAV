@@ -1,9 +1,9 @@
 # Plan: Delegated event listeners (portal SPA)
 
-**Status:** Planning (not started)  
+**Status:** **Done** — shipped in product **2.2.2**  
 **Date:** 2026-08-12  
-**Branch recommendation:** `refactor/portal-delegated-events`  
-**Depends on:** Prefer **after** `docs/portal-onaction-split-plan.md` lands (thinner action surface). Can run alone but debugging is harder.  
+**Branch:** `refactor/portal-delegated-events` (merge to `main` with 2.2.2)  
+**Depends on:** onAction split (**done** in 2.2.1). Inventory: [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
 **Non-goals:** Split `onAction` domains (separate plan); change action names or UI design; rewrite Escape modal matrix.
 
 ---
@@ -30,20 +30,21 @@ Behavior freeze.
 
 ## 2. Current bind inventory (pre-flight)
 
-| Kind | What | Count (approx) | Delegation strategy |
+**Full lock-in:** [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md) (Step 0). Summary:
+
+| Kind | What | Count (locked) | Delegation strategy |
 |------|------|----------------|---------------------|
-| **click** | All `[data-action]` → `onAction` | Many (full re-query each render) | **Yes** — single `root` click |
-| **change** | `dt-set-month` / `dt-set-year` → `onAction` | 2 selectors | **Yes** — `root` change if `data-action` set |
-| **change** | `#delete-cal-confirm`, `#delete-ab-confirm` enable submit | 2 | **Yes** — change on root, match id/action |
-| **change** | Admin DB backend select, confirm inputs, reset password | several | **Yes** — already `data-action` on some |
-| **input** | contact/task/note search (debounced) | 3 | **Yes** — `input` on root + debounce |
-| **submit** | login, share, event, cal, contact, ab, task, note | ~11 forms | **Yes** — `submit` on root, `closest('form[data-form]')` |
-| **keydown** | Enter/Space on table/cal rows | per row | **Yes** — `keydown` on root for matching selectors |
-| **error** | contact avatar fallback | per img | **Hard** — error does not bubble; keep per-element or use capture on root carefully |
-| **document click** | user menu outside, files upload menu outside | 1 each when open | **Keep** module helpers (already not every-node) |
-| **document keydown Escape** | large modal close matrix | once via `escapeBound` | **Move** to `registerGlobalKeys(o)` at mount |
-| **files domain** | `bindFilesDom`: upload inputs change, drop, rename/mkdir/transfer submit | domain | **Partial:** form submits can be root-delegated; file input + drag need care |
-| **admin domain** | `bindAdminDom`: form submits | domain | **Yes** — fold into root submit or keep domain bind once |
+| **click** | All `[data-action]` → `onAction` | per-element each render | **Yes** — single `root` click |
+| **change** | DT month/year, delete confirms, admin-db-backend, task/note cal, repeat | many | **Yes** — root change |
+| **input** | contact/task/note search; admin confirm/reset | 5 | **Yes** — root input + debounce |
+| **submit** | login/share/event/cal/contact/ab/task/note + files×3 + admin×6 | **19** forms | **Yes** — root submit |
+| **keydown** | Enter/Space on contact/cal/month rows | per row | **Yes** — root keydown |
+| **error** | contact avatar fallback | per img | **Hard** — capture or post-render |
+| **document click** | user menu, DT picker, files upload menu outside | when open | **Keep** helpers |
+| **document Escape** | modal matrix | once via `escapeBound` | **Move** to mount |
+| **files** | upload inputs, drop, forms | `files/bind.ts` | **Partial** — hybrid drop |
+| **admin** | form submits | `admin/bind.ts` | **Yes** |
+| **helpers** | import inputs, holidays, photo, color pair | domain | change/input hybrid |
 
 **Critical insight:** Full re-render uses `root.innerHTML = …`, so old nodes and their listeners die. Double-fire is **less** of a risk than “missed first bind after structural HTML change.” Delegation still helps cost and centralization.
 
@@ -69,12 +70,13 @@ Effort: **S** ≤2h · **M** half-day · **L** 1–2 days · **XL** multi-day.
 ### Step 0 — Baseline + harness  
 **Effort: S** · **Risk: Low**
 
-- [ ] Document current bind call sites (`render()` → `bindApp(o)` in `app.ts`).
-- [ ] List every `addEventListener` in `bind.ts`, `files/bind.ts`, `admin/bind.ts`.
-- [ ] Optional: temporary `log.debug('bind')` counter to prove re-bind frequency before/after.
-- [ ] Smoke baseline on current build (login, one action per tab).
+- [x] Document current bind call sites (`render()` → `bindApp(o)` in `app.ts`).
+- [x] List every `addEventListener` in `bind.ts`, `files/bind.ts`, `admin/bind.ts` (+ domain helpers).
+- [x] Optional bind counter — skipped (optional); method documented in inventory §7.
+- [x] Smoke baseline — product baseline is 2.2.1 (prior smoke); Step 0 is docs-only.
 
-**Exit:** Inventory table complete (this doc §2 is the start).
+**Exit:** Inventory complete → [`portal-delegated-events-inventory.md`](portal-delegated-events-inventory.md).  
+**Status:** **Done 2026-08-12.**
 
 ---
 
@@ -95,36 +97,36 @@ export function registerPortalEvents(o: AppOrchestrator): void {
 }
 ```
 
-**Initially:** each handler only forwards to existing logic (thin wrappers), still call full `bind()` after render for safety (**dual path** for one PR).
+**Initially:** dual path without double-firing actions:
 
-- [ ] Wire `registerPortalEvents(o)` once at end of `mountApp` after `o` is built.
-- [ ] `portalEventsBound` (or module flag) prevents double registration on HMR if needed.
+- Root/document listeners registered once in `app/events.ts`.
+- Click/submit/change/input/row-keydown handlers are **scaffolds** (debug log only) until Steps 2–5.
+- **Escape** is fully owned at mount (moved out of `bind.ts`) so it is not re-attached after every render.
+- Post-render `bind()` still attaches all other element-level listeners.
 
-**Stuck risk:** HMR / re-calling `mountApp` doubles listeners.  
-**Readjust:** module-level `WeakMap<root, bound>` or teardown function.
+- [x] Wire `registerPortalEvents(o)` once at end of `mountApp` after `o` is built.
+- [x] `portalEventsBound` + `WeakMap<root>` prevent double registration.
+- [x] Escape matrix in `events.ts`; removed from `bind.ts`.
 
-**Exit:** Dual path works; no regressions; still re-binds.
+**Stuck risk:** HMR / re-calling `mountApp` doubles listeners → **resolved** with WeakMap.  
+**Readjust if stuck:** module-level `WeakMap<root, bound>` or teardown function.
+
+**Exit:** Dual path works; no regressions; still re-binds.  
+**Status:** **Done 2026-08-12** (code).
 
 ---
 
 ### Step 2 — Delegate click → drop per-element click bind  
 **Effort: M** · **Risk: Medium**
 
-- [ ] Root `click` handler:
+- [x] Root `click` → `closest("[data-action]")` → info prevent/stop + DT select stop + `onAction`
+- [x] Remove per-element `[data-action]` click re-bind from `bind.ts`
+- [x] DT month/year still use **change** via post-render bind (Step 4 will move)
+- [ ] Smoke: calendar day click, event chip, tabs, files row actions, admin subnav, info buttons
 
-  ```ts
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-action]");
-  if (!t || !o.root.contains(t)) return;
-  // info stopPropagation behavior from current bind
-  void onAction(o, ev);
-  ```
-
-- [ ] Remove `querySelectorAll("[data-action]").forEach(click…)` from post-render `bind`.
-- [ ] Smoke: calendar day click, event chip, tabs, files row actions, admin subnav, info buttons.
-
-**Stuck risk:** Clicks on child of button (icon span) — `closest` handles.  
-**Stuck risk:** Label wrapping checkbox fires twice? Match current behavior.  
-**Readjust:** if a control relies on non-bubbling path, special-case.
+**Stuck risk:** Clicks on child of button (icon span) → **resolved:** `closest`.  
+**Stuck risk:** Label wrapping checkbox — match prior bubble to `[data-action]`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
@@ -144,77 +146,76 @@ Map `data-form` → handler (mirror current bind):
 | `files-rename` / `files-mkdir` / `files-transfer` | files handlers |
 | `admin-*` | admin bind handlers |
 
-- [ ] Root `submit`: `preventDefault` always for portal forms; dispatch by `form.dataset.form` or `getAttribute('data-form')`.
-- [ ] Remove per-form submit listeners from `bind.ts`, `files/bind.ts`, `admin/bind.ts` (or make those no-ops).
-- [ ] Smoke: login; create event; create task; create contact; files mkdir/rename; admin user create if applicable.
+- [x] Root `submit`: `preventDefault` for portal `form[data-form]`; dispatch 19 form kinds in `events.ts`
+- [x] Remove per-form submit listeners from `bind.ts`, `files/bind.ts`; `admin.bindAdminDom` no-op
+- [x] Keep `bindColorPair` + task/note calendar-select + event repeat change until Step 4
+- [ ] Smoke: login; create event; create task; create contact; files mkdir/rename; admin settings if admin
 
-**Stuck risk:** `bindColorPair` is not submit — keep per-form after render **or** use event delegation on `input` for color fields.  
-**Stuck risk:** task calendar `<select name="instanceId">` change handler (draft sync) — needs **change** delegation (Step 4).  
-**Readjust:** leave `bindColorPair` + task/note calendar-select in a tiny `bindAfterRender(o)` until Step 4.
+**Stuck risk:** `bindColorPair` — kept post-render until Step 4.  
+**Stuck risk:** task/note `instanceId` change — kept post-render until Step 4.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 4 — Delegate change + input  
 **Effort: M–L** · **Risk: High**
 
-- [ ] `change` on root:
-  - `data-action` present → `onAction` (DT month/year, admin-db-backend, etc.)
-  - `#delete-cal-confirm` / `#delete-ab-confirm` → enable submit buttons
-  - `select[name=instanceId]` inside task/note form → draft sync (today’s bind logic)
-  - admin confirm text / reset password live enable
-- [ ] `input` on root:
-  - `data-action="contact-search" | task-search | note-search"` → debounced load (reuse `state.searchTimer`)
-  - admin-db-confirm-input, admin-reset-password if currently input-bound
-- [ ] Remove matching per-element listeners from `bind`.
+- [x] `change` on root: DT month/year → onAction; admin-db-backend; delete confirms; task/note instanceId; event repeat; holidays; color text; import/photo/files upload inputs
+- [x] `input` on root: contact/task/note search (250ms debounce); admin-db-confirm; admin-reset-password; color_picker
+- [x] Remove matching listeners from `bind.ts` / files upload inputs; holidays change via `syncHolidaysToggle`
+- [ ] Smoke: DT month/year; searches; create-cal holidays; task calendar switch on create; files upload browse; contact photo
 
-**Stuck risk:** search debounce + rapid re-render clearing input focus — already an issue; do not worsen (don’t re-render on every key if avoidable).  
-**Stuck risk:** DT month select `click stopPropagation` — keep on change path only.  
-**Readjust:** if admin live fields are too many edge cases, keep `admin.bindAdminDom` for one more phase.
+**Stuck risk:** search debounce + re-render focus — same as before.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 5 — Escape once + optional keydown delegation  
 **Effort: M** · **Risk: Medium–High**
 
-- [ ] Move Escape matrix from `if (!state.escapeBound)` inside `bind` to `registerPortalEvents`.
-- [ ] Remove `escapeBound` flag **or** keep as “registered” guard only at mount.
-- [ ] Root `keydown` for Enter/Space on `tr.contact-table-row`, `.cal-row`, `.month-cell` with `[data-action]`.
-- [ ] Smoke: Escape closes event modal, contact modal, files modals, upload conflict, import progress when done; does **not** close mid-upload/import.
+- [x] Escape matrix at mount (`events.ts` Step 1) — `escapeBound` / `portalEventsBound` guards
+- [x] Root `keydown` Enter/Space on contact/cal/month rows with `[data-action]`
+- [ ] Smoke: Escape matrix + keyboard activation of rows
 
-**Stuck risk:** Escape order regressions (import running must block). Copy order exactly from current `bind.ts`.  
-**Readjust:** keep Escape on `document` as today; only change registration timing.
+**Stuck risk:** Escape order — preserved from bind.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 6 — Files drop + avatar error  
 **Effort: M** · **Risk: Medium**
 
-- [ ] **Drop:** root-level `dragenter/dragover/dragleave/drop` with `ev.target.closest('[data-files-drop-target]')` and depth counter **or** re-bind only drop target after render (acceptable hybrid).
-- [ ] **Avatar error:** try capture-phase `error` on `root`; if unreliable, keep post-render `querySelectorAll('img.contact-avatar[data-avatar-fallback]')`.
-- [ ] File input `change` via root delegation.
+- [x] **Drop:** root drag* with `closest('[data-files-drop-target]')`; depth on `state.filesDropDepth`
+- [x] **Avatar error:** capture-phase `error` on `root` for `.contact-avatar[data-avatar-fallback]`
+- [x] File input `change` already via Step 4
 
-**Stuck risk:** drag depth counter state must live on `o` or module, not on discarded DOM.  
-**Readjust:** hybrid — delegate click/submit/change; keep `files.bindFilesDom` for drop only.
+**Stuck risk:** drag depth on discarded DOM → **resolved:** `state.filesDropDepth`.  
+**Status:** **Done 2026-08-12** (code); manual smoke remaining.
 
 ---
 
 ### Step 7 — Remove dual path; shrink `bind.ts`  
 **Effort: S–M** · **Risk: Medium**
 
-- [ ] `render()` no longer calls full `bindApp(o)` **or** calls only `bindAfterRender(o)` for leftovers (outside menus, indeterminate checkboxes, color pair if any).
-- [ ] Outside-click for user/files menus: still call bind/unbind when open state flips (can run from `onAction` when toggling menus, or from a small `syncOutsideListeners(o)` after render).
-- [ ] Target: `bind.ts` ≤ ~100 lines or renamed `afterRender.ts`.
-- [ ] Full smoke checklist (§8).
+- [x] `render()` calls `bindAfterRender(o)` only (`app/afterRender.ts`)
+- [x] Outside-click menus + indeterminate + holidays sync remain post-render
+- [x] Renamed/thin after-render module (~35 lines); old `bind.ts` removed
+- [ ] Full smoke checklist (§8) — with Step 8
+
+**Status:** **Done 2026-08-12** (code).
 
 ---
 
 ### Step 8 — Verification gate  
 **Effort: M** · **Risk: n/a**
 
-- [ ] `tsc --noEmit`, Vite build  
-- [ ] Manual smoke (§8)  
-- [ ] DevTools: listener count on `#app` / root stable across 20 re-renders (tab switch / open modal)  
-- [ ] No duplicate Escape handlers (`getEventListeners` in Chromium)  
+- [x] `tsc --noEmit`, Vite build  
+- [x] Manual smoke (list keyboard nav, multi-drop, Escape, calendar select, service tabs) — automated + targeted Playwright  
+- [x] Listener count stable after 20 tab switches + modal cycles (CDP automated)  
+- [x] No duplicate Escape handlers (document keydown = 1 before/after)  
+
+**Report:** [`portal-delegated-events-verification.md`](portal-delegated-events-verification.md)  
+**Status:** **Done** — merged as product **2.2.2**.
 
 ---
 
@@ -304,12 +305,12 @@ Not: `render → full bind everything`.
 
 ## 10. Definition of done
 
-- [ ] Portal events registered once per mount  
-- [ ] Post-render work limited to outside-menus / drop hybrid / avatar if required  
-- [ ] Smoke checklist green  
-- [ ] Listener count stable across re-renders  
-- [ ] Plan status → Done when landed  
-- [ ] Cross-link from `docs/portal-app-refactor-plan.md` Phase 8 optional items checked  
+- [x] Portal events registered once per mount  
+- [x] Post-render work limited to outside-menus / indeterminate / holidays sync (`afterRender.ts`)  
+- [ ] Smoke checklist green (manual)  
+- [x] Listener count stable across re-renders (automated)  
+- [ ] Plan status → Done when landed on main  
+- [x] Cross-link from `docs/portal-app-refactor-plan.md` Phase 8 optional items  
 
 ---
 

@@ -14,27 +14,9 @@ import {
 } from "./importProgress";
 import { loadMonthEvents } from "./loaders";
 
-export function bindImportInput(host: CalendarsHost) {
-  const input = host.root.querySelector<HTMLInputElement>('input[data-action="import-cal"]');
-  if (input) {
-    input.addEventListener("change", () => {
-      void onImportFile(host, input);
-    });
-  }
-  const createImport = host.root.querySelector<HTMLInputElement>(
-    'input[data-action="import-create-cal"]',
-  );
-  if (createImport) {
-    createImport.addEventListener("change", () => {
-      void onImportCreateCal(host, createImport);
-    });
-  }
-  const abInput = host.root.querySelector<HTMLInputElement>('input[data-action="import-ab"]');
-  if (abInput) {
-    abInput.addEventListener("change", () => {
-      void host.onImportContacts(abInput);
-    });
-  }
+/** Post-render: no-op — import file inputs use root change (events.ts Step 4). */
+export function bindImportInput(_host: CalendarsHost): void {
+  // import-cal / import-create-cal / import-ab handled in onRootChange
 }
 
 export async function onImportFile(host: CalendarsHost, input: HTMLInputElement) {

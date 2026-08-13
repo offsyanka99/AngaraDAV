@@ -5,12 +5,19 @@ import { log } from "../log";
 import type { AdminPageId, TabId } from "./types";
 import type { AppOrchestrator } from "./orchestrator";
 import * as admin from "./admin";
+import { firstEnabledUserTab, isUserTabEnabled } from "./session";
 
 export function normalizeActiveTab(o: AppOrchestrator): void {
   const { state } = o;
   if (state.activeTab === "admin" && (!o.userIsAdmin() || !o.adminUiEnabled())) {
-    state.activeTab = "calendars";
+    state.activeTab = firstEnabledUserTab(state);
     state.adminPage = "overview";
+    o.persistTab(state.activeTab);
+    return;
+  }
+  // Stored/hash tab may point at a DAV service that is disabled in Admin settings
+  if (state.activeTab !== "admin" && !isUserTabEnabled(state, state.activeTab)) {
+    state.activeTab = firstEnabledUserTab(state);
     o.persistTab(state.activeTab);
   }
 }
@@ -33,7 +40,11 @@ export async function activateTab(
     if (o.userIsAdmin() && state.adminCapabilities && !state.adminCapabilities.uiEnabled) {
       setFlash("info", "Portal Administration UI is disabled (portal_admin_ui_enabled).");
     }
-    tab = "calendars";
+    tab = firstEnabledUserTab(state);
+  }
+  if (tab !== "admin" && !isUserTabEnabled(state, tab)) {
+    setFlash("info", "That section is disabled in system settings.");
+    tab = firstEnabledUserTab(state);
   }
   if (tab === "admin") {
     // Entering Administration from the user menu → Overview (or last hash page)
@@ -45,6 +56,7 @@ export async function activateTab(
   }
   state.activeTab = tab;
   state.userMenuOpen = false;
+  state.listKeyboardFocus = false;
   o.persistTab(tab);
   log.event("tab", { tab });
   if (tab !== "calendars") {
@@ -110,15 +122,24 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     state.calModalOpen = false;
     state.deleteConfirmId = null;
   }
+  // Seed default visibility only once (login / first home load). After that, an empty
+  // selectedIds means "show no month events" — do not re-check the first/default calendar.
   if (state.selectedIds.length === 0) {
-    const def = o.pickDefaultCalendar();
-    if (def) {
-      state.selectedIds = [def.id];
-      state.selectedId = def.id;
-    } else if (state.calendars.length > 0) {
-      state.selectedIds = [state.calendars[0].id];
-      state.selectedId = state.calendars[0].id;
+    if (!state.calendarSelectionSeeded) {
+      const def = o.pickDefaultCalendar();
+      if (def) {
+        state.selectedIds = [def.id];
+        state.selectedId = def.id;
+      } else if (state.calendars.length > 0) {
+        state.selectedIds = [state.calendars[0].id];
+        state.selectedId = state.calendars[0].id;
+      }
+      state.calendarSelectionSeeded = true;
+    } else {
+      state.selectedId = null;
     }
+  } else {
+    state.calendarSelectionSeeded = true;
   }
   if (state.selectedId === null && state.selectedIds.length > 0) {
     state.selectedId = state.selectedIds[0];

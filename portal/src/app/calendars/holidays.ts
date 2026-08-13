@@ -3,7 +3,8 @@
  */
 import type { CalendarsHost } from "./host";
 
-export function bindHolidaysToggle(host: CalendarsHost) {
+/** Sync create-cal holidays UI from checkbox state (no listeners). */
+export function syncHolidaysToggle(host: CalendarsHost): void {
   const form = host.root.querySelector<HTMLFormElement>('[data-form="create-cal"]');
   if (!form) return;
   const cb = form.querySelector<HTMLInputElement>('input[name="holidays"]');
@@ -12,21 +13,22 @@ export function bindHolidaysToggle(host: CalendarsHost) {
   const readOnly = form.querySelector<HTMLInputElement>('input[name="readOnly"]');
   if (!cb || !wrap) return;
 
-  const sync = () => {
-    const on = cb.checked;
-    wrap.hidden = !on;
-    if (nameInput) {
-      nameInput.required = !on;
-      if (on && !nameInput.value.trim()) {
-        nameInput.placeholder = "Auto: Holidays (XX)";
-      } else if (!on) {
-        nameInput.placeholder = "Work";
-      }
+  const on = cb.checked;
+  wrap.hidden = !on;
+  if (nameInput) {
+    nameInput.required = !on;
+    if (on && !nameInput.value.trim()) {
+      nameInput.placeholder = "Auto: Holidays (XX)";
+    } else if (!on) {
+      nameInput.placeholder = "Work";
     }
-    if (on && readOnly) {
-      readOnly.checked = true;
-    }
-  };
-  cb.addEventListener("change", sync);
-  sync();
+  }
+  if (on && readOnly) {
+    readOnly.checked = true;
+  }
+}
+
+/** Post-render: apply initial sync only (change is delegated in events.ts Step 4). */
+export function bindHolidaysToggle(host: CalendarsHost): void {
+  syncHolidaysToggle(host);
 }

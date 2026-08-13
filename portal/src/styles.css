@@ -113,9 +113,9 @@ a:hover {
   line-height: 1.2;
 }
 
-/* “DAV” segment of AngaraDAV — same blue as primary buttons */
+/* “DAV” segment of AngaraDAV — medium gray */
 .brand-dav {
-  color: var(--primary);
+  color: #9ca3af;
 }
 
 .brand-sep {
@@ -3779,6 +3779,12 @@ body.cal-modal-open {
 /* Flash inside modal body */
 .cal-modal-body > .flash {
   margin-top: 0;
+}
+
+/* Avoid double rule: table last row border-bottom + next section border-top */
+.cal-modal-body .table-wrap table tr:last-child td,
+.cal-modal-body .table-wrap table tr:last-child th {
+  border-bottom: none;
 }
 
 .cal-modal-footer {

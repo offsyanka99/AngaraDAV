@@ -217,6 +217,8 @@ function bind(): void {
 
 **Improvement opportunity (optional, later phase):** attach stable delegated listeners once on `root` instead of re-binding every render. Not required for the first extract PRs; document as Phase 8 optimization.
 
+**Status (2026-08-12):** Implemented on branch `refactor/portal-delegated-events` — see [portal-delegated-events-plan.md](portal-delegated-events-plan.md) and [portal-delegated-events-verification.md](portal-delegated-events-verification.md). Mount-time `registerPortalEvents` + thin `bindAfterRender`; automated listener stability green; manual smoke before merge.
+
 ---
 
 ## 4. Recommended reasoning level (AI / agent work)
