@@ -14,6 +14,7 @@ import {
 import { syncOpenItemFormsBeforeDtRender } from "../datetimeSync";
 import type { AppOrchestrator } from "../orchestrator";
 import { readRepeatFromForm } from "./eventModal";
+import { persistCalendarSelection } from "./selectionPersist";
 
 /**
  * Handle calendar-tab and shared datetime-picker actions.
@@ -57,6 +58,7 @@ export async function handleCalendarsAction(
     }
     state.selectedId = id;
     state.calendarSelectionSeeded = true;
+    persistCalendarSelection(state);
     state.busy = true;
     clearFlash();
     render();
@@ -80,6 +82,7 @@ export async function handleCalendarsAction(
     if (!state.selectedIds.includes(id)) {
       state.selectedIds = [...state.selectedIds, id];
     }
+    persistCalendarSelection(state);
     state.calModalOpen = true;
     state.deleteConfirmId = null;
     state.busy = true;

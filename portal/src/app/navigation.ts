@@ -5,6 +5,10 @@ import { log } from "../log";
 import type { AdminPageId, TabId } from "./types";
 import type { AppOrchestrator } from "./orchestrator";
 import * as admin from "./admin";
+import {
+  persistCalendarSelection,
+  readStoredCalendarSelection,
+} from "./calendars/selectionPersist";
 import { firstEnabledUserTab, isUserTabEnabled } from "./session";
 
 export function normalizeActiveTab(o: AppOrchestrator): void {
@@ -122,10 +126,27 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     state.calModalOpen = false;
     state.deleteConfirmId = null;
   }
-  // Seed default visibility only once (login / first home load). After that, an empty
-  // selectedIds means "show no month events" — do not re-check the first/default calendar.
-  if (state.selectedIds.length === 0) {
-    if (!state.calendarSelectionSeeded) {
+  // First paint after login/F5: restore multi-select from localStorage (per user).
+  // If never stored, seed the default calendar once. Empty stored list is intentional.
+  if (!state.calendarSelectionSeeded && state.selectedIds.length === 0) {
+    const stored = readStoredCalendarSelection(state.user?.username);
+    if (stored) {
+      const valid = stored.ids.filter((id) => state.calendars.some((c) => c.id === id));
+      state.selectedIds = valid;
+      if (
+        stored.selectedId !== null &&
+        state.calendars.some((c) => c.id === stored.selectedId)
+      ) {
+        state.selectedId = stored.selectedId;
+      } else {
+        state.selectedId = valid[0] ?? null;
+      }
+      state.calendarSelectionSeeded = true;
+      log.debug("loadHome.calSelection.restored", {
+        count: valid.length,
+        selectedId: state.selectedId,
+      });
+    } else {
       const def = o.pickDefaultCalendar();
       if (def) {
         state.selectedIds = [def.id];
@@ -135,15 +156,18 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
         state.selectedId = state.calendars[0].id;
       }
       state.calendarSelectionSeeded = true;
-    } else {
-      state.selectedId = null;
     }
+  } else if (state.selectedIds.length === 0) {
+    // Intentional empty multi-select mid-session
+    state.selectedId = null;
   } else {
     state.calendarSelectionSeeded = true;
   }
   if (state.selectedId === null && state.selectedIds.length > 0) {
     state.selectedId = state.selectedIds[0];
   }
+  // Keep preference durable across logout / new browser session
+  persistCalendarSelection(state);
   if (state.selectedId !== null && state.calModalOpen) {
     await o.loadShares(state.selectedId);
   } else if (state.selectedId !== null) {

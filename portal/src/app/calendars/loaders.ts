@@ -6,6 +6,7 @@ import { log } from "../../log";
 import type { Calendar } from "../../api";
 import { monthRange } from "../datetime";
 import type { CalendarsHost } from "./host";
+import { persistCalendarSelection } from "./selectionPersist";
 
 export async function loadShares(host: CalendarsHost, id: number) {
   const res = await api.shares(id);
@@ -81,4 +82,5 @@ export function toggleCalendarSelected(host: CalendarsHost, id: number): void {
     host.state.selectedIds = [...host.state.selectedIds, id];
     host.state.selectedId = id;
   }
+  persistCalendarSelection(host.state);
 }

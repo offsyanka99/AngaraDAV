@@ -38,3 +38,7 @@ export { onShare, onSaveEvent, onEditCal, onCreateCal } from "./actions";
 export { bindHolidaysToggle, syncHolidaysToggle } from "./holidays";
 export { renderCalendarsHome } from "./home";
 export { handleCalendarsAction } from "./actionsRouter";
+export {
+  persistCalendarSelection,
+  readStoredCalendarSelection,
+} from "./selectionPersist";
