@@ -120,12 +120,24 @@ class App {
     }
 
     /**
-     * Portal UI prefs (time format / week start / log level). Env overrides YAML.
+     * Portal UI prefs (time format / week start / log level / DAV service flags).
+     * Env overrides YAML for time/week/log.
      * TIME_FORMAT / BAIKAL_PORTAL_TIME_FORMAT: auto|12h|24h
      * BAIKAL_PORTAL_WEEK_START: auto|monday|sunday
      * PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL: off|error|warn|info|debug.
      *
-     * @return array{timeFormat: string, weekStart: string, logLevel: string, sessionIdleSeconds: int, version: string, git: string}
+     * `services` mirrors Admin System settings (and public /info.php). Safe for all
+     * authenticated users — not secrets; used by the SPA to hide disabled tabs.
+     *
+     * @return array{
+     *   timeFormat: string,
+     *   weekStart: string,
+     *   logLevel: string,
+     *   sessionIdleSeconds: int,
+     *   version: string,
+     *   git: string,
+     *   services: array{caldav: bool, carddav: bool, tasks: bool, notes: bool, files: bool}
+     * }
      */
     private function portalUiSettings(): array {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
@@ -152,7 +164,38 @@ class App {
             'sessionIdleSeconds' => $this->auth->sessionMaxAge(),
             'version'            => defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '',
             'git'                => defined('BAIKAL_GIT_SHA') ? (string) BAIKAL_GIT_SHA : '',
+            // Defaults match AdminDashboardService / install (notes & files off by default)
+            'services'           => [
+                'caldav'  => $this->systemBoolFlag($sys, 'cal_enabled', true),
+                'carddav' => $this->systemBoolFlag($sys, 'card_enabled', true),
+                'tasks'   => $this->systemBoolFlag($sys, 'tasks_enabled', true),
+                'notes'   => $this->systemBoolFlag($sys, 'notes_enabled', false),
+                'files'   => $this->systemBoolFlag($sys, 'files_enabled', false),
+            ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $sys
+     */
+    private function systemBoolFlag(array $sys, string $key, bool $default): bool {
+        if (!array_key_exists($key, $sys)) {
+            return $default;
+        }
+        $v = $sys[$key];
+        if (is_bool($v)) {
+            return $v;
+        }
+        if (is_int($v) || is_float($v)) {
+            return (int) $v !== 0;
+        }
+        if (is_string($v)) {
+            $s = strtolower(trim($v));
+
+            return !in_array($s, ['', '0', 'false', 'off', 'no'], true);
+        }
+
+        return (bool) $v;
     }
 
     /**

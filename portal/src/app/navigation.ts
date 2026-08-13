@@ -5,12 +5,19 @@ import { log } from "../log";
 import type { AdminPageId, TabId } from "./types";
 import type { AppOrchestrator } from "./orchestrator";
 import * as admin from "./admin";
+import { firstEnabledUserTab, isUserTabEnabled } from "./session";
 
 export function normalizeActiveTab(o: AppOrchestrator): void {
   const { state } = o;
   if (state.activeTab === "admin" && (!o.userIsAdmin() || !o.adminUiEnabled())) {
-    state.activeTab = "calendars";
+    state.activeTab = firstEnabledUserTab(state);
     state.adminPage = "overview";
+    o.persistTab(state.activeTab);
+    return;
+  }
+  // Stored/hash tab may point at a DAV service that is disabled in Admin settings
+  if (state.activeTab !== "admin" && !isUserTabEnabled(state, state.activeTab)) {
+    state.activeTab = firstEnabledUserTab(state);
     o.persistTab(state.activeTab);
   }
 }
@@ -33,7 +40,11 @@ export async function activateTab(
     if (o.userIsAdmin() && state.adminCapabilities && !state.adminCapabilities.uiEnabled) {
       setFlash("info", "Portal Administration UI is disabled (portal_admin_ui_enabled).");
     }
-    tab = "calendars";
+    tab = firstEnabledUserTab(state);
+  }
+  if (tab !== "admin" && !isUserTabEnabled(state, tab)) {
+    setFlash("info", "That section is disabled in system settings.");
+    tab = firstEnabledUserTab(state);
   }
   if (tab === "admin") {
     // Entering Administration from the user menu → Overview (or last hash page)

@@ -484,6 +484,15 @@ function notifySessionActivity(path: string): void {
   }
 }
 
+/** DAV service switches from Admin System settings (also public on /info.php). */
+export type PortalUiServices = {
+  caldav?: boolean;
+  carddav?: boolean;
+  tasks?: boolean;
+  notes?: boolean;
+  files?: boolean;
+};
+
 export type PortalUi = {
   timeFormat?: string;
   weekStart?: string;
@@ -494,6 +503,11 @@ export type PortalUi = {
   version?: string;
   /** Short git SHA only. */
   git?: string;
+  /**
+   * Which portal user tabs to show. When omitted (older server), SPA keeps all tabs
+   * (fail-open). When present, disabled services hide the matching tab.
+   */
+  services?: PortalUiServices;
 };
 
 /** Install/upgrade wizard status (public; works while portal API is blocked for upgrades). */

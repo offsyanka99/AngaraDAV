@@ -97,10 +97,23 @@ export type EventDtPicker = {
   name: string;
 };
 
+export type PortalUiServicesState = {
+  caldav: boolean;
+  carddav: boolean;
+  tasks: boolean;
+  notes: boolean;
+  files: boolean;
+};
+
 export type PortalUiState = {
   timeFormat: "auto" | "12h" | "24h";
   weekStart: "auto" | "monday" | "sunday";
   logLevel: string;
+  /**
+   * null = services not yet known (fail-open: show all user tabs).
+   * object = from login/me/ui; hide tabs for disabled services.
+   */
+  services: PortalUiServicesState | null;
 };
 
 export type AdminResourceDelete =
@@ -362,6 +375,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
       timeFormat: "auto",
       weekStart: "auto",
       logLevel: "off",
+      services: null,
     },
     searchTimer: null,
     sessionIdleSeconds: 900,

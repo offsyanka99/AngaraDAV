@@ -241,6 +241,18 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
   try {
     const res = await api.adminUpdateSystemSettings(body);
     host.state.adminSystemSettings = res.data;
+    // Keep user-tab visibility in sync for this session without re-login
+    const d = res.data;
+    host.state.portalUi = {
+      ...host.state.portalUi,
+      services: {
+        caldav: !!d.cal_enabled,
+        carddav: !!d.card_enabled,
+        tasks: !!d.tasks_enabled,
+        notes: !!d.notes_enabled,
+        files: !!d.files_enabled,
+      },
+    };
     log.event("admin.settings.save");
     host.setFlash("success", "System settings saved");
   } catch (e) {

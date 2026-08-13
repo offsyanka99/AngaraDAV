@@ -4,6 +4,7 @@
 import { ApiError, type PortalUi } from "../api";
 import { log, setLogLevel } from "../log";
 import type { AppState } from "./context";
+import type { TabId } from "./types";
 
 export function userIsAdmin(state: AppState): boolean {
   return !!(state.user?.isAdmin || state.user?.role === "Admin");
@@ -21,10 +22,32 @@ export function applyPortalUi(state: AppState, ui: PortalUi | null | undefined):
   if (!ui) return;
   const tf = (ui.timeFormat || "auto").toLowerCase();
   const ws = (ui.weekStart || "auto").toLowerCase();
+  const prevServices = state.portalUi.services;
+  let services = prevServices;
+  if (ui.services && typeof ui.services === "object") {
+    // When the server sends services, apply known flags; missing keys keep prior or true
+    // so a partial payload cannot blank every tab. First apply: default each key open.
+    const base = prevServices ?? {
+      caldav: true,
+      carddav: true,
+      tasks: true,
+      notes: true,
+      files: true,
+    };
+    const s = ui.services;
+    services = {
+      caldav: typeof s.caldav === "boolean" ? s.caldav : base.caldav,
+      carddav: typeof s.carddav === "boolean" ? s.carddav : base.carddav,
+      tasks: typeof s.tasks === "boolean" ? s.tasks : base.tasks,
+      notes: typeof s.notes === "boolean" ? s.notes : base.notes,
+      files: typeof s.files === "boolean" ? s.files : base.files,
+    };
+  }
   state.portalUi = {
     timeFormat: tf === "12h" || tf === "24h" ? tf : "auto",
     weekStart: ws === "monday" || ws === "sunday" ? ws : "auto",
     logLevel: ui.logLevel || "off",
+    services,
   };
   setLogLevel(state.portalUi.logLevel);
   if (
@@ -37,6 +60,40 @@ export function applyPortalUi(state: AppState, ui: PortalUi | null | undefined):
   if (typeof ui.version === "string" && ui.version.trim() !== "") {
     state.appVersion = ui.version.trim();
   }
+}
+
+/**
+ * Whether a user portal tab should be visible for current DAV service flags.
+ * Admin is never gated by services. Until services load (null), fail open (show all).
+ */
+export function isUserTabEnabled(state: AppState, tab: TabId): boolean {
+  if (tab === "admin") return true;
+  const svc = state.portalUi.services;
+  if (!svc) return true;
+  switch (tab) {
+    case "calendars":
+      return svc.caldav;
+    case "contacts":
+      return svc.carddav;
+    case "tasks":
+      return svc.tasks;
+    case "notes":
+      return svc.notes;
+    case "files":
+      return svc.files;
+    default:
+      return true;
+  }
+}
+
+/** First enabled user tab (fallback when active tab is disabled). Prefers Calendar. */
+export function firstEnabledUserTab(state: AppState): TabId {
+  const order: TabId[] = ["calendars", "contacts", "tasks", "notes", "files"];
+  for (const t of order) {
+    if (isUserTabEnabled(state, t)) return t;
+  }
+  // All DAV services off — still pick calendars so shell has a main panel
+  return "calendars";
 }
 
 export function stopSessionIdleTimer(state: AppState): void {
