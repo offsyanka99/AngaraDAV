@@ -163,6 +163,11 @@ export type AppState = {
    * (do not re-check the default calendar when the user unchecks everything).
    */
   calendarSelectionSeeded: boolean;
+  /**
+   * When true, restore focus to the selected Contacts/Tasks/Notes list row after
+   * re-render so ↑/↓ keyboard navigation keeps working.
+   */
+  listKeyboardFocus: boolean;
   shares: Share[];
   installGate: InstallGate | null;
   calModalOpen: boolean;
@@ -314,6 +319,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     selectedId: null,
     selectedIds: [],
     calendarSelectionSeeded: false,
+    listKeyboardFocus: false,
     shares: [],
     installGate: null,
     calModalOpen: false,
@@ -478,6 +484,7 @@ export const APP_STATE_KEYS = [
   "holidayCountries",
   "selectedIds",
   "calendarSelectionSeeded",
+  "listKeyboardFocus",
   "selectedId",
   "installGate",
   "userMenuDocClick",

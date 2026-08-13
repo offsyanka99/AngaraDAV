@@ -84,6 +84,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.selectedId = null;
   state.selectedIds = [];
   state.calendarSelectionSeeded = false;
+  state.listKeyboardFocus = false;
   state.directory = [];
   state.addressBooks = [];
   state.selectedAbId = null;

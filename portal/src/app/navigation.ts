@@ -45,6 +45,7 @@ export async function activateTab(
   }
   state.activeTab = tab;
   state.userMenuOpen = false;
+  state.listKeyboardFocus = false;
   o.persistTab(tab);
   log.event("tab", { tab });
   if (tab !== "calendars") {
