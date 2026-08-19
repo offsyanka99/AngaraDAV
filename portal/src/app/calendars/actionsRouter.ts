@@ -307,6 +307,36 @@ export async function handleCalendarsAction(
     return true;
   }
 
+  if (action === "new-event-slot") {
+    const raw = ev.target as HTMLElement | null;
+    if (raw?.closest?.(".week-event")) return true;
+    const day = t.dataset.day ?? "";
+    const hour = Number(t.dataset.hour);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isInteger(hour) || hour < 0 || hour > 23) {
+      return true;
+    }
+    if (state.selectedId === null) {
+      setFlash("error", "Select a calendar first");
+      render();
+      return true;
+    }
+    const cal = state.calendars.find((c) => c.id === state.selectedId);
+    if (!cal || cal.readOnly || !(cal.canShare || cal.access === "readwrite")) {
+      setFlash("error", "This calendar is read-only");
+      render();
+      return true;
+    }
+    state.creatingEvent = true;
+    state.editingEvent = o.blankEventForSlot(day, hour, state.selectedId);
+    state.eventModalOpen = true;
+    state.eventDtPicker = null;
+    state.calModalOpen = false;
+    state.deleteConfirmId = null;
+    clearFlash();
+    render();
+    return true;
+  }
+
   if (action === "close-event-modal") {
     state.eventModalOpen = false;
     state.editingEvent = null;

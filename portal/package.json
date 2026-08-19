@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/app/paths.test.ts src/app/files/preview.test.ts src/app/files/itemMenuModel.test.ts src/app/files/listing.test.ts src/app/files/officeXml.test.ts src/app/notes/html.test.ts src/app/calendars/selectionPersist.test.ts src/app/about.test.ts"
+    "test": "node --experimental-strip-types --test src/app/paths.test.ts src/app/files/preview.test.ts src/app/files/itemMenuModel.test.ts src/app/files/listing.test.ts src/app/files/officeXml.test.ts src/app/notes/html.test.ts src/app/calendars/selectionPersist.test.ts src/app/about.test.ts src/app/theme.test.ts"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

@@ -62,6 +62,7 @@ export type AppOrchestrator = {
   pickDefaultCalendar: () => import("../api").Calendar | null;
   toggleCalendarSelected: (id: number) => void;
   blankEventForDay: (day: string, instanceId: number) => CalendarEventDetail;
+  blankEventForSlot: (day: string, hour: number, instanceId: number) => CalendarEventDetail;
   defaultRepeat: () => NonNullable<CalendarEventDetail["repeat"]>;
   itemKey: (instanceId: number, uri: string) => string;
   openContact: (uri: string) => Promise<void>;

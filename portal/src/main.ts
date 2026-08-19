@@ -1,6 +1,9 @@
 import "./styles.css";
+import { applyStoredTheme } from "./app/theme";
 import { mountApp } from "./app";
 import { mountInstall } from "./install";
+
+applyStoredTheme();
 
 const root = document.getElementById("app");
 if (!root) {

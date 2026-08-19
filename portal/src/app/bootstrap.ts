@@ -14,6 +14,7 @@ import {
   bumpSessionIdleTimer,
   userIsAdmin,
 } from "./session";
+import { applyStoredTheme } from "./theme";
 import type { AdminPageId, TabId } from "./types";
 
 export type BootstrapDeps = {
@@ -110,6 +111,7 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void> {
       log.event("bootstrap.anonymous");
     } else {
       state.user = me.user;
+      applyStoredTheme(state.user.username);
       applyPortalUi(state, me.ui);
       if (typeof me.version === "string" && me.version.trim() !== "") {
         state.appVersion = me.version.trim();
@@ -158,6 +160,7 @@ export async function onLogin(form: HTMLFormElement, deps: LoginDeps): Promise<v
   try {
     const res = await api.login(username, password);
     state.user = res.user;
+    applyStoredTheme(state.user?.username ?? username);
     applyPortalUi(state, res.ui);
     log.event("login.ok", { username: state.user?.username ?? username });
     bumpSessionIdleTimer(state, (m) => deps.handleSessionExpired(m));

@@ -236,7 +236,7 @@ body.layout-files .files-table-wrap {
 .files-crumb {
   border: none;
   background: transparent;
-  color: #93c5fd;
+  color: var(--link);
   font: inherit;
   font-weight: 600;
   padding: 0.15rem 0.25rem;
@@ -516,12 +516,12 @@ body.layout-files .files-table-wrap {
 }
 
 .files-item-menu-item.is-danger {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .files-item-menu-item.is-danger:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.12);
-  color: #fecaca;
+  color: var(--danger-text-hover);
 }
 
 .files-name-btn {
@@ -530,7 +530,7 @@ body.layout-files .files-table-wrap {
   gap: 0.4rem;
   border: none;
   background: transparent;
-  color: #93c5fd;
+  color: var(--link);
   font: inherit;
   font-weight: 600;
   padding: 0;
@@ -585,7 +585,7 @@ body.layout-files .files-table-wrap {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #121820;
+  background: var(--tree-bg);
   padding: 0.35rem 0.25rem;
 }
 
@@ -599,7 +599,7 @@ body.layout-files .files-table-wrap {
 
 .files-tree-row.is-selected .files-tree-select {
   background: rgba(59, 130, 246, 0.18);
-  color: #e2e8f0;
+  color: var(--text);
 }
 
 .files-tree-row.is-blocked .files-tree-select {
@@ -627,7 +627,7 @@ body.layout-files .files-table-wrap {
 
 .files-tree-toggle:hover:not(:disabled) {
   background: rgba(148, 163, 184, 0.12);
-  color: #e2e8f0;
+  color: var(--text);
 }
 
 .files-tree-toggle-spacer {
@@ -642,7 +642,7 @@ body.layout-files .files-table-wrap {
   gap: 0.4rem;
   border: none;
   background: transparent;
-  color: #cbd5e1;
+  color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   text-align: left;
@@ -674,11 +674,11 @@ body.layout-files .files-table-wrap {
 }
 
 .btn-danger-text {
-  color: #fca5a5 !important;
+  color: var(--danger-text) !important;
 }
 
 .btn-danger-text:hover:not(:disabled) {
-  color: #fecaca !important;
+  color: var(--danger-text-hover) !important;
 }
 
 @media (max-width: 720px) {

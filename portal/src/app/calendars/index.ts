@@ -15,6 +15,7 @@ export {
   repeatEndMode,
   renderEventModal,
   blankEventForDay,
+  blankEventForSlot,
   syncEditingEventFromForm,
   readRepeatFromForm,
 } from "./eventModal";

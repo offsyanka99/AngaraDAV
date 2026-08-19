@@ -169,7 +169,7 @@ a.user-menu-item {
 }
 
 .admin-link-row a {
-  color: #93c5fd;
+  color: var(--link);
 }
 
 .admin-kv-table {

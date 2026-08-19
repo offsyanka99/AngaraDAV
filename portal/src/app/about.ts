@@ -7,6 +7,7 @@ import type { AppState } from "./context";
 
 export const ABOUT_CONTACT_EMAIL = "hummersoft@mailbox.org";
 export const ABOUT_APP_NAME = "AngaraDAV";
+export const ABOUT_GITHUB_URL = "https://github.com/offsyanka99/AngaraDAV";
 
 export { splitAppVersion };
 
@@ -28,6 +29,7 @@ export function aboutModalHtml(state: AppState): string {
             <div><dt>Version</dt><dd class="mono">${esc(version)}</dd></div>
             <div><dt>Build</dt><dd class="mono">${esc(buildLabel)}</dd></div>
             <div><dt>Contact</dt><dd><a href="mailto:${esc(ABOUT_CONTACT_EMAIL)}">${esc(ABOUT_CONTACT_EMAIL)}</a></dd></div>
+            <div><dt>GitHub</dt><dd><a href="${esc(ABOUT_GITHUB_URL)}" target="_blank" rel="noopener noreferrer">${esc(ABOUT_GITHUB_URL.replace(/^https:\/\//, ""))}</a></dd></div>
           </dl>
         </div>
         <footer class="info-modal-footer">

@@ -270,6 +270,8 @@ export function mountApp(root: HTMLElement): void {
     toggleCalendarSelected: (id) => calendars.toggleCalendarSelected(calendarsHost, id),
     blankEventForDay: (day, instanceId) =>
       calendars.blankEventForDay(calendarsHost, day, instanceId),
+    blankEventForSlot: (day, hour, instanceId) =>
+      calendars.blankEventForSlot(calendarsHost, day, hour, instanceId),
     defaultRepeat: () => calendars.defaultRepeat(),
     itemKey: itemKeyUtil,
     openContact: (uri) => contacts.openContact(contactsHost, uri),

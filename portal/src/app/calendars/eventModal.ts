@@ -5,6 +5,7 @@ import type { CalendarEventDetail } from "../../api";
 import { esc } from "../../ui";
 import {
   convertAllDaySpanToTimed,
+  formatLocalDtValue,
   toDateInputValue,
   toLocalInputValue,
   ymd,
@@ -253,7 +254,10 @@ export function renderEventModal(host: CalendarsHost): string {
   </div>`;
 }
 
-export function blankEventForDay(host: CalendarsHost, day: string, instanceId: number): CalendarEventDetail {
+function blankEventBase(
+  host: CalendarsHost,
+  instanceId: number,
+): Omit<CalendarEventDetail, "start" | "end" | "allDay"> {
   const cal = host.state.calendars.find((c) => c.id === instanceId);
   return {
     uri: "",
@@ -265,13 +269,38 @@ export function blankEventForDay(host: CalendarsHost, day: string, instanceId: n
     summary: "",
     description: "",
     location: "",
-    start: day,
-    end: day,
-    allDay: true,
     hasRrule: false,
     repeat: defaultRepeat(),
     readOnly: false,
     canWrite: true,
+  };
+}
+
+export function blankEventForDay(host: CalendarsHost, day: string, instanceId: number): CalendarEventDetail {
+  return {
+    ...blankEventBase(host, instanceId),
+    start: day,
+    end: day,
+    allDay: true,
+  };
+}
+
+/** Timed event starting at `hour`:00 on `day` (local), ending one hour later. */
+export function blankEventForSlot(
+  host: CalendarsHost,
+  day: string,
+  hour: number,
+  instanceId: number,
+): CalendarEventDetail {
+  const [ys, ms, ds] = day.split("-").map(Number);
+  const h = Math.max(0, Math.min(23, Math.floor(hour)));
+  const start = new Date(ys, ms - 1, ds, h, 0, 0, 0);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return {
+    ...blankEventBase(host, instanceId),
+    start: formatLocalDtValue(start),
+    end: formatLocalDtValue(end),
+    allDay: false,
   };
 }
 
