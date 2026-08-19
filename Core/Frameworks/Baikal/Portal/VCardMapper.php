@@ -304,11 +304,7 @@ class VCardMapper {
             if (strncmp($binary, "\xFF\xD8", 2) === 0) {
                 return $binary;
             }
-            throw new ApiException(
-                'Photo processing requires PHP GD (PNG/WebP/GIF). Install php-gd '
-                . '(Ubuntu: sudo apt install php-gd) and restart PHP, or upload a JPEG.',
-                501
-            );
+            throw new ApiException('Photo processing requires PHP GD (PNG/WebP/GIF). Install php-gd (Ubuntu: sudo apt install php-gd) and restart PHP, or upload a JPEG.', 501);
         }
 
         $src = @imagecreatefromstring($binary);
