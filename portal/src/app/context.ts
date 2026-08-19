@@ -32,6 +32,7 @@ import type { FlashType } from "../ui";
 import { APP_VERSION_FALLBACK } from "./constants";
 import type { ConfirmDeleteState } from "./confirmDelete";
 import type { FilesPreviewKind } from "./files/previewKind";
+import type { FilesSort, FilesTypeFilter } from "./files/listing";
 import type { AdminPageId, Flash, TabId } from "./types";
 
 export type { FilesPreviewKind };
@@ -78,8 +79,17 @@ export type FilesPreview = {
   status: "loading" | "ready" | "error";
   objectUrl: string | null;
   text: string | null;
+  html: string | null;
   truncated: boolean;
   error: string | null;
+};
+
+/** Floating ⋮ / right-click menu for a Files row (and the current selection). */
+export type FilesItemMenu = {
+  path: string;
+  x: number;
+  y: number;
+  origin: "button" | "context";
 };
 
 /** Portal-styled conflict dialog before upload (File objects held in upload.ts pending). */
@@ -203,6 +213,10 @@ export type AppState = {
   deleteConfirmId: number | null;
   deleteAbConfirmId: number | null;
   monthCursor: { y: number; m: number };
+  calView: "month" | "week" | "agenda";
+  calFocusDay: string;
+  eventSearch: string;
+  eventSearchFocus: boolean;
   monthEvents: Array<CalendarEvent & { instanceId: number }>;
   monthEventsLoading: boolean;
   eventModalOpen: boolean;
@@ -271,7 +285,16 @@ export type AppState = {
   filesTreeChildren: Record<string, FileEntry[] | "loading" | "error">;
   filesTreeExpanded: string[];
   filesMkdirOpen: boolean;
+  filesSearch: string;
+  filesSearchFocus: boolean;
+  filesSort: FilesSort;
+  filesOrder: "asc" | "desc";
+  filesTypeFilter: FilesTypeFilter;
   checkedFilePaths: string[];
+  /** Open per-row ⋮ / right-click menu (fixed overlay; content follows selection). */
+  filesItemMenu: FilesItemMenu | null;
+  filesItemMenuDocClick: ((ev: MouseEvent) => void) | null;
+  filesItemMenuWinClose: (() => void) | null;
   filesPreview: FilesPreview | null;
   /** Bumped to ignore stale preview fetches. */
   filesPreviewSeq: number;
@@ -358,6 +381,10 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     deleteConfirmId: null,
     deleteAbConfirmId: null,
     monthCursor: { y: now.getFullYear(), m: now.getMonth() },
+    calView: "month",
+    calFocusDay: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+    eventSearch: "",
+    eventSearchFocus: false,
     monthEvents: [],
     monthEventsLoading: false,
     eventModalOpen: false,
@@ -429,7 +456,15 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesTreeChildren: {},
     filesTreeExpanded: [],
     filesMkdirOpen: false,
+    filesSearch: "",
+    filesSearchFocus: false,
+    filesSort: "name",
+    filesOrder: "asc",
+    filesTypeFilter: "all",
     checkedFilePaths: [],
+    filesItemMenu: null,
+    filesItemMenuDocClick: null,
+    filesItemMenuWinClose: null,
     filesPreview: null,
     filesPreviewSeq: 0,
     filesUploadConflict: null,

@@ -16,6 +16,7 @@ import * as admin from "./admin";
 import * as calendars from "./calendars";
 import * as contacts from "./contacts";
 import * as files from "./files";
+import { aboutModalIsOpen, closeAboutModal } from "./about";
 import { unbindDtPickerOutside } from "./shell";
 
 /** Prevent double registration when mountApp runs twice on the same root (e.g. HMR). */
@@ -37,6 +38,7 @@ export function registerPortalEvents(o: AppOrchestrator): void {
   const { root } = o;
 
   root.addEventListener("click", (ev) => onRootClick(o, ev));
+  root.addEventListener("contextmenu", (ev) => onRootContextMenu(o, ev));
   root.addEventListener("submit", (ev) => onRootSubmit(o, ev));
   root.addEventListener("change", (ev) => onRootChange(o, ev));
   root.addEventListener("input", (ev) => onRootInput(o, ev));
@@ -62,7 +64,7 @@ function onRootClick(o: AppOrchestrator, ev: Event): void {
 
   const action = t.dataset.action ?? "";
   // Match prior bind.ts: info buttons must not bubble into other handlers
-  if (action === "info" || action === "info-close") {
+  if (action === "info" || action === "info-close" || action === "about-open" || action === "about-close") {
     ev.preventDefault();
     ev.stopPropagation();
   }
@@ -82,6 +84,21 @@ function onRootClick(o: AppOrchestrator, ev: Event): void {
 
   log.debug("portalEvents.click", { action });
   void onAction(o, ev);
+}
+
+function onRootContextMenu(o: AppOrchestrator, ev: MouseEvent): void {
+  const target = ev.target as HTMLElement | null;
+  if (!target || !o.root.contains(target)) return;
+  if (target.closest("#files-item-menu")) {
+    ev.preventDefault();
+    return;
+  }
+  const row = target.closest("tr.files-row") as HTMLElement | null;
+  if (!row || !o.root.contains(row)) return;
+  const path = row.dataset.path ?? "";
+  if (!path || files.filesItemMenuBlocked(o.state)) return;
+  ev.preventDefault();
+  files.openFilesItemMenu(o.filesHost, path, { x: ev.clientX, y: ev.clientY, origin: "context" });
 }
 
 /**
@@ -192,6 +209,11 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
   }
   if (action === "files-upload-pick-folder" && el instanceof HTMLInputElement) {
     files.onFilesUploadInput(o.filesHost, el, true);
+    return;
+  }
+  if (action === "files-type-filter") {
+    log.debug("portalEvents.change", { action });
+    void onAction(o, ev);
     return;
   }
 
@@ -355,6 +377,28 @@ function onRootInput(o: AppOrchestrator, ev: Event): void {
     return;
   }
 
+  if (action === "files-search" && el instanceof HTMLInputElement) {
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    const value = el.value;
+    state.searchTimer = setTimeout(() => {
+      state.filesSearch = value;
+      state.filesSearchFocus = true;
+      render();
+    }, 150);
+    return;
+  }
+
+  if (action === "event-search" && el instanceof HTMLInputElement) {
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    const value = el.value;
+    state.searchTimer = setTimeout(() => {
+      state.eventSearch = value;
+      state.eventSearchFocus = true;
+      render();
+    }, 150);
+    return;
+  }
+
   if (action === "note-search" && el instanceof HTMLInputElement) {
     state.listKeyboardFocus = false;
     if (state.searchTimer) clearTimeout(state.searchTimer);
@@ -425,6 +469,27 @@ function focusListRow(row: HTMLElement): void {
 function onRootKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   const target = ev.target as HTMLElement | null;
   if (!target || !o.root.contains(target)) return;
+
+  if (
+    (ev.key === "ContextMenu" || (ev.key === "F10" && ev.shiftKey)) &&
+    o.state.activeTab === "files"
+  ) {
+    const row = target.closest("tr.files-row") as HTMLElement | null;
+    if (row && o.root.contains(row)) {
+      const path = row.dataset.path ?? "";
+      if (path) {
+        ev.preventDefault();
+        const btn = row.querySelector<HTMLElement>(".files-row-menu-btn");
+        const r = (btn ?? row).getBoundingClientRect();
+        files.openFilesItemMenu(o.filesHost, path, {
+          x: r.right,
+          y: r.bottom + 4,
+          origin: "button",
+        });
+        return;
+      }
+    }
+  }
 
   const tab = o.state.activeTab;
   const onListTab = tab === "contacts" || tab === "tasks" || tab === "notes";
@@ -571,6 +636,7 @@ function onRootDrag(o: AppOrchestrator, kind: "enter" | "over" | "leave" | "drop
   if (!dt || state.busy || state.filesUploadProgress) return;
   state.filesUploadMenuOpen = false;
   o.unbindFilesUploadMenuOutside();
+  files.closeFilesItemMenu(o.filesHost);
   // CRITICAL: snapshot DataTransferItemList synchronously before any await —
   // Chromium drops all but the first item once the drop handler yields.
   const snap = snapshotDataTransfer(dt);
@@ -687,6 +753,11 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     render();
     return;
   }
+  if (state.filesItemMenu) {
+    files.closeFilesItemMenu(o.filesHost);
+    render();
+    return;
+  }
   if (state.userMenuOpen) {
     state.userMenuOpen = false;
     o.unbindUserMenuOutside();
@@ -720,7 +791,11 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     render();
     return;
   }
-  // Info modal stacks above other dialogs — close only it first (do not fall through)
+  // About / info modals stack above other dialogs — close only them first
+  if (aboutModalIsOpen(o.root)) {
+    closeAboutModal(o.root);
+    return;
+  }
   const infoModal = o.root.querySelector<HTMLElement>("#info-modal");
   if (infoModal && !infoModal.hidden) {
     o.closeInfoModal();

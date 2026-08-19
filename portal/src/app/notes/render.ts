@@ -4,6 +4,8 @@ import { toLocalInputValue } from "../datetime";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
+import { renderNoteEditor } from "./editor";
+import { notePlainText } from "./html";
 import type { NotesHost } from "./host";
 
 export function renderNotesTab(host: NotesHost): string {
@@ -16,7 +18,7 @@ export function renderNotesTab(host: NotesHost): string {
           .map((n) => {
             const key = itemKey(n.instanceId, n.uri);
             const active = !host.state.creatingNote && key === host.state.selectedNoteKey ? " is-selected" : "";
-            const preview = (n.description || "").replace(/\s+/g, " ").slice(0, 80);
+            const preview = notePlainText(n.description || "").replace(/\s+/g, " ").slice(0, 80);
             return `<tr class="contact-table-row${active}" data-action="select-note" data-instance="${n.instanceId}" data-uri="${esc(n.uri)}" tabindex="0" role="button">
               <td class="col-note-title">
                 <span class="contact-name-primary">${esc(n.summary || n.uri)}</span>
@@ -64,7 +66,7 @@ export function renderNotesTab(host: NotesHost): string {
               allowClear: true,
             })}
             <label>Body
-              <textarea name="description" rows="8" maxlength="20000" ${n.readOnly && !host.state.creatingNote ? "readonly" : ""}>${esc(n.description)}</textarea>
+              ${renderNoteEditor(n.description, !!(n.readOnly && !host.state.creatingNote))}
             </label>
             <div class="form-actions-row">
               ${

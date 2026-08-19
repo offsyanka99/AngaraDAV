@@ -4,8 +4,8 @@
 import { api } from "../../api";
 import { log } from "../../log";
 import type { Calendar } from "../../api";
-import { monthRange } from "../datetime";
 import type { CalendarsHost } from "./host";
+import { eventsRangeForView } from "./eventsView";
 import { persistCalendarSelection } from "./selectionPersist";
 
 export async function loadShares(host: CalendarsHost, id: number) {
@@ -30,7 +30,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
     host.state.monthEvents = [];
     return;
   }
-  const { from, to } = monthRange(host.state.monthCursor.y, host.state.monthCursor.m);
+  const { from, to } = eventsRangeForView(host);
   host.state.monthEventsLoading = true;
   log.debug("loadMonthEvents", { selectedIds: ids, from, to });
   try {

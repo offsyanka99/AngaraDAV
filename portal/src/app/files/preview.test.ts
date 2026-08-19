@@ -13,6 +13,9 @@ describe("classifyFilesPreview", () => {
     assert.equal(classifyFilesPreview("doc.pdf"), "pdf");
     assert.equal(classifyFilesPreview("track.mp3"), "audio");
     assert.equal(classifyFilesPreview("clip.webm"), "video");
+    assert.equal(classifyFilesPreview("memo.docx"), "office");
+    assert.equal(classifyFilesPreview("sheet.xlsx"), "office");
+    assert.equal(classifyFilesPreview("deck.pptx"), "office");
   });
 
   it("treats markup and source as text (not executed)", () => {

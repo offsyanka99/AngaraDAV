@@ -178,9 +178,7 @@ class CalendarItemService {
                 'DTSTAMP' => new \DateTime('now', new \DateTimeZone('UTC')),
                 'SUMMARY' => $summary,
             ]);
-            if ($description !== '') {
-                $journal->DESCRIPTION = $description;
-            }
+            $this->writeDescription($journal, $description);
             $this->applyJournalFields($journal, $fields, true);
         }
 
@@ -239,7 +237,9 @@ class CalendarItemService {
         }
         if (array_key_exists('description', $fields)) {
             $description = mb_substr(trim((string) $fields['description']), 0, self::MAX_DESCRIPTION);
-            if ($description === '') {
+            if ($kind === self::KIND_NOTE) {
+                $this->writeDescription($comp, $description);
+            } elseif ($description === '') {
                 unset($comp->DESCRIPTION);
             } else {
                 $comp->DESCRIPTION = $description;
@@ -760,7 +760,7 @@ class CalendarItemService {
         }
         $out = [
             'summary'     => $this->utf8(isset($journal->SUMMARY) ? (string) $journal->SUMMARY : ''),
-            'description' => $this->utf8(isset($journal->DESCRIPTION) ? (string) $journal->DESCRIPTION : ''),
+            'description' => $this->readDescription($journal),
             'dtstart'     => $dtstart,
         ];
         $vcal->destroy();
@@ -825,6 +825,68 @@ class CalendarItemService {
     /**
      * @param array<string, mixed> $fields
      */
+    /**
+     * Store HTML notes as X-ALT-DESC (text/html) plus a plain DESCRIPTION fallback.
+     *
+     * @param mixed $comp
+     */
+    private function writeDescription($comp, string $description): void {
+        unset($comp->DESCRIPTION);
+        unset($comp->{'X-ALT-DESC'});
+        if ($description === '') {
+            return;
+        }
+        $html = $this->sanitizeNoteHtml($description);
+        $plain = $this->htmlToPlain($html);
+        $isHtml = $this->looksLikeHtml($html);
+        if ($isHtml) {
+            $comp->DESCRIPTION = $plain !== '' ? $plain : ' ';
+            $comp->add('X-ALT-DESC', $html, ['FMTTYPE' => 'text/html']);
+        } else {
+            $comp->DESCRIPTION = $html;
+        }
+    }
+
+    /**
+     * @param mixed $comp
+     */
+    private function readDescription($comp): string {
+        foreach ($comp->select('X-ALT-DESC') as $alt) {
+            $fmt = strtolower((string) ($alt['FMTTYPE'] ?? ''));
+            if ($fmt === 'text/html') {
+                return $this->utf8((string) $alt);
+            }
+        }
+
+        return $this->utf8(isset($comp->DESCRIPTION) ? (string) $comp->DESCRIPTION : '');
+    }
+
+    private function looksLikeHtml(string $s): bool {
+        return (bool) preg_match('/<[a-z][\s\S]*>/i', $s);
+    }
+
+    private function htmlToPlain(string $html): string {
+        $withBreaks = preg_replace('#</(p|div|h2|h3|li|blockquote)>#i', "\n", $html) ?? $html;
+        $withBreaks = preg_replace('#<br\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
+        $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace("/[ \t]+/", ' ', $text) ?? $text;
+        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+
+        return trim($text);
+    }
+
+    private function sanitizeNoteHtml(string $html): string {
+        if (!$this->looksLikeHtml($html)) {
+            return $html;
+        }
+        $html = preg_replace('#<script[\s\S]*?</script>#i', '', $html) ?? $html;
+        $html = preg_replace('#<style[\s\S]*?</style>#i', '', $html) ?? $html;
+        $html = preg_replace('/\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
+        $html = preg_replace('#</?(?:iframe|object|embed|link|meta|form)[^>]*>#i', '', $html) ?? $html;
+
+        return $html;
+    }
+
     private function applyJournalFields($journal, array $fields, bool $isCreate): void {
         if ($isCreate || array_key_exists('dtstart', $fields)) {
             $raw = $fields['dtstart'] ?? null;
@@ -884,7 +946,7 @@ class CalendarItemService {
     private function matchesQuery(array $item, string $q): bool {
         $hay = mb_strtolower(implode(' ', [
             (string) ($item['summary'] ?? ''),
-            (string) ($item['description'] ?? ''),
+            $this->htmlToPlain((string) ($item['description'] ?? '')),
             (string) ($item['calendarName'] ?? ''),
             (string) ($item['status'] ?? ''),
         ]));

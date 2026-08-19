@@ -91,7 +91,7 @@ export function sortHeader(
   col: string,
   current: string,
   order: "asc" | "desc",
-  kind: "task" | "note",
+  kind: "task" | "note" | "file",
   colClass = "",
 ): string {
   const active = current === col;

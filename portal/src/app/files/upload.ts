@@ -14,6 +14,7 @@ import type { FilesUploadProgress } from "../context";
 import { formatElapsed, formatFileSize } from "../format";
 import { joinStoragePath } from "../paths";
 import type { FilesHost } from "./host";
+import { closeFilesItemMenu } from "./itemMenu";
 import { loadFiles } from "./loaders";
 import { closeFilesPreview } from "./preview";
 import { resetFilesTransferTree } from "./transfer";
@@ -252,6 +253,7 @@ export async function startFilesUploadBrowse(host: FilesHost, kind: "files" | "f
   resetFilesTransferTree(host);
   host.state.filesMkdirOpen = false;
   closeFilesPreview(host);
+  closeFilesItemMenu(host);
 
   const pick = kind === "files" ? pickFilesForUpload : pickFolderForUpload;
   try {
@@ -476,6 +478,7 @@ export async function startFilesUpload(host: FilesHost, items: FilesUploadItem[]
   unbindFilesUploadMenuOutside(host);
   host.state.filesUploadDropActive = false;
   closeFilesPreview(host);
+  closeFilesItemMenu(host);
 
   const fileItems = items.filter((it) => it.file && !it.isEmptyDir);
   const emptyDirs = items.filter((it) => it.isEmptyDir && it.relativePath);

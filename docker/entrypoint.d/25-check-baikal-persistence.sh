@@ -41,17 +41,8 @@ check_mount() {
       ;;
   esac
 
-  if [ -n "${BAIKAL_SKIP_CHOWN+x}" ]; then
-    # With skip-chown, host ownership must already be nginx (uid 101).
-    owner=$(stat -c %u "$target" 2>/dev/null || echo unknown)
-    if [ "$owner" != "101" ]; then
-      echo "$ME: warning: $label is owned by uid $owner (expected 101) and BAIKAL_SKIP_CHOWN is set."
-      echo "$ME:          PHP-FPM runs as nginx and cannot save baikal.yaml. On the host:"
-      echo "$ME:            chown -R 101:101 <host-path-for-$label>"
-    elif ! [ -w "$target" ]; then
-      echo "$ME: warning: $label is not writable (check mode/ACLs on the host path)."
-    fi
-  fi
+  # Ownership/writability when BAIKAL_SKIP_CHOWN is set is fatal in
+  # 26-check-skip-chown-writable.sh (root can always -w these dirs).
 }
 
 check_mount /var/www/baikal/config config

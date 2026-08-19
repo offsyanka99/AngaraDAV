@@ -53,6 +53,9 @@ export async function activateTab(
     setFlash("info", "That section is disabled in system settings.");
     tab = firstEnabledUserTab(state);
   }
+  if (tab !== "files") {
+    files.closeFilesItemMenu(o.filesHost);
+  }
   if (tab === "admin") {
     // Entering Administration from the user menu → Overview (or last hash page)
     await o.activateAdminPage(state.adminPage || "overview", {
@@ -134,6 +137,7 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
   if (!state.calendarSelectionSeeded && state.selectedIds.length === 0) {
     const stored = readStoredCalendarSelection(state.user?.username);
     if (stored) {
+      if (stored.view) state.calView = stored.view;
       const valid = stored.ids.filter((id) => state.calendars.some((c) => c.id === id));
       state.selectedIds = valid;
       if (
@@ -148,6 +152,7 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
       log.debug("loadHome.calSelection.restored", {
         count: valid.length,
         selectedId: state.selectedId,
+        view: state.calView,
       });
     } else {
       const def = o.pickDefaultCalendar();

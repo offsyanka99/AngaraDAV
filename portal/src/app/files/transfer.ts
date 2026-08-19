@@ -6,6 +6,7 @@ import { log } from "../../log";
 import { esc } from "../../ui";
 import { basenamePath } from "../paths";
 import type { FilesHost } from "./host";
+import { closeFilesItemMenu } from "./itemMenu";
 import { loadFiles } from "./loaders";
 
 export function isBlockedTransferDest(_host: FilesHost, dest: string, sources: string[]): boolean {
@@ -48,6 +49,7 @@ export async function openFilesTransfer(host: FilesHost, op: "copy" | "move", pa
     document.removeEventListener("click", host.state.filesUploadMenuDocClick, true);
     host.state.filesUploadMenuDocClick = null;
   }
+  closeFilesItemMenu(host);
   host.clearFlash();
   host.render();
   // Load children for every expanded path so the tree is usable immediately

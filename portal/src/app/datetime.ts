@@ -23,6 +23,37 @@ export function monthRange(y: number, m: number): { from: string; to: string } {
   return { from: ymd(from), to: ymd(to) };
 }
 
+export function parseYmd(key: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function addDays(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+/** Inclusive week containing `day`, starting on locale weekStart (0=Sun). */
+export function weekRange(day: Date, weekStart: number): { from: string; to: string; days: Date[] } {
+  const startPad = (day.getDay() - weekStart + 7) % 7;
+  const start = addDays(day, -startPad);
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) days.push(addDays(start, i));
+  return { from: ymd(days[0]), to: ymd(days[6]), days };
+}
+
+export function formatDayRange(from: Date, to: Date): string {
+  const sameYear = from.getFullYear() === to.getFullYear();
+  const sameMonth = sameYear && from.getMonth() === to.getMonth();
+  if (sameMonth) {
+    return `${from.toLocaleString(undefined, { month: "short" })} ${from.getDate()}–${to.getDate()}, ${from.getFullYear()}`;
+  }
+  const a = from.toLocaleString(undefined, { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+  const b = to.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return `${a} – ${b}`;
+}
+
 /** Local calendar date of an event start/end string. */
 export function eventLocalDate(iso: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {

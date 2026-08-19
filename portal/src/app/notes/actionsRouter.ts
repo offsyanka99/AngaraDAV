@@ -3,6 +3,7 @@
  * Owns: sort-note, select/new/cancel/delete note.
  */
 import type { AppOrchestrator } from "../orchestrator";
+import { applyNoteFormat } from "./editor";
 
 /**
  * Handle note actions. Returns true if the action was recognized
@@ -12,9 +13,15 @@ export async function handleNotesAction(
   o: AppOrchestrator,
   action: string,
   t: HTMLElement,
-  _ev: Event,
+  ev: Event,
 ): Promise<boolean> {
   const { state, render, setFlash, clearFlash } = o;
+
+  if (action === "note-fmt") {
+    ev.preventDefault();
+    applyNoteFormat(t.dataset.cmd || "", t.dataset.value);
+    return true;
+  }
 
   if (action === "sort-note") {
     const col = t.dataset.sort || "";

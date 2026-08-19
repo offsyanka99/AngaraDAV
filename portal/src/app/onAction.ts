@@ -29,7 +29,9 @@ export async function onAction(o: AppOrchestrator, ev: Event): Promise<void> {
     return;
   }
   if (
-    (action.startsWith("files-") || action === "close-files-upload-progress") &&
+    (action.startsWith("files-") ||
+      action === "sort-file" ||
+      action === "close-files-upload-progress") &&
     (await files.handleFilesAction(o.filesHost, action, t, ev))
   ) {
     return;

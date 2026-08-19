@@ -5,6 +5,7 @@
  */
 import { api } from "../api";
 import { log } from "../log";
+import { closeAboutModal, openAboutModal } from "./about";
 import { closeConfirmDelete } from "./confirmDelete";
 import type { AppOrchestrator } from "./orchestrator";
 import { parseTabId } from "./routing";
@@ -198,6 +199,18 @@ export async function handleShellAction(
 
   if (action === "info-close") {
     o.closeInfoModal();
+    return true;
+  }
+
+  if (action === "about-open") {
+    ev.preventDefault();
+    openAboutModal(o.root);
+    return true;
+  }
+
+  if (action === "about-close") {
+    ev.preventDefault();
+    closeAboutModal(o.root);
     return true;
   }
 

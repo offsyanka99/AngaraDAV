@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.3.0`
+**Version:** `2.3.1`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -76,8 +76,6 @@ Primary admin UI is the **portal** (same DB + `baikal.yaml`). Auth is a **DAV us
 
 Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the in-SPA Administration shell; `/api/admin/*` still enforces Admin server-side.
 
-Operator guide: [`docs/DEPLOYMENT.md` — Portal Administration](../docs/DEPLOYMENT.md#portal-administration).
-
 #### UI surface
 
 - Opened from the **user menu → Administration** (hidden for non-admins).
@@ -100,8 +98,6 @@ Operator guide: [`docs/DEPLOYMENT.md` — Portal Administration](../docs/DEPLOYM
 | Database settings write | Yes (`confirm: "CONFIRM"`) |
 | Installer / upgrade | Yes (`/portal/install/`) |
 
-Installer details: [`docs/DEPLOYMENT.md` — Portal Administration](../docs/DEPLOYMENT.md#portal-administration).
-
 Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → server import, elapsed time) and show the result when finished.
 
 ### Debug logging
@@ -119,9 +115,16 @@ Set log level in `baikal.yaml` or env (env wins):
 ## Develop
 
 ```bash
-# API + AngaraDAV must already be running (e.g. docker on :8080)
+# API + AngaraDAV must already be running (e.g. docker on :31088)
+#   docker compose -f docs/local.compose.yaml up --build
 cd portal
 npm install
-npm run dev     # Vite on :5173, proxies /api → :8080
+npm run dev     # Vite on :5173, proxies /api → :8080 (change vite.config if using 31088)
 npm run build   # emits to ../html/portal/
 ```
+
+`portal/node_modules` must be owned by your user. A root-owned tree (for
+example `sudo npm install`) makes Vite fail with EACCES on
+`node_modules/.vite-temp`. Fix: `chown -R "$USER:$USER" node_modules`.
+
+`make portal` from the repo root runs `npm test` then `npm run build`.

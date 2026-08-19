@@ -2,6 +2,7 @@
  * App chrome: topnav, tabs bar, footer, user menu (Phase 3 extract).
  */
 import { esc } from "../ui";
+import { aboutModalHtml } from "./about";
 import { DOCS_URL } from "./constants";
 import type { AppState } from "./context";
 import { renderFlashBanner } from "./flash";
@@ -91,13 +92,14 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
   const footer = `
       <footer class="site-footer">
         <div class="container footer-inner">
-          <span>AngaraDAV portal <span class="mono">v${esc(state.appVersion)}</span></span>
+          <span>AngaraDAV portal</span>
           <span class="footer-sep" aria-hidden="true">·</span>
-          <a href="/dav.php/">DAV browser</a>
+          <button type="button" class="footer-link" data-action="about-open">About</button>
           <span class="footer-sep" aria-hidden="true">·</span>
           <a href="${esc(DOCS_URL)}" target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
-      </footer>`;
+      </footer>
+      ${aboutModalHtml(state)}`;
 
   // Preserve layout-* toggles applied after shell (e.g. layout-contacts); auth replaces them.
   if (opts.auth) {

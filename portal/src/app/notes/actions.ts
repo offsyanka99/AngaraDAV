@@ -2,6 +2,7 @@
 import { api } from "../../api";
 import { entityFlash } from "../format";
 import { itemKey } from "../keys";
+import { sanitizeNoteHtml } from "./html";
 import type { NotesHost } from "./host";
 import { loadNotes } from "./loaders";
 
@@ -10,6 +11,9 @@ import { loadNotes } from "./loaders";
  */
 export function syncEditingNoteFromForm(host: NotesHost, form: HTMLFormElement): void {
   if (!host.state.editingNote) return;
+  const editor = form.querySelector<HTMLElement>("[data-note-editor]");
+  const hidden = form.querySelector<HTMLTextAreaElement>('textarea[name="description"]');
+  if (editor && hidden) hidden.value = sanitizeNoteHtml(editor.innerHTML);
   const fd = new FormData(form);
   const dtLocal = String(fd.get("dtstart") ?? "").trim();
   const instanceRaw = fd.get("instanceId");
@@ -21,15 +25,18 @@ export function syncEditingNoteFromForm(host: NotesHost, form: HTMLFormElement):
     ...host.state.editingNote,
     instanceId: Number.isFinite(instanceId) && instanceId > 0 ? instanceId : host.state.editingNote.instanceId,
     summary: String(fd.get("summary") ?? host.state.editingNote.summary),
-    description: String(fd.get("description") ?? host.state.editingNote.description),
+    description: sanitizeNoteHtml(String(fd.get("description") ?? host.state.editingNote.description)),
     dtstart: dtLocal ? new Date(dtLocal).toISOString() : null,
   };
 }
 
 export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
+  const editor = form.querySelector<HTMLElement>("[data-note-editor]");
+  const hidden = form.querySelector<HTMLTextAreaElement>('textarea[name="description"]');
+  if (editor && hidden) hidden.value = sanitizeNoteHtml(editor.innerHTML);
   const fd = new FormData(form);
   const summary = String(fd.get("summary") ?? "").trim();
-  const description = String(fd.get("description") ?? "").trim();
+  const description = sanitizeNoteHtml(String(fd.get("description") ?? "").trim());
   const dtLocal = String(fd.get("dtstart") ?? "").trim();
   const dtstart = dtLocal ? new Date(dtLocal).toISOString() : null;
   host.state.busy = true;

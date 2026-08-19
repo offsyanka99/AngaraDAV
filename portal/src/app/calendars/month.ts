@@ -4,36 +4,26 @@
 import type { CalendarEvent } from "../../api";
 import { esc } from "../../ui";
 import { eventDayKeys, ymd } from "../datetime";
+import { renderAgendaView } from "./agenda";
+import { formatEventChipLabel, visibleCalendarEvents } from "./eventsView";
 import type { CalendarsHost } from "./host";
 import { calendarColor } from "./loaders";
+import { calendarChrome } from "./toolbar";
+import { renderWeekView } from "./week";
 
-export function monthTitle(_host: CalendarsHost, y: number, m: number): string {
-  return new Date(y, m, 1).toLocaleString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
-}
+export { formatEventChipLabel, monthTitle } from "./eventsView";
 
-export function formatEventChipLabel(host: CalendarsHost, ev: CalendarEvent): string {
-  const title = ev.summary || "(No title)";
-  if (ev.allDay || /^\d{4}-\d{2}-\d{2}$/.test(ev.start)) {
-    return title;
-  }
-  const d = new Date(ev.start);
-  if (Number.isNaN(d.getTime())) return title;
-  const time = d.toLocaleTimeString(undefined, host.timeFormatOpts());
-  return `${time} ${title}`;
+export function renderCalendarView(host: CalendarsHost): string {
+  if (host.state.calView === "week") return renderWeekView(host);
+  if (host.state.calView === "agenda") return renderAgendaView(host);
+  return renderMonthGridInner(host);
 }
 
 export function renderMonthGrid(host: CalendarsHost): string {
-  const selectedCals = host.state.calendars.filter((c) => host.state.selectedIds.includes(c.id));
-  const calName =
-    selectedCals.length === 0
-      ? "No calendar selected"
-      : selectedCals.length === 1
-        ? selectedCals[0].displayname
-        : `${selectedCals.length} calendars`;
+  return renderCalendarView(host);
+}
 
+function renderMonthGridInner(host: CalendarsHost): string {
   const y = host.state.monthCursor.y;
   const m = host.state.monthCursor.m;
   const first = new Date(y, m, 1);
@@ -46,7 +36,7 @@ export function renderMonthGrid(host: CalendarsHost): string {
   const dowLabels = host.localeDowLabels();
 
   const byDay = new Map<string, CalendarEvent[]>();
-  for (const ev of host.state.monthEvents) {
+  for (const ev of visibleCalendarEvents(host)) {
     for (const key of eventDayKeys(ev)) {
       const list = byDay.get(key) ?? [];
       list.push(ev);
@@ -114,38 +104,11 @@ export function renderMonthGrid(host: CalendarsHost): string {
     </div>`);
   }
 
-  // "Check one or more calendars…" lives under Owned (sidebar); keep only no-calendars / loading here.
-  const emptyHint =
-    selectedCals.length === 0
-      ? host.state.calendars.length === 0
-        ? `<p class="muted small month-empty-hint">No calendars yet — create one on the left, or wait for someone to share with you.</p>`
-        : ""
-      : host.state.monthEventsLoading
-        ? `<p class="muted small month-empty-hint">Loading events…</p>`
-        : "";
-
-  const swatches = selectedCals
-    .slice(0, 6)
-    .map((c) => {
-      const col = c.color && c.color.length >= 7 ? c.color.slice(0, 7) : c.color || "#3B82F6";
-      return `<span class="cal-swatch" style="background:${esc(col)};margin-top:0" title="${esc(c.displayname)}"></span>`;
-    })
-    .join("");
+  const chrome = calendarChrome(host);
 
   return `<section class="card month-cal-card">
-    <div class="month-cal-toolbar">
-      <button type="button" class="btn btn-ghost btn-small" data-action="month-today" ${host.state.busy ? "disabled" : ""}>Today</button>
-      <div class="month-nav">
-        <button type="button" class="btn btn-ghost btn-small month-nav-btn" data-action="month-prev" aria-label="Previous month" ${host.state.busy ? "disabled" : ""}>‹</button>
-        <button type="button" class="btn btn-ghost btn-small month-nav-btn" data-action="month-next" aria-label="Next month" ${host.state.busy ? "disabled" : ""}>›</button>
-      </div>
-      <h2 class="month-cal-title">${esc(monthTitle(host, y, m))}</h2>
-      <span class="month-cal-name muted small" title="${esc(calName)}">
-        ${swatches}
-        ${esc(calName)}
-      </span>
-    </div>
-    ${emptyHint}
+    ${chrome.toolbar}
+    ${chrome.emptyHint}
     <div class="month-grid-wrap" role="grid" aria-label="Month calendar">
       <div class="month-dow-row" role="row">
         ${dowLabels.map((l) => `<div class="month-dow">${esc(l)}</div>`).join("")}

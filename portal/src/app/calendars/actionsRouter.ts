@@ -9,6 +9,7 @@ import {
   defaultTimedRange,
   formatLocalDtValue,
   parseDtParts,
+  parseYmd,
   ymd,
 } from "../datetime";
 import { syncOpenItemFormsBeforeDtRender } from "../datetimeSync";
@@ -179,9 +180,27 @@ export async function handleCalendarsAction(
     return true;
   }
 
+  if (action === "cal-view") {
+    const view = t.dataset.view;
+    if (view !== "month" && view !== "week" && view !== "agenda") return true;
+    state.calView = view;
+    persistCalendarSelection(state);
+    state.monthExpandDay = null;
+    state.busy = true;
+    render();
+    try {
+      await o.loadMonthEvents();
+    } finally {
+      state.busy = false;
+      render();
+    }
+    return true;
+  }
+
   if (action === "month-today") {
     const n = new Date();
     state.monthCursor = { y: n.getFullYear(), m: n.getMonth() };
+    state.calFocusDay = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
     state.monthExpandDay = null;
     state.busy = true;
     render();
@@ -196,8 +215,22 @@ export async function handleCalendarsAction(
 
   if (action === "month-prev" || action === "month-next") {
     const delta = action === "month-prev" ? -1 : 1;
-    const d = new Date(state.monthCursor.y, state.monthCursor.m + delta, 1);
-    state.monthCursor = { y: d.getFullYear(), m: d.getMonth() };
+    const view = state.calView;
+    if (view === "week") {
+      const cur = parseYmd(state.calFocusDay) ?? new Date();
+      cur.setDate(cur.getDate() + delta * 7);
+      state.calFocusDay = ymd(cur);
+      state.monthCursor = { y: cur.getFullYear(), m: cur.getMonth() };
+    } else if (view === "agenda") {
+      const cur = parseYmd(state.calFocusDay) ?? new Date();
+      cur.setDate(cur.getDate() + delta * 7);
+      state.calFocusDay = ymd(cur);
+      state.monthCursor = { y: cur.getFullYear(), m: cur.getMonth() };
+    } else {
+      const d = new Date(state.monthCursor.y, state.monthCursor.m + delta, 1);
+      state.monthCursor = { y: d.getFullYear(), m: d.getMonth() };
+      state.calFocusDay = ymd(d);
+    }
     state.monthExpandDay = null;
     state.busy = true;
     render();

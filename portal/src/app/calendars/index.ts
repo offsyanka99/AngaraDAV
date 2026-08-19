@@ -9,7 +9,7 @@ export {
   calendarColor,
   toggleCalendarSelected,
 } from "./loaders";
-export { monthTitle, formatEventChipLabel, renderMonthGrid } from "./month";
+export { monthTitle, formatEventChipLabel, renderMonthGrid, renderCalendarView } from "./month";
 export {
   defaultRepeat,
   repeatEndMode,
@@ -41,4 +41,5 @@ export { handleCalendarsAction } from "./actionsRouter";
 export {
   persistCalendarSelection,
   readStoredCalendarSelection,
+  parseCalendarView,
 } from "./selectionPersist";

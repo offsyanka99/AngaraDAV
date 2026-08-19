@@ -6,6 +6,7 @@
  */
 import type { AppOrchestrator } from "./orchestrator";
 import * as files from "./files";
+import * as notes from "./notes";
 import { bindDtPickerOutside, unbindDtPickerOutside } from "./shell";
 
 /** @deprecated use bindAfterRender — kept as alias for older imports */
@@ -31,12 +32,36 @@ export function bindAfterRender(o: AppOrchestrator): void {
 
   // Indeterminate select-all must be re-set after each paint
   files.bindFilesDom(o.filesHost);
+  notes.bindNoteEditor(o.notesHost);
   // Create-cal holidays field visibility (no listener)
   o.bindHolidaysToggle();
 
   // Keep ↑/↓/Enter working after re-render (innerHTML clears focus)
   restoreListKeyboardFocus(o);
   focusOpenModal(o.root);
+  restoreSearchFocus(o);
+}
+
+function restoreSearchFocus(o: AppOrchestrator): void {
+  const { state, root } = o;
+  const sel =
+    state.filesSearchFocus && state.activeTab === "files"
+      ? 'input[data-action="files-search"]'
+      : state.eventSearchFocus && state.activeTab === "calendars"
+        ? 'input[data-action="event-search"]'
+        : null;
+  if (!sel) return;
+  const input = root.querySelector<HTMLInputElement>(sel);
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  const len = input.value.length;
+  try {
+    input.setSelectionRange(len, len);
+  } catch {
+    /* ignore */
+  }
+  state.filesSearchFocus = false;
+  state.eventSearchFocus = false;
 }
 
 function focusOpenModal(root: HTMLElement): void {
@@ -65,7 +90,7 @@ function restoreListKeyboardFocus(o: AppOrchestrator): void {
   if (
     active &&
     root.contains(active) &&
-    active.matches("input:not([type=checkbox]), textarea, select") &&
+    active.matches("input:not([type=checkbox]), textarea, select, [contenteditable='true']") &&
     !active.closest("tr.contact-table-row[data-action]")
   ) {
     return;

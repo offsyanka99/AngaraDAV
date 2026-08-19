@@ -2,13 +2,20 @@
  * Persist month-grid calendar multi-select across browser sessions (localStorage).
  * Scoped per DAV username so shared browsers do not mix preferences.
  */
-import { CAL_SELECTION_STORAGE_KEY } from "../constants";
+import { CAL_SELECTION_STORAGE_KEY } from "../constants.ts";
 import type { AppState } from "../context";
+
+export type CalendarViewId = "month" | "week" | "agenda";
 
 export type StoredCalendarSelection = {
   ids: number[];
   selectedId: number | null;
+  view?: CalendarViewId;
 };
+
+export function parseCalendarView(raw: unknown): CalendarViewId | null {
+  return raw === "month" || raw === "week" || raw === "agenda" ? raw : null;
+}
 
 function storageKey(username: string): string {
   return `${CAL_SELECTION_STORAGE_KEY}:${username}`;
@@ -39,7 +46,8 @@ export function readStoredCalendarSelection(
       const n = Number(obj.selectedId);
       selectedId = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
     }
-    return { ids, selectedId };
+    const view = parseCalendarView(obj.view) ?? undefined;
+    return { ids, selectedId, view };
   } catch {
     return null;
   }
@@ -53,6 +61,7 @@ export function persistCalendarSelection(state: AppState): void {
     const payload: StoredCalendarSelection = {
       ids: state.selectedIds.slice(),
       selectedId: state.selectedId,
+      view: parseCalendarView(state.calView) ?? "month",
     };
     localStorage.setItem(storageKey(username), JSON.stringify(payload));
   } catch {

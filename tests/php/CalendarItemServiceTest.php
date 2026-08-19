@@ -140,6 +140,17 @@ $note = $svc->createItem('alice', CalendarItemService::KIND_NOTE, [
     'description' => 'Discussed roadmap',
 ]);
 assert_true($note['summary'] === 'Meeting notes', 'create note');
+
+$htmlNote = $svc->createItem('alice', CalendarItemService::KIND_NOTE, [
+    'instanceId'  => 10,
+    'summary'     => 'Rich note',
+    'description' => '<p>Hello <strong>team</strong></p><script>alert(1)</script>',
+]);
+assert_true(str_contains((string) $htmlNote['description'], '<strong>team</strong>'), 'html note round-trip');
+assert_true(!str_contains((string) $htmlNote['description'], '<script>'), 'html note strips script');
+$found = $svc->listItems('alice', CalendarItemService::KIND_NOTE, 'team', 'summary', 'asc');
+assert_true(count($found) >= 1, 'plain-text search matches html note');
+$svc->deleteItem('alice', CalendarItemService::KIND_NOTE, 10, $htmlNote['uri']);
 $notes = $svc->listItems('alice', CalendarItemService::KIND_NOTE, '', 'summary', 'asc');
 assert_true(count($notes) === 1, 'list one note');
 

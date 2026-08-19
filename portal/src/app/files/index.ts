@@ -32,6 +32,12 @@ export { onFilesRename, onFilesMkdir } from "./actions";
 export { handleFilesAction } from "./actionsRouter";
 export { bindFilesDom } from "./bind";
 export {
+  closeFilesItemMenu,
+  filesItemMenuBlocked,
+  openFilesItemMenu,
+  unbindFilesItemMenuOutside,
+} from "./itemMenu";
+export {
   classifyFilesPreview,
   closeFilesPreview,
   disposeFilesPreviewState,

@@ -159,6 +159,14 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];
+  state.calView = "month";
+  state.eventSearch = "";
+  state.eventSearchFocus = false;
+  {
+    const n = new Date();
+    state.calFocusDay = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    state.monthCursor = { y: n.getFullYear(), m: n.getMonth() };
+  }
   state.tasks = [];
   state.notes = [];
   state.taskCalendars = [];
@@ -178,6 +186,20 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.filesDeletePaths = null;
   hooks.resetFilesTransferTree();
   state.filesMkdirOpen = false;
+  state.filesSearch = "";
+  state.filesSearchFocus = false;
+  state.filesSort = "name";
+  state.filesOrder = "asc";
+  state.filesTypeFilter = "all";
+  state.filesItemMenu = null;
+  if (state.filesItemMenuDocClick) {
+    document.removeEventListener("click", state.filesItemMenuDocClick, true);
+    state.filesItemMenuDocClick = null;
+  }
+  if (state.filesItemMenuWinClose) {
+    window.removeEventListener("resize", state.filesItemMenuWinClose);
+    state.filesItemMenuWinClose = null;
+  }
   if (state.filesPreview?.objectUrl) {
     try {
       URL.revokeObjectURL(state.filesPreview.objectUrl);

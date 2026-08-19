@@ -298,8 +298,17 @@ class VCardMapper {
             throw new ApiException('Photo is too large (max 2 MB)', 400);
         }
 
-        if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) {
-            throw new ApiException('Photo processing requires PHP GD extension', 501);
+        $hasGd = function_exists('imagecreatefromstring') && function_exists('imagejpeg');
+        if (!$hasGd) {
+            // CLI/php-S often lacks php-gd. JPEG can still be stored as vCard PHOTO.
+            if (strncmp($binary, "\xFF\xD8", 2) === 0) {
+                return $binary;
+            }
+            throw new ApiException(
+                'Photo processing requires PHP GD (PNG/WebP/GIF). Install php-gd '
+                . '(Ubuntu: sudo apt install php-gd) and restart PHP, or upload a JPEG.',
+                501
+            );
         }
 
         $src = @imagecreatefromstring($binary);

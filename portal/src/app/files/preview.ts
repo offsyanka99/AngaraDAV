@@ -7,6 +7,8 @@ import { esc, renderModal } from "../../ui";
 import type { AppState, FilesPreview } from "../context";
 import { formatBytes } from "../format";
 import type { FilesHost } from "./host";
+import { closeFilesItemMenu } from "./itemMenu";
+import { officeBlobToHtml } from "./officePreview";
 import { classifyFilesPreview } from "./previewKind";
 import { resetFilesTransferTree } from "./transfer";
 
@@ -42,6 +44,7 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
   resetFilesTransferTree(host);
   host.state.filesMkdirOpen = false;
   host.state.filesUploadMenuOpen = false;
+  closeFilesItemMenu(host);
 
   const kind = classifyFilesPreview(entry.name);
   const seq = host.state.filesPreviewSeq + 1;
@@ -54,11 +57,12 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
     status: "loading",
     objectUrl: null,
     text: null,
+    html: null,
     truncated: false,
     error: null,
   };
 
-  const needsFetch = kind === "text" || kind === "pdf";
+  const needsFetch = kind === "text" || kind === "pdf" || kind === "office";
   if (!needsFetch) {
     host.state.filesPreview = { ...base, status: "ready" };
     log.event("files.preview", { path: entry.path, kind });
@@ -82,7 +86,11 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
     }
     const { blob } = await api.filesGetBlob(entry.path, { inline: true });
     if (host.state.filesPreviewSeq !== seq) return;
-    if (kind === "pdf") {
+    if (kind === "office") {
+      const html = await officeBlobToHtml(entry.name, blob);
+      if (host.state.filesPreviewSeq !== seq) return;
+      host.state.filesPreview = { ...base, status: "ready", html };
+    } else if (kind === "pdf") {
       const pdfBlob =
         blob.type && blob.type.toLowerCase().includes("pdf")
           ? blob
@@ -142,6 +150,8 @@ export function renderFilesPreviewModal(host: FilesHost): string {
     body = `<div class="files-preview-media">
       <video class="files-preview-video" controls preload="metadata" src="${esc(src)}"></video>
     </div>`;
+  } else if (p.kind === "office" && p.html) {
+    body = `<div class="files-preview-office">${p.html}</div>`;
   } else if (p.kind === "text") {
     const note = p.truncated
       ? `<p class="muted small files-preview-truncated">Showing the first ${esc(formatBytes(MAX_TEXT_BYTES))} of this file.</p>`

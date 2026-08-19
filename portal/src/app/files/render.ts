@@ -1,12 +1,14 @@
 /**
  * Files tab UI HTML (Phase 4).
  */
-import { api } from "../../api";
 import { esc, renderModal } from "../../ui";
-import { formatBytes, formatMtime } from "../format";
+import { formatBytes, formatMtime, sortHeader } from "../format";
 import { basenamePath } from "../paths";
 import { infoTitle } from "../sectionInfo";
 import type { FilesHost } from "./host";
+import { renderFilesItemMenu } from "./itemMenu";
+import { filesItemMenuModel } from "./itemMenuModel";
+import { FILES_TYPE_FILTERS, filterAndSortEntries } from "./listing";
 import { isBlockedTransferDest, renderFilesFolderTree } from "./transfer";
 
 export function filesBreadcrumb(host: FilesHost, path: string): string {
@@ -62,23 +64,32 @@ export function renderFilesTab(host: FilesHost): string {
       ? Math.min(100, Math.round((100 * st.usedBytes) / st.quotaBytes))
       : 0;
 
+  const visibleEntries = filterAndSortEntries(host.state.filesEntries, {
+    search: host.state.filesSearch,
+    type: host.state.filesTypeFilter,
+    sort: host.state.filesSort,
+    order: host.state.filesOrder,
+  });
   const nChecked = host.state.checkedFilePaths.length;
+  const selectedFileBytes = (() => {
+    if (nChecked === 0) return null;
+    const checked = new Set(host.state.checkedFilePaths);
+    let bytes = 0;
+    let files = 0;
+    for (const e of host.state.filesEntries) {
+      if (!checked.has(e.path) || e.type !== "file") continue;
+      bytes += e.size;
+      files += 1;
+    }
+    return files > 0 ? bytes : null;
+  })();
   const allChecked =
-    host.state.filesEntries.length > 0 && host.state.filesEntries.every((e) => host.state.checkedFilePaths.includes(e.path));
+    visibleEntries.length > 0 && visibleEntries.every((e) => host.state.checkedFilePaths.includes(e.path));
   const someChecked = nChecked > 0;
   const nDirs = host.state.filesEntries.filter((e) => e.type === "dir").length;
   const nFiles = host.state.filesEntries.length - nDirs;
-  const bulkBar =
-    nChecked > 0
-      ? `<div class="bulk-bar files-bulk-bar" role="toolbar" aria-label="Selected files">
-          <span class="muted small">${nChecked} selected</span>
-          <div class="bulk-bar-actions">
-            <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-copy" ${host.state.busy ? "disabled" : ""}>Copy</button>
-            <button type="button" class="btn btn-small btn-ghost" data-action="files-bulk-move" ${host.state.busy ? "disabled" : ""}>Move</button>
-            <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${host.state.busy ? "disabled" : ""}>Delete</button>
-          </div>
-        </div>`
-      : "";
+  const selModel = filesItemMenuModel(host.state.filesEntries, host.state.checkedFilePaths);
+  const filtered = visibleEntries.length !== host.state.filesEntries.length;
   const filesCountLabel = (() => {
     if (host.state.filesLoading && host.state.filesEntries.length === 0) return "Loading…";
     if (host.state.filesEntries.length === 0) return "0 items";
@@ -94,7 +105,9 @@ export function renderFilesTab(host: FilesHost): string {
   const rows =
     host.state.filesEntries.length === 0
       ? `<tr><td colspan="5" class="muted">This folder is empty.</td></tr>`
-      : host.state.filesEntries
+      : visibleEntries.length === 0
+        ? `<tr><td colspan="5" class="muted">No items match this search or filter.</td></tr>`
+        : visibleEntries
           .map((e) => {
             const checked = host.state.checkedFilePaths.includes(e.path);
             const icon = e.type === "dir" ? "📁" : "📄";
@@ -107,7 +120,8 @@ export function renderFilesTab(host: FilesHost): string {
                     <span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}
                   </button>`;
             const size = e.type === "dir" ? "—" : formatBytes(e.size);
-            return `<tr class="files-row${checked ? " is-checked" : ""}" data-path="${esc(e.path)}" data-type="${e.type}">
+            const menuOpen = host.state.filesItemMenu?.path === e.path;
+            return `<tr class="files-row${checked ? " is-checked" : ""}${menuOpen ? " is-menu-open" : ""}" data-path="${esc(e.path)}" data-type="${e.type}">
               <td class="files-col-check">
                 <input type="checkbox" data-action="files-toggle" data-path="${esc(e.path)}"
                   ${checked ? "checked" : ""} ${host.state.busy ? "disabled" : ""}
@@ -117,16 +131,16 @@ export function renderFilesTab(host: FilesHost): string {
               <td class="files-col-size mono">${size}</td>
               <td class="files-col-mtime hide-sm">${esc(formatMtime(e.mtime))}</td>
               <td class="files-col-actions">
-                ${
-                  e.type === "file"
-                    ? `<button type="button" class="btn btn-ghost btn-small" data-action="files-preview-open" data-path="${esc(e.path)}" aria-expanded="${host.state.filesPreview?.path === e.path ? "true" : "false"}" ${host.state.busy ? "disabled" : ""}>View</button>
-                       <a class="btn btn-ghost btn-small" href="${esc(api.filesDownloadUrl(e.path))}" download="${esc(e.name)}" data-action="files-download">Download</a>`
-                    : ""
-                }
-                <button type="button" class="btn btn-ghost btn-small" data-action="files-copy" data-path="${esc(e.path)}" ${host.state.busy ? "disabled" : ""}>Copy</button>
-                <button type="button" class="btn btn-ghost btn-small" data-action="files-move" data-path="${esc(e.path)}" ${host.state.busy ? "disabled" : ""}>Move</button>
-                <button type="button" class="btn btn-ghost btn-small" data-action="files-rename-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${host.state.busy ? "disabled" : ""}>Rename</button>
-                <button type="button" class="btn btn-ghost btn-small btn-danger-text" data-action="files-delete-open" data-path="${esc(e.path)}" data-name="${esc(e.name)}" ${host.state.busy ? "disabled" : ""}>Delete</button>
+                <button type="button" class="files-row-menu-btn" data-action="files-item-menu-toggle"
+                  data-path="${esc(e.path)}"
+                  aria-haspopup="menu"
+                  aria-expanded="${menuOpen ? "true" : "false"}"
+                  ${menuOpen ? 'aria-controls="files-item-menu"' : ""}
+                  aria-label="Actions for ${esc(e.name)}"
+                  title="Actions"
+                  ${host.state.busy ? "disabled" : ""}>
+                  <span aria-hidden="true">⋮</span>
+                </button>
               </td>
             </tr>`;
           })
@@ -369,10 +383,41 @@ export function renderFilesTab(host: FilesHost): string {
               Folder…
             </button>
           </div>
-        </div>
-        <input type="file" data-action="files-upload-pick-files" ${host.state.busy ? "disabled" : ""} multiple hidden />
+        </div>`;
+  const hiddenUploadInputs = `<input type="file" data-action="files-upload-pick-files" ${host.state.busy ? "disabled" : ""} multiple hidden />
         <input type="file" data-action="files-upload-pick-folder" ${host.state.busy ? "disabled" : ""}
           multiple webkitdirectory directory hidden />`;
+  const typeOpts = FILES_TYPE_FILTERS.map(
+    (f) =>
+      `<option value="${esc(f.value)}" ${host.state.filesTypeFilter === f.value ? "selected" : ""}>${esc(f.label)}</option>`,
+  ).join("");
+  const filesFilterBar = `<div class="files-filter-bar">
+          <input type="search" class="files-search" data-action="files-search" placeholder="Search this folder…"
+            value="${esc(host.state.filesSearch)}" aria-label="Search files in this folder" ${host.state.busy ? "disabled" : ""} />
+          <label class="files-type-filter">
+            <span class="visually-hidden">Type</span>
+            <select data-action="files-type-filter" aria-label="Filter by type" ${host.state.busy ? "disabled" : ""}>
+              ${typeOpts}
+            </select>
+          </label>
+        </div>`;
+  const toolbarActions =
+    nChecked > 0
+      ? `<div class="files-toolbar-actions" role="toolbar" aria-label="Selected files">
+            <span class="files-selection-count">${nChecked} selected</span>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-clear-selection" ${host.state.busy ? "disabled" : ""}>Clear</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-bulk-download"
+              ${host.state.busy || !selModel.showDownload ? "disabled" : ""}
+              title="${selModel.showDownload ? "Download selected files" : "No files in the selection"}">Download</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-bulk-copy" ${host.state.busy ? "disabled" : ""}>Copy</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-bulk-move" ${host.state.busy ? "disabled" : ""}>Move</button>
+            <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${host.state.busy ? "disabled" : ""}>Delete</button>
+          </div>`
+      : `<div class="files-toolbar-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${host.state.busy || host.state.filesLoading ? "disabled" : ""}>Refresh</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${host.state.busy ? "disabled" : ""}>New folder</button>
+            ${uploadMenu}
+          </div>`;
 
   return `<div class="portal-grid portal-grid-files">
     <section class="card files-panel${host.state.filesUploadDropActive ? " is-dragover" : ""}" data-files-drop-target>
@@ -394,13 +439,10 @@ export function renderFilesTab(host: FilesHost): string {
       </div>
       <div class="files-toolbar">
         ${filesBreadcrumb(host, host.state.filesPath)}
-        <div class="files-toolbar-actions">
-          <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${host.state.busy || host.state.filesLoading ? "disabled" : ""}>Refresh</button>
-          <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${host.state.busy ? "disabled" : ""}>New folder</button>
-          ${uploadMenu}
-        </div>
+        ${toolbarActions}
       </div>
-      ${bulkBar}
+      ${hiddenUploadInputs}
+      ${filesFilterBar}
       <div class="table-wrap files-table-wrap">
         <table class="files-table">
           <thead>
@@ -409,13 +451,13 @@ export function renderFilesTab(host: FilesHost): string {
                 <input type="checkbox" data-action="files-select-all"
                   ${allChecked ? "checked" : ""}
                   ${someChecked && !allChecked ? "data-indeterminate=1" : ""}
-                  ${host.state.busy || host.state.filesEntries.length === 0 ? "disabled" : ""}
-                  aria-label="Select all in this folder" />
+                  ${host.state.busy || visibleEntries.length === 0 ? "disabled" : ""}
+                  aria-label="Select all visible in this folder" />
               </th>
-              <th class="files-col-name">Name</th>
-              <th class="files-col-size">Size</th>
-              <th class="files-col-mtime hide-sm">Modified</th>
-              <th class="files-col-actions">Actions</th>
+              ${sortHeader("Name", "name", host.state.filesSort, host.state.filesOrder, "file", "files-col-name")}
+              ${sortHeader("Size", "size", host.state.filesSort, host.state.filesOrder, "file", "files-col-size")}
+              ${sortHeader("Modified", "mtime", host.state.filesSort, host.state.filesOrder, "file", "files-col-mtime hide-sm")}
+              <th class="files-col-actions" aria-label="Actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -423,8 +465,17 @@ export function renderFilesTab(host: FilesHost): string {
           </tbody>
         </table>
       </div>
+      ${renderFilesItemMenu(host)}
       <div class="files-status-bar muted small" role="status" aria-live="polite">
-        ${nChecked > 0 ? `${nChecked} of ${host.state.filesEntries.length} selected` : esc(filesCountLabel)}
+        ${
+          nChecked > 0
+            ? `${nChecked} of ${host.state.filesEntries.length} selected${
+                selectedFileBytes !== null ? ` · ${esc(formatBytes(selectedFileBytes))}` : ""
+              }`
+            : filtered
+              ? `${visibleEntries.length} shown of ${host.state.filesEntries.length}`
+              : esc(filesCountLabel)
+        }
       </div>
     </section>
     ${renameModal}

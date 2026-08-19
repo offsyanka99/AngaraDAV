@@ -1,0 +1,43 @@
+# Local Docker for AngaraDAV (laptop / workstation — not TrueNAS).
+#
+# From the repository root:
+#   make local-up
+#   # or, with the Compose v2 plugin (`sudo apt install docker-compose-v2`):
+#   mkdir -p .local-run/config .local-run/Specific/db
+#   docker compose -f docs/local.compose.yaml up --build
+#
+# Then: http://127.0.0.1:31088/portal/install/
+#
+# Image tag `angaradav:local` is independent of container name `angaradav-local`.
+# `docker rm angaradav` will not remove this container.
+#
+# Bind dirs Docker creates as root are chowned by the entrypoint unless you set
+# BAIKAL_SKIP_CHOWN. If you do set it, first:
+#   sudo chown -R 101:101 .local-run
+# Otherwise the container exits with a clear error (PHP cannot write baikal.yaml).
+#
+# nginx.conf lives in the image. `docker compose restart` does not pick up a
+# new image or a new nginx.conf — recreate:
+#   docker compose -f docs/local.compose.yaml up -d --build --force-recreate
+
+name: angaradav-local
+
+services:
+  angaradav:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    image: angaradav:local
+    container_name: angaradav-local
+    ports:
+      - "31088:80"
+    environment:
+      TZ: UTC
+      # Uncomment only after: sudo chown -R 101:101 .local-run
+      # BAIKAL_SKIP_CHOWN: "1"
+    volumes:
+      - ../.local-run/config:/var/www/baikal/config
+      - ../.local-run/Specific:/var/www/baikal/Specific
+    restart: unless-stopped

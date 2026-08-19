@@ -1,5 +1,17 @@
 /** In-app file viewer kinds (extension-based; HTML/JS/SVG are text). */
-export type FilesPreviewKind = "image" | "pdf" | "text" | "audio" | "video" | "unsupported";
+export type FilesPreviewKind = "image" | "pdf" | "text" | "audio" | "video" | "office" | "unsupported";
+
+const OFFICE_EXT = new Set([
+  "docx",
+  "xlsx",
+  "pptx",
+  "odt",
+  "ods",
+  "odp",
+  "doc",
+  "xls",
+  "ppt",
+]);
 
 const IMAGE_EXT = new Set([
   "jpg",
@@ -81,7 +93,7 @@ const TEXT_EXT = new Set([
   "pm",
 ]);
 
-function extensionOf(name: string): string {
+export function extensionOf(name: string): string {
   const base = name.split(/[/\\]/).pop() || name;
   const dot = base.lastIndexOf(".");
   if (dot <= 0) return "";
@@ -94,6 +106,7 @@ export function classifyFilesPreview(name: string): FilesPreviewKind {
   if (ext === "pdf") return "pdf";
   if (AUDIO_EXT.has(ext)) return "audio";
   if (VIDEO_EXT.has(ext)) return "video";
+  if (OFFICE_EXT.has(ext)) return "office";
   if (TEXT_EXT.has(ext)) return "text";
   return "unsupported";
 }

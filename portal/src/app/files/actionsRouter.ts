@@ -11,6 +11,14 @@ import {
   openFilesTransfer,
   resetFilesTransferTree,
 } from "./transfer";
+import {
+  closeFilesItemMenu,
+  downloadSelectedFiles,
+  filesItemMenuBlocked,
+  openFilesItemMenu,
+} from "./itemMenu";
+import { filesItemMenuModel } from "./itemMenuModel";
+import { filterAndSortEntries } from "./listing";
 import { closeFilesPreview, openFilesPreview } from "./preview";
 import {
   closeFilesUploadProgress,
@@ -38,7 +46,54 @@ export async function handleFilesAction(
       state.filesDeletePaths = null;
       resetFilesTransferTree(host);
       state.filesMkdirOpen = false;
+      closeFilesItemMenu(host);
     }
+    host.render();
+    return true;
+  }
+  if (action === "files-item-menu-toggle") {
+    ev.stopPropagation();
+    const path = t.dataset.path ?? "";
+    if (!path || filesItemMenuBlocked(state)) return true;
+    if (state.filesItemMenu?.path === path) {
+      closeFilesItemMenu(host);
+      host.render();
+      return true;
+    }
+    const rect = t.getBoundingClientRect();
+    openFilesItemMenu(host, path, { x: rect.right, y: rect.bottom + 4, origin: "button" });
+    return true;
+  }
+  if (action === "sort-file") {
+    const col = (t.dataset.sort || "") as typeof state.filesSort;
+    if (col !== "name" && col !== "size" && col !== "mtime") return true;
+    if (state.filesSort === col) state.filesOrder = state.filesOrder === "asc" ? "desc" : "asc";
+    else {
+      state.filesSort = col;
+      state.filesOrder = col === "name" ? "asc" : "desc";
+    }
+    host.render();
+    return true;
+  }
+  if (action === "files-type-filter") {
+    const v = (t as HTMLSelectElement).value;
+    state.filesTypeFilter =
+      v === "folder" ||
+      v === "file" ||
+      v === "image" ||
+      v === "document" ||
+      v === "audio" ||
+      v === "video" ||
+      v === "archive" ||
+      v === "other"
+        ? v
+        : "all";
+    host.render();
+    return true;
+  }
+  if (action === "files-clear-selection") {
+    state.checkedFilePaths = [];
+    closeFilesItemMenu(host);
     host.render();
     return true;
   }
@@ -58,6 +113,7 @@ export async function handleFilesAction(
     state.filesTransfer = null;
     state.filesMkdirOpen = false;
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     state.checkedFilePaths = [];
     state.busy = true;
     host.clearFlash();
@@ -84,13 +140,25 @@ export async function handleFilesAction(
     } else {
       state.checkedFilePaths = state.checkedFilePaths.filter((p) => p !== path);
     }
+    if (state.filesItemMenu && !state.checkedFilePaths.includes(state.filesItemMenu.path)) {
+      closeFilesItemMenu(host);
+    }
     host.render();
     return true;
   }
   if (action === "files-select-all") {
     ev.stopPropagation();
     const on = (t as HTMLInputElement).checked;
-    state.checkedFilePaths = on ? state.filesEntries.map((e) => e.path) : [];
+    const visible = filterAndSortEntries(state.filesEntries, {
+      search: state.filesSearch,
+      type: state.filesTypeFilter,
+      sort: state.filesSort,
+      order: state.filesOrder,
+    });
+    state.checkedFilePaths = on ? visible.map((e) => e.path) : [];
+    if (state.filesItemMenu && !state.checkedFilePaths.includes(state.filesItemMenu.path)) {
+      closeFilesItemMenu(host);
+    }
     host.render();
     return true;
   }
@@ -98,6 +166,7 @@ export async function handleFilesAction(
     const path = t.dataset.path ?? "";
     if (!path) return true;
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     void openFilesTransfer(host, "copy", [path]);
     return true;
   }
@@ -105,19 +174,30 @@ export async function handleFilesAction(
     const path = t.dataset.path ?? "";
     if (!path) return true;
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     void openFilesTransfer(host, "move", [path]);
     return true;
   }
   if (action === "files-bulk-copy") {
     if (state.checkedFilePaths.length === 0) return true;
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     void openFilesTransfer(host, "copy", [...state.checkedFilePaths]);
     return true;
   }
   if (action === "files-bulk-move") {
     if (state.checkedFilePaths.length === 0) return true;
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     void openFilesTransfer(host, "move", [...state.checkedFilePaths]);
+    return true;
+  }
+  if (action === "files-bulk-download") {
+    const model = filesItemMenuModel(state.filesEntries, state.checkedFilePaths);
+    if (model.downloadItems.length === 0) return true;
+    closeFilesItemMenu(host);
+    downloadSelectedFiles(model.downloadItems);
+    host.render();
     return true;
   }
   if (action === "files-tree-select") {
@@ -166,10 +246,12 @@ export async function handleFilesAction(
     state.filesRenamePath = null;
     resetFilesTransferTree(host);
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     host.render();
     return true;
   }
   if (action === "files-refresh") {
+    closeFilesItemMenu(host);
     state.busy = true;
     host.clearFlash();
     host.render();
@@ -193,6 +275,7 @@ export async function handleFilesAction(
     state.filesDeletePaths = null;
     resetFilesTransferTree(host);
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     host.clearFlash();
     host.render();
     return true;
@@ -203,12 +286,15 @@ export async function handleFilesAction(
     return true;
   }
   if (action === "files-rename-open") {
-    state.filesRenamePath = t.dataset.path ?? null;
+    const path = t.dataset.path || (state.checkedFilePaths.length === 1 ? state.checkedFilePaths[0] : "");
+    if (!path) return true;
+    state.filesRenamePath = path;
     state.filesDeletePaths = null;
     resetFilesTransferTree(host);
     state.filesUploadMenuOpen = false;
     unbindFilesUploadMenuOutside(host);
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     host.render();
     return true;
   }
@@ -225,6 +311,7 @@ export async function handleFilesAction(
     state.filesUploadMenuOpen = false;
     unbindFilesUploadMenuOutside(host);
     closeFilesPreview(host);
+    closeFilesItemMenu(host);
     host.render();
     return true;
   }

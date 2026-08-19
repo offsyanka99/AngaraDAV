@@ -4,6 +4,7 @@
 import { api, ApiError, type FileEntry } from "../../api";
 import { log } from "../../log";
 import type { FilesHost } from "./host";
+import { closeFilesItemMenu } from "./itemMenu";
 
 export async function loadFiles(host: FilesHost): Promise<void> {
   host.state.filesLoading = true;
@@ -25,9 +26,13 @@ export async function loadFiles(host: FilesHost): Promise<void> {
       host.state.filesEntries = list.entries;
       const valid = new Set(host.state.filesEntries.map((e) => e.path));
       host.state.checkedFilePaths = host.state.checkedFilePaths.filter((p) => valid.has(p));
+      if (host.state.filesItemMenu && !valid.has(host.state.filesItemMenu.path)) {
+        closeFilesItemMenu(host);
+      }
     } else {
       host.state.filesEntries = [];
       host.state.checkedFilePaths = [];
+      closeFilesItemMenu(host);
     }
     log.event("loadFiles", {
       path: host.state.filesPath,
