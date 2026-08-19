@@ -34,9 +34,18 @@ RUN ln -sfn ../../Frameworks/Baikal/Resources Core/Resources/Web/Baikal \
     && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/index.php html/admin/index.php \
     && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/install/index.php html/admin/install/index.php
 
-RUN composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader \
-    && sh scripts/apply-vendor-patches.sh \
-    && rm -f composer.json composer.lock
+# Packagist/GitHub zipballs occasionally 504; retry before failing the image build.
+RUN set -eux; \
+    n=0; \
+    until [ "$n" -ge 5 ]; do \
+      composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader && break; \
+      n=$((n + 1)); \
+      echo "composer install failed (attempt $n), retrying..."; \
+      sleep $((n * 15)); \
+    done; \
+    [ "$n" -lt 5 ]; \
+    sh scripts/apply-vendor-patches.sh; \
+    rm -f composer.json composer.lock
 
 # ---------------------------------------------------------------------------
 # Stage 2: TypeScript user portal SPA → /html/portal
