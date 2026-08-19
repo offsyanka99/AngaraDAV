@@ -89,12 +89,7 @@ export function mountApp(root: HTMLElement): void {
   function render() {
     const scroll = captureScrollRoot(root);
     if (!state.user) {
-      renderLoginView(root, state, (body, opts) =>
-        shellHtml(state, body, opts, {
-          renderImportProgressModal: () => calendars.renderImportProgressModal(calendarsHost),
-          renderFilesUploadProgressModal: () => files.renderFilesUploadProgressModal(filesHost),
-        }),
-      );
+      renderLoginView(root, state, (body, opts) => shellHtml(state, body, opts));
     } else {
       renderHome(o);
     }
@@ -258,7 +253,6 @@ export function mountApp(root: HTMLElement): void {
     activateAdminPage: (page, opts) => activateAdminPageNav(o, page, opts),
     loadHome: () => loadHomeNav(o),
     handleSessionExpired,
-    loadFiles: () => files.loadFiles(filesHost),
     loadShares: (id) => calendars.loadShares(calendarsHost, id),
     loadMonthEvents: () => calendars.loadMonthEvents(calendarsHost),
     loadContacts: (abId) => contacts.loadContacts(contactsHost, abId),
@@ -285,27 +279,12 @@ export function mountApp(root: HTMLElement): void {
     syncEditingTaskFromForm: (form) => tasks.syncEditingTaskFromForm(tasksHost, form),
     syncEditingNoteFromForm: (form) => notes.syncEditingNoteFromForm(notesHost, form),
     runBulkTaskAction: (action) => tasks.runBulkTaskAction(tasksHost, action),
-    shell: (main, opts) =>
-      shellHtml(state, main, opts, {
-        renderImportProgressModal: () => calendars.renderImportProgressModal(calendarsHost),
-        renderFilesUploadProgressModal: () => files.renderFilesUploadProgressModal(filesHost),
-      }),
+    shell: (main, opts) => shellHtml(state, main, opts),
     renderLogin: () =>
-      renderLoginView(root, state, (body, shellOpts) =>
-        shellHtml(state, body, shellOpts, {
-          renderImportProgressModal: () => calendars.renderImportProgressModal(calendarsHost),
-          renderFilesUploadProgressModal: () => files.renderFilesUploadProgressModal(filesHost),
-        }),
-      ),
+      renderLoginView(root, state, (body, shellOpts) => shellHtml(state, body, shellOpts)),
     renderFlashBanner: () => renderFlashBannerState(state),
     renderMonthGrid: () => calendars.renderMonthGrid(calendarsHost),
     renderEventModal: () => calendars.renderEventModal(calendarsHost),
-    renderImportProgressModal: () => calendars.renderImportProgressModal(calendarsHost),
-    renderFilesUploadProgressModal: () => files.renderFilesUploadProgressModal(filesHost),
-    renderTasksTab: () => tasks.renderTasksTab(tasksHost),
-    renderNotesTab: () => notes.renderNotesTab(notesHost),
-    renderFilesTab: () => files.renderFilesTab(filesHost),
-    renderAdminSection: () => admin.renderAdminSection(adminHost),
     adminSubnavButtons: () => admin.adminSubnavButtons(adminHost),
     renderPortalDateTimeField: (opts) => dt.renderPortalDateTimeField(o, opts),
     getDtFieldCurrentValue: (field) => dt.getDtFieldCurrentValue(o, field),

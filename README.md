@@ -72,7 +72,7 @@ Legacy release history
 | `2.2.1` | Portal `onAction` domain routers; multi-user calendar share href fix; Files drop merge + Skip existing; themed delete confirms; DT picker outside-click; anonymous `/api/me` 200 |
 | `2.2.2` | Portal delegated event listeners; list keyboard nav; tabs gated by DAV services; calendar multi-select + Escape/modal polish |
 | `2.2.3` | Portal remembers selected calendars across sessions (localStorage per user) |
-| `2.3.0` | Portal Files **View**: in-browser preview for images, PDF, text, audio, and video; inline download MIME allowlist (HTML/JS/SVG as text) |
+| `2.3.0` | Portal Files **View**; PHP API split (calendar/contact/item routes + services); SPA overlay slot so previews survive tab re-renders; contact list/save fixes |
 
 Image tags: `latest`, `2.3.0`, `sha-…`.
 

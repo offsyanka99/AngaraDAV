@@ -7,7 +7,6 @@ import { formatBytes, formatMtime } from "../format";
 import { basenamePath } from "../paths";
 import { infoTitle } from "../sectionInfo";
 import type { FilesHost } from "./host";
-import { renderFilesPreviewModal } from "./preview";
 import { isBlockedTransferDest, renderFilesFolderTree } from "./transfer";
 
 export function filesBreadcrumb(host: FilesHost, path: string): string {
@@ -104,7 +103,7 @@ export function renderFilesTab(host: FilesHost): string {
                 ? `<button type="button" class="files-name-btn" data-action="files-nav" data-path="${esc(e.path)}" ${host.state.busy ? "disabled" : ""}>
                     <span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}
                   </button>`
-                : `<button type="button" class="files-name-btn" data-action="files-preview-open" data-path="${esc(e.path)}" title="View ${esc(e.name)}" ${host.state.busy ? "disabled" : ""}>
+                : `<button type="button" class="files-name-btn" data-action="files-preview-open" data-path="${esc(e.path)}" title="View ${esc(e.name)}" aria-expanded="${host.state.filesPreview?.path === e.path ? "true" : "false"}" ${host.state.busy ? "disabled" : ""}>
                     <span class="files-icon" aria-hidden="true">${icon}</span>${esc(e.name)}
                   </button>`;
             const size = e.type === "dir" ? "—" : formatBytes(e.size);
@@ -120,7 +119,7 @@ export function renderFilesTab(host: FilesHost): string {
               <td class="files-col-actions">
                 ${
                   e.type === "file"
-                    ? `<button type="button" class="btn btn-ghost btn-small" data-action="files-preview-open" data-path="${esc(e.path)}" ${host.state.busy ? "disabled" : ""}>View</button>
+                    ? `<button type="button" class="btn btn-ghost btn-small" data-action="files-preview-open" data-path="${esc(e.path)}" aria-expanded="${host.state.filesPreview?.path === e.path ? "true" : "false"}" ${host.state.busy ? "disabled" : ""}>View</button>
                        <a class="btn btn-ghost btn-small" href="${esc(api.filesDownloadUrl(e.path))}" download="${esc(e.name)}" data-action="files-download">Download</a>`
                     : ""
                 }
@@ -433,6 +432,5 @@ export function renderFilesTab(host: FilesHost): string {
     ${transferModal}
     ${mkdirModal}
     ${uploadConflictModal}
-    ${renderFilesPreviewModal(host)}
   </div>`;
 }

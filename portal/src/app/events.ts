@@ -637,7 +637,31 @@ function onRootErrorCapture(_o: AppOrchestrator, ev: Event): void {
  * Escape matrix — previously registered once inside bind() via escapeBound.
  * Priority order must match bind.ts (inventory §5).
  */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function trapTabInOpenModal(root: HTMLElement, ev: KeyboardEvent): void {
+  if (ev.key !== "Tab") return;
+  const modal = root.querySelector<HTMLElement>(".cal-modal[data-focus-trap]");
+  if (!modal) return;
+  const nodes = [...modal.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (el) => el.offsetParent !== null || el === document.activeElement,
+  );
+  if (nodes.length === 0) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  if (!ev.shiftKey && active === last) {
+    ev.preventDefault();
+    first.focus();
+  } else if (ev.shiftKey && (active === first || !modal.contains(active))) {
+    ev.preventDefault();
+    last.focus();
+  }
+}
+
 function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
+  trapTabInOpenModal(o.root, ev);
   if (ev.key !== "Escape") return;
   const { state, render } = o;
 

@@ -20,8 +20,8 @@ Effort scale:
 
 | Area | Size | Shape |
 |------|------|--------|
-| Portal SPA | ~16k TS + ~4k CSS | Domain folders (`files/`, `calendars/`, …) + one fat `AppOrchestrator` and `innerHTML` re-renders |
-| Portal PHP API | ~12k | `App.php` (~1835) is the router; fat services: `ContactService` ~1810, `ShareService` ~1659, `AdminSettingsService` ~1008, `CalendarItemService` ~955, `FileService` ~767 |
+| Portal SPA | ~16k TS + ~4k CSS | Domain folders + orchestrator; overlay slot; `api/` split; files/admin CSS split |
+| Portal PHP API | ~12k | `App.php` + `Http\*Routes`; calendar/contact stores/services split; `AdminSettingsService`, `CalendarItemService`, `FileService` still fat |
 | DAV / files / Push | ~5k under `Baikal\Core` | Solid, already modular |
 | Tests | ~5k | PHP scripts with copy-pasted `assert_true`; Python MechanicalSoup; `portal_admin_e2e.py` **not in CI** |
 | Static analysis | PHPStan **level 0**; portal `tsc --strict` locally, **not in CI** |
@@ -41,8 +41,8 @@ renaming DAV URLs, changing `auth_realm` without a migration story.
 ## Recommended sequence
 
 1. **CI + test harness** (stops regressions while everything else moves)
-2. **Split PHP router/services** (where bugs and reviews hurt)
-3. **Portal SPA hygiene** (`api.ts`, dead state, orchestrator)
+2. **Split PHP router/services** — **done** in 2.3.0 (behavior freeze)
+3. **Portal SPA hygiene** — **done** in 2.3.0 (incremental; no framework rewrite)
 4. **Local Docker / Makefile DX**
 5. **Product features** (week view, file search, etc.) as separate PRs
 6. **Legacy Flake/Formal** last, and only if something still depends on it
@@ -74,13 +74,19 @@ restore is documented.
 
 ## 2. PHP API: split the god router and misnamed services — **L**
 
-`App.php` is bootstrap + HTTP helpers + calendar routes + admin + files +
-tasks/notes + streaming downloads. File and admin routes are already extracted
-as `dispatchFileRoutes` / `dispatchAdminRoutes`; calendars/events/shares are
-still a long `if` chain in `dispatch()`.
+**Status (2.3.0):** implemented as a behavior freeze.
+`App.php` dispatches through `Http\CalendarRoutes`, `Http\ContactRoutes`,
+`Http\ItemRoutes`, and existing file/admin methods. Calendar work is
+`CalendarStore` + `CalendarService` / `EventService` / `CalendarImportService` /
+`ShareService`. Contacts are `ContactStore` + `ContactService` / `VCardMapper` /
+`ContactImportService`. Request/response helpers live in `Http\HttpIO`.
 
-`ShareService` (~1659 lines) is not “sharing”: it is calendars + events +
-import + holidays + directory + sharees.
+`App.php` remains bootstrap, session/CSRF helpers, file/admin dispatch, and
+tasks/notes. Calendar/contact/item HTTP is in `Http\*Routes`. Remaining
+maintainability work: typed properties, PHPStan, and thinning file/admin
+services.
+
+The old `ShareService` god-object is split; sharing is a thin `ShareService`.
 
 | Work | Effort | Notes |
 |------|--------|--------|
@@ -96,6 +102,13 @@ Stay away from rewriting Sabre backends. Portal services should keep calling
 ---
 
 ## 3. Portal SPA — **L** (incremental, not a rewrite)
+
+**Status (2.3.0):** implemented incrementally (no framework rewrite).
+`APP_STATE_KEYS` removed; `portal/src/api.ts` is a barrel over `api/{client,types,*Api}.ts`;
+tab load/render for files/tasks/notes/admin uses domain hosts; overlay slot
+`#portal-overlays` keeps PDF/media previews across tab innerHTML; files/admin
+CSS split; modal Tab trap + View `aria-expanded`; Node test runner for preview
+classify and path helpers (`npm test` in `portal/`).
 
 Architecture today: `mountApp` builds a ~140-field `AppOrchestrator`, domains
 render **HTML strings**, `home.ts` does `root.innerHTML = …` every time. That is

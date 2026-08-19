@@ -1,6 +1,9 @@
 /**
  * Shared runtime bag for Phase 8 orchestrator modules.
  * Built once in mountApp after hosts and core helpers exist.
+ *
+ * New domain code should take FilesHost / CalendarsHost / … rather than growing
+ * this type. Tab render/load for files/tasks/notes/admin already goes through hosts.
  */
 import type { FlashType } from "../ui";
 import type { AppState } from "./context";
@@ -43,7 +46,6 @@ export type AppOrchestrator = {
   handleSessionExpired: (message?: string) => void;
 
   // domain thin calls
-  loadFiles: () => Promise<void>;
   loadShares: (id: number) => Promise<void>;
   loadMonthEvents: () => Promise<void>;
   loadContacts: (abId: number) => Promise<void>;
@@ -83,12 +85,6 @@ export type AppOrchestrator = {
   renderFlashBanner: () => string;
   renderMonthGrid: () => string;
   renderEventModal: () => string;
-  renderImportProgressModal: () => string;
-  renderFilesUploadProgressModal: () => string;
-  renderTasksTab: () => string;
-  renderNotesTab: () => string;
-  renderFilesTab: () => string;
-  renderAdminSection: () => string;
   adminSubnavButtons: () => string;
   renderPortalDateTimeField: (opts: {
     field: string;

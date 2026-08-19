@@ -3,9 +3,14 @@
  */
 import type { AppState } from "./context";
 import type { AppOrchestrator } from "./orchestrator";
+import * as admin from "./admin";
 import { renderCalendarsHome } from "./calendars/home";
 import { renderContactsHome } from "./contacts/home";
+import * as files from "./files";
+import * as notes from "./notes";
+import { ensureAppSlots, overlayHtml, overlayStabilityKey, patchOverlays } from "./overlays";
 import { isUserTabEnabled } from "./session";
+import * as tasks from "./tasks";
 import type { TabId } from "./types";
 
 function userTabButton(state: AppState, tab: TabId, label: string): string {
@@ -38,21 +43,21 @@ export function renderHome(o: AppOrchestrator): void {
       break;
     case "tasks":
       mainTab = isUserTabEnabled(state, "tasks")
-        ? o.renderTasksTab()
+        ? tasks.renderTasksTab(o.tasksHost)
         : renderDisabledServicePanel("Tasks", "Tasks (VTODO)");
       break;
     case "notes":
       mainTab = isUserTabEnabled(state, "notes")
-        ? o.renderNotesTab()
+        ? notes.renderNotesTab(o.notesHost)
         : renderDisabledServicePanel("Notes", "Notes (VJOURNAL)");
       break;
     case "files":
       mainTab = isUserTabEnabled(state, "files")
-        ? o.renderFilesTab()
+        ? files.renderFilesTab(o.filesHost)
         : renderDisabledServicePanel("Files", "WebDAV file storage");
       break;
     case "admin":
-      mainTab = o.renderAdminSection();
+      mainTab = admin.renderAdminSection(o.adminHost);
       break;
     default:
       mainTab = renderCalendarsHome(o);
@@ -98,7 +103,9 @@ export function renderHome(o: AppOrchestrator): void {
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
         </div>`;
 
-  root.innerHTML = o.shell(mainTab, { tabs: tabsHtml });
+  const { page, overlays } = ensureAppSlots(root);
+  page.innerHTML = o.shell(mainTab, { tabs: tabsHtml });
+  patchOverlays(overlays, overlayHtml(o), overlayStabilityKey(state));
   document.body.classList.toggle(
     "cal-modal-open",
     state.calModalOpen ||

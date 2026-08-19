@@ -3,25 +3,13 @@
  */
 import { esc } from "../ui";
 import { DOCS_URL } from "./constants";
-import { renderConfirmDeleteModal } from "./confirmDelete";
 import type { AppState } from "./context";
 import { renderFlashBanner } from "./flash";
-import { infoModalHtml } from "./sectionInfo";
 import { adminUiEnabled, userIsAdmin } from "./session";
 
 export type ShellOpts = { auth?: boolean; tabs?: string };
 
-export type ShellProgressModals = {
-  renderImportProgressModal: () => string;
-  renderFilesUploadProgressModal: () => string;
-};
-
-export function shell(
-  state: AppState,
-  body: string,
-  opts: ShellOpts = {},
-  progress: ShellProgressModals,
-): string {
+export function shell(state: AppState, body: string, opts: ShellOpts = {}): string {
   const inAdmin =
     !!state.user && state.activeTab === "admin" && userIsAdmin(state) && adminUiEnabled(state);
   // Logo + wordmark: DAV blue; portal name after · is soft green (user) / soft red (admin)
@@ -128,11 +116,7 @@ export function shell(
         ${flashHtml}
         ${body}
       </main>
-      ${footer}
-      ${infoModalHtml()}
-      ${renderConfirmDeleteModal(state)}
-      ${progress.renderImportProgressModal()}
-      ${progress.renderFilesUploadProgressModal()}`;
+      ${footer}`;
 }
 
 export function unbindUserMenuOutside(state: AppState): void {

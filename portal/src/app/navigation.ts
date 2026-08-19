@@ -5,6 +5,9 @@ import { log } from "../log";
 import type { AdminPageId, TabId } from "./types";
 import type { AppOrchestrator } from "./orchestrator";
 import * as admin from "./admin";
+import * as files from "./files";
+import * as notes from "./notes";
+import * as tasks from "./tasks";
 import {
   persistCalendarSelection,
   readStoredCalendarSelection,
@@ -79,11 +82,11 @@ export async function activateTab(
     } else if (tab === "calendars") {
       await o.loadMonthEvents();
     } else if (tab === "tasks") {
-      await o.loadTasks();
+      await tasks.loadTasks(o.tasksHost);
     } else if (tab === "notes") {
-      await o.loadNotes();
+      await notes.loadNotes(o.notesHost);
     } else if (tab === "files") {
-      await o.loadFiles();
+      await files.loadFiles(o.filesHost);
     }
   } catch (e) {
     log.warn("tab load failed", e instanceof Error ? e.message : e);
@@ -196,12 +199,12 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     await o.loadContacts(state.selectedAbId);
   }
   if (state.activeTab === "tasks") {
-    await o.loadTasks();
+    await tasks.loadTasks(o.tasksHost);
   }
   if (state.activeTab === "notes") {
-    await o.loadNotes();
+    await notes.loadNotes(o.notesHost);
   }
   if (state.activeTab === "files") {
-    await o.loadFiles();
+    await files.loadFiles(o.filesHost);
   }
 }

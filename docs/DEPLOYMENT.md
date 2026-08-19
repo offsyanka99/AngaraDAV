@@ -780,6 +780,9 @@ AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork
 - **Portal Files — View:** click a file name or **View** to preview in a dialog. Images, PDF, text (and common source/markup), audio, and video open in the browser; other types prompt to download. HTML, JavaScript, and SVG are shown as text (not executed). Large PDFs (over 50 MiB) and huge text files are capped.
 - **Download API:** `GET /api/files/download?inline=1` uses `Content-Disposition: inline` with a safe MIME allowlist (`FileService::contentTypeForInline`).
 - **CSP:** nginx allows `media-src 'self' blob:` and `frame-src 'self' blob:` so PDF preview can use a blob iframe. Recreate the container from a rebuilt image (a process restart is not enough).
+- **PHP API:** `App.php` dispatches calendar/contact/item routes via `Http\CalendarRoutes`, `Http\ContactRoutes`, `Http\ItemRoutes`, and `Http\HttpIO`. Calendar/contact work is split into store + service + import modules (`CalendarStore`, `CalendarService`, `EventService`, `CalendarImportService`, `ShareService`; `ContactStore`, `ContactService`, `VCardMapper`, `ContactImportService`). Behavior freeze — same HTTP contracts.
+- **Portal SPA:** `api.ts` is a barrel over `portal/src/api/*`; overlay slot `#portal-overlays` keeps PDF/media previews across innerHTML re-renders; `#portal-page { display: contents }` so tab layouts stay flex. Tiny Node tests: `npm test` in `portal/`.
+- **Fixes:** contacts list 500 (`listContacts` restored); contact save 500 (`VCardMapper::normalizeFormFields` is public).
 - **Docs:** [Improvements and refactoring plan](IMPROVEMENTS.md).
 
 ### 2.2.3

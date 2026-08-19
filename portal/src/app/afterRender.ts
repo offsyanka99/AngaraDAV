@@ -36,6 +36,20 @@ export function bindAfterRender(o: AppOrchestrator): void {
 
   // Keep ↑/↓/Enter working after re-render (innerHTML clears focus)
   restoreListKeyboardFocus(o);
+  focusOpenModal(o.root);
+}
+
+function focusOpenModal(root: HTMLElement): void {
+  const modal = root.querySelector<HTMLElement>(".cal-modal[data-focus-trap]");
+  if (!modal) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (active && modal.contains(active)) return;
+  const page = root.querySelector("#portal-page");
+  if (active && page?.contains(active)) return;
+  const focusable = modal.querySelector<HTMLElement>(
+    "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+  );
+  focusable?.focus();
 }
 
 /** Focus the selected Contacts/Tasks/Notes row so keyboard nav continues after paint. */

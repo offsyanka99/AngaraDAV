@@ -8,59 +8,43 @@ use Baikal\Portal\Admin\AdminDashboardService;
 use Baikal\Portal\Admin\AdminSettingsService;
 use Baikal\Portal\Admin\AdminUserResourceService;
 use Baikal\Portal\Admin\AdminUserService;
+use Baikal\Portal\Http\CalendarRoutes;
+use Baikal\Portal\Http\ContactRoutes;
+use Baikal\Portal\Http\HttpIO;
+use Baikal\Portal\Http\ItemRoutes;
 use Symfony\Component\Yaml\Yaml;
 
 /**
  * JSON API router for the user portal SPA.
  */
 class App {
-    /** @var Auth */
-    private $auth;
-
-    /** @var AdminAuth */
-    private $adminAuth;
-
-    /** @var AdminAudit */
-    private $adminAudit;
-
-    /** @var AdminDashboardService */
-    private $adminDashboard;
-
-    /** @var AdminCapabilitiesService */
-    private $adminCapabilities;
-
-    /** @var AdminUserService */
-    private $adminUsers;
-
-    /** @var AdminUserResourceService */
-    private $adminResources;
-
-    /** @var AdminSettingsService */
-    private $adminSettings;
-
-    /** @var ShareService */
-    private $shares;
-
-    /** @var ContactService */
-    private $contacts;
-
-    /** @var CalendarItemService */
-    private $items;
-
-    /** @var FileService */
-    private $files;
+    private Auth $auth;
+    private AdminAuth $adminAuth;
+    private AdminAudit $adminAudit;
+    private AdminDashboardService $adminDashboard;
+    private AdminCapabilitiesService $adminCapabilities;
+    private AdminUserService $adminUsers;
+    private AdminUserResourceService $adminResources;
+    private AdminSettingsService $adminSettings;
+    private CalendarService $calendars;
+    private EventService $events;
+    private ShareService $shares;
+    private CalendarImportService $calendarImport;
+    private ContactService $contacts;
+    private ContactImportService $contactImport;
+    private CalendarItemService $items;
+    private FileService $files;
+    private HttpIO $http;
+    private CalendarRoutes $calendarRoutes;
+    private ContactRoutes $contactRoutes;
+    private ItemRoutes $itemRoutes;
 
     /** @var array<string, mixed> */
-    private $config;
-
-    /** @var array<string, mixed>|null Cached JSON body (php://input is one-shot) */
-    private $jsonBodyCache;
-
-    /** True when a streaming / download response was already sent (skip json()). */
-    private $responseSent = false;
+    private array $config;
 
     public function __construct(\PDO $pdo, array $config) {
         $this->config = $config;
+        $this->http = new HttpIO();
         $realm = (string) ($config['system']['auth_realm'] ?? 'BaikalDAV');
         $sessionMax = Auth::DEFAULT_SESSION_MAX_AGE;
         if (isset($config['system']['session_max_age_minutes'])
@@ -83,10 +67,26 @@ class App {
             $configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'),
             $this->portalSpecificDir()
         );
-        $this->shares = new ShareService($pdo);
-        $this->contacts = new ContactService($pdo);
+        $calendarStore = new CalendarStore($pdo);
+        $this->calendarImport = new CalendarImportService($calendarStore);
+        $this->calendars = new CalendarService($calendarStore, $this->calendarImport);
+        $this->events = new EventService($calendarStore);
+        $this->shares = new ShareService($calendarStore);
+        $contactStore = new ContactStore($pdo);
+        $vcard = new VCardMapper();
+        $this->contacts = new ContactService($contactStore, $vcard);
+        $this->contactImport = new ContactImportService($contactStore, $vcard);
         $this->items = new CalendarItemService($pdo);
         $this->files = new FileService($pdo, $config);
+        $this->calendarRoutes = new CalendarRoutes(
+            $this->calendars,
+            $this->events,
+            $this->shares,
+            $this->calendarImport,
+            $this->http
+        );
+        $this->contactRoutes = new ContactRoutes($this->contacts, $this->contactImport, $this->http);
+        $this->itemRoutes = new ItemRoutes($this->items, $this->http);
     }
 
     /**
@@ -313,7 +313,7 @@ class App {
                 $contentType = $inline
                     ? FileService::contentTypeForInline($meta['name'], $meta['contentType'])
                     : $meta['contentType'];
-                $this->streamFileDownload(
+                $this->http->streamFileDownload(
                     $meta['absolutePath'],
                     $meta['name'],
                     $contentType,
@@ -341,8 +341,8 @@ class App {
             // Binary/download responses (ICS / VCF export)
             if ($method === 'GET' && preg_match('#^/calendars/(\d+)/export$#', $path, $m)) {
                 $username = $this->auth->requireUser();
-                $export = $this->shares->exportCalendar($username, (int) $m[1]);
-                $this->fileDownload($export['ics'], $export['filename'], 'text/calendar; charset=utf-8');
+                $export = $this->calendarImport->exportCalendar($username, (int) $m[1]);
+                $this->http->fileDownload($export['ics'], $export['filename'], 'text/calendar; charset=utf-8');
                 $this->portalServerLog(
                     sprintf('%s %s → 200 export (%dms)', $method, $path, (int) ((microtime(true) - $t0) * 1000)),
                     'info'
@@ -352,8 +352,8 @@ class App {
             }
             if ($method === 'GET' && preg_match('#^/addressbooks/(\d+)/export$#', $path, $m)) {
                 $username = $this->auth->requireUser();
-                $export = $this->contacts->exportAddressBook($username, (int) $m[1]);
-                $this->fileDownload($export['vcf'], $export['filename'], 'text/vcard; charset=utf-8');
+                $export = $this->contactImport->exportAddressBook($username, (int) $m[1]);
+                $this->http->fileDownload($export['vcf'], $export['filename'], 'text/vcard; charset=utf-8');
                 $this->portalServerLog(
                     sprintf('%s %s → 200 export (%dms)', $method, $path, (int) ((microtime(true) - $t0) * 1000)),
                     'info'
@@ -364,8 +364,8 @@ class App {
             // Single contact VCF export
             if ($method === 'GET' && preg_match('#^/addressbooks/(\d+)/contacts/([^/]+)/export$#', $path, $m)) {
                 $username = $this->auth->requireUser();
-                $export = $this->contacts->exportContact($username, (int) $m[1], rawurldecode($m[2]));
-                $this->fileDownload($export['vcf'], $export['filename'], 'text/vcard; charset=utf-8');
+                $export = $this->contactImport->exportContact($username, (int) $m[1], rawurldecode($m[2]));
+                $this->http->fileDownload($export['vcf'], $export['filename'], 'text/vcard; charset=utf-8');
                 $this->portalServerLog(
                     sprintf('%s %s → 200 export (%dms)', $method, $path, (int) ((microtime(true) - $t0) * 1000)),
                     'info'
@@ -395,7 +395,7 @@ class App {
             }
 
             $result = $this->dispatch($method, $path);
-            if ($this->responseSent) {
+            if ($this->http->responseSent) {
                 $this->portalServerLog(
                     sprintf('%s %s → stream done (%dms)', $method, $path, (int) ((microtime(true) - $t0) * 1000)),
                     'info'
@@ -403,7 +403,7 @@ class App {
 
                 return;
             }
-            $this->json(200, $result);
+            $this->http->json(200, $result);
             $this->portalServerLog(
                 sprintf('%s %s → 200 (%dms)', $method, $path, (int) ((microtime(true) - $t0) * 1000)),
                 'info'
@@ -428,17 +428,17 @@ class App {
                 $lvl
             );
             // NDJSON stream may already have flushed headers/body
-            if ($this->responseSent) {
+            if ($this->http->responseSent) {
                 return;
             }
-            $this->json($e->getStatus(), ['error' => $e->getMessage()]);
+            $this->http->json($e->getStatus(), ['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
             error_log('AngaraDAV portal API: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
             $this->portalServerLog(
                 sprintf('%s %s → 500 %s', $method, $path, $e->getMessage()),
                 'error'
             );
-            if ($this->responseSent) {
+            if ($this->http->responseSent) {
                 return;
             }
             $msg = 'Internal server error';
@@ -446,7 +446,7 @@ class App {
             if (stripos($e->getMessage(), 'Maximum execution time') !== false) {
                 $msg = 'Import timed out. Try a smaller export, or import again (already-imported items update faster).';
             }
-            $this->json(500, ['error' => $msg]);
+            $this->http->json(500, ['error' => $msg]);
         }
     }
 
@@ -466,8 +466,8 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/login') {
-            $this->assertSameOrigin();
-            $body = $this->jsonBody();
+            $this->http->assertSameOrigin();
+            $body = $this->http->jsonBody();
             $user = $this->auth->login(
                 (string) ($body['username'] ?? ''),
                 (string) ($body['password'] ?? '')
@@ -483,11 +483,11 @@ class App {
 
         // State-changing requests: same-origin + CSRF (when a session exists)
         if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-            $this->assertSameOrigin();
+            $this->http->assertSameOrigin();
             $sessionUser = $this->auth->username();
             if ($path === '/logout') {
                 if ($sessionUser !== null) {
-                    $this->auth->assertCsrf($this->csrfFromRequest());
+                    $this->auth->assertCsrf($this->http->csrfFromRequest());
                 }
                 $this->auth->logout();
                 $this->portalServerLog('logout', 'info');
@@ -500,7 +500,7 @@ class App {
                 }
                 throw new ApiException('Not authenticated', 401);
             }
-            $this->auth->assertCsrf($this->csrfFromRequest());
+            $this->auth->assertCsrf($this->http->csrfFromRequest());
         }
 
         if ($method === 'GET' && ($path === '/me' || $path === '')) {
@@ -541,230 +541,22 @@ class App {
 
         $username = $this->auth->requireUser();
 
-        if ($method === 'GET' && $path === '/directory') {
-            return ['users' => $this->shares->directory($username)];
+        $calendarRoutes = $this->calendarRoutes->dispatch($method, $path, $username);
+        if ($calendarRoutes !== null) {
+            return $calendarRoutes;
         }
 
-        if ($method === 'GET' && $path === '/holidays/countries') {
-            return ['countries' => Holidays::countries()];
+        $contactRoutes = $this->contactRoutes->dispatch($method, $path, $username);
+        if ($contactRoutes !== null) {
+            return $contactRoutes;
         }
 
-        if ($method === 'GET' && $path === '/calendars') {
-            return ['calendars' => $this->shares->listCalendars($username)];
-        }
-
-        // POST /calendars — create (optional holidays + readOnly)
-        if ($method === 'POST' && $path === '/calendars') {
-            $body = $this->jsonBody();
-            $cal = $this->shares->createCalendar($username, $body);
-
-            return [
-                'calendar'      => $cal,
-                'holidayImport' => $cal['holidayImport'] ?? null,
-            ];
-        }
-
-        // PATCH|PUT /calendars/{id} — update displayname / color / description
-        if (preg_match('#^/calendars/(\d+)$#', $path, $m) && ($method === 'PATCH' || $method === 'PUT')) {
-            $instanceId = (int) $m[1];
-            $body = $this->jsonBody();
-            $cal = $this->shares->updateCalendar($username, $instanceId, $body);
-
-            return ['calendar' => $cal];
-        }
-
-        // DELETE /calendars/{id} — permanently remove owned calendar
-        if (preg_match('#^/calendars/(\d+)$#', $path, $m) && $method === 'DELETE') {
-            $instanceId = (int) $m[1];
-            $this->shares->deleteCalendar($username, $instanceId);
-
-            return ['ok' => true];
-        }
-
-        // GET /calendars/{id}/events?from=YYYY-MM-DD&to=YYYY-MM-DD — month view
-        // POST /calendars/{id}/events — create VEVENT
-        if (preg_match('#^/calendars/(\d+)/events$#', $path, $m)) {
-            $instanceId = (int) $m[1];
-            if ($method === 'GET') {
-                $from = isset($_GET['from']) ? (string) $_GET['from'] : '';
-                $to = isset($_GET['to']) ? (string) $_GET['to'] : '';
-
-                return [
-                    'events' => $this->shares->listEvents($username, $instanceId, $from, $to),
-                ];
-            }
-            if ($method === 'POST') {
-                $body = $this->jsonBody();
-                $event = $this->shares->createEvent($username, $instanceId, $body);
-
-                return ['event' => $event];
-            }
-        }
-
-        // GET|PATCH|DELETE /calendars/{id}/events/{uri} — single VEVENT
-        if (preg_match('#^/calendars/(\d+)/events/([^/]+)$#', $path, $m)) {
-            $instanceId = (int) $m[1];
-            $uri = rawurldecode($m[2]);
-            if ($method === 'GET') {
-                return ['event' => $this->shares->getEvent($username, $instanceId, $uri)];
-            }
-            if ($method === 'PATCH' || $method === 'PUT') {
-                $body = $this->jsonBody();
-                $event = $this->shares->updateEvent($username, $instanceId, $uri, $body);
-
-                return ['event' => $event];
-            }
-            if ($method === 'DELETE') {
-                $this->shares->deleteEvent($username, $instanceId, $uri);
-
-                return ['ok' => true];
-            }
-        }
-
-        // POST /calendars/{id}/import — ICS body (raw text/calendar preferred; JSON {ics} still works)
-        // Accept: application/x-ndjson → stream progress lines for the portal modal
-        if ($method === 'POST' && preg_match('#^/calendars/(\d+)/import$#', $path, $m)) {
-            $instanceId = (int) $m[1];
-            // Raise limits before reading multi‑MB bodies into memory
-            if (function_exists('set_time_limit')) {
-                @set_time_limit(600);
-            }
-            @ini_set('memory_limit', '512M');
-            // Release session lock so other portal tabs / healthchecks keep working
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
-            $ics = $this->readIcsPayload();
-            if ($this->wantsImportProgressStream()) {
-                $this->streamImportProgress(function (?callable $onProgress) use ($username, $instanceId, $ics) {
-                    return $this->shares->importCalendar($username, $instanceId, $ics, false, $onProgress);
-                });
-
-                return null;
-            }
-
-            return $this->shares->importCalendar($username, $instanceId, $ics);
-        }
-
-        if (preg_match('#^/calendars/(\d+)/shares$#', $path, $m)) {
-            $instanceId = (int) $m[1];
-            if ($method === 'GET') {
-                return ['shares' => $this->shares->listShares($username, $instanceId)];
-            }
-            if ($method === 'POST') {
-                $body = $this->jsonBody();
-                $share = $this->shares->addOrUpdateShare(
-                    $username,
-                    $instanceId,
-                    (string) ($body['username'] ?? ''),
-                    (string) ($body['access'] ?? 'read')
-                );
-
-                return ['share' => $share];
-            }
-            if ($method === 'DELETE') {
-                $body = $this->jsonBody();
-                $href = (string) ($body['href'] ?? ($_GET['href'] ?? ''));
-                $this->shares->revokeShare($username, $instanceId, $href);
-
-                return ['ok' => true];
-            }
-        }
-
-        // --- Address books / contacts ---
-        if ($method === 'GET' && $path === '/addressbooks') {
-            return ['addressbooks' => $this->contacts->listAddressBooks($username)];
-        }
-
-        if ($method === 'POST' && $path === '/addressbooks') {
-            $body = $this->jsonBody();
-            $ab = $this->contacts->createAddressBook($username, $body);
-
-            return ['addressbook' => $ab];
-        }
-
-        if (preg_match('#^/addressbooks/(\d+)$#', $path, $m)) {
-            $id = (int) $m[1];
-            if ($method === 'PATCH' || $method === 'PUT') {
-                $body = $this->jsonBody();
-                $ab = $this->contacts->updateAddressBook($username, $id, $body);
-
-                return ['addressbook' => $ab];
-            }
-            if ($method === 'DELETE') {
-                $body = $this->jsonBody();
-                $force = !empty($body['force']) || (isset($_GET['force']) && $_GET['force'] !== '0' && $_GET['force'] !== '');
-                $this->contacts->deleteAddressBook($username, $id, $force);
-
-                return ['ok' => true];
-            }
-        }
-
-        if ($method === 'POST' && preg_match('#^/addressbooks/(\d+)/import$#', $path, $m)) {
-            $id = (int) $m[1];
-            if (function_exists('set_time_limit')) {
-                @set_time_limit(600);
-            }
-            @ini_set('memory_limit', '512M');
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
-            $vcf = $this->readPayloadField('vcf', ['text/vcard', 'text/x-vcard', 'text/directory']);
-            if ($this->wantsImportProgressStream()) {
-                $this->streamImportProgress(function (?callable $onProgress) use ($username, $id, $vcf) {
-                    return $this->contacts->importAddressBook($username, $id, $vcf, $onProgress);
-                });
-
-                return null;
-            }
-
-            return $this->contacts->importAddressBook($username, $id, $vcf);
-        }
-
-        // GET list / POST create contacts
-        if (preg_match('#^/addressbooks/(\d+)/contacts$#', $path, $m)) {
-            $id = (int) $m[1];
-            if ($method === 'GET') {
-                $q = isset($_GET['q']) ? (string) $_GET['q'] : '';
-
-                return ['contacts' => $this->contacts->listContacts($username, $id, $q)];
-            }
-            if ($method === 'POST') {
-                $body = $this->jsonBody();
-                $contact = $this->contacts->createContact($username, $id, $body);
-
-                return ['contact' => $contact];
-            }
-        }
-
-        // GET / PATCH / DELETE one contact
-        if (preg_match('#^/addressbooks/(\d+)/contacts/([^/]+)$#', $path, $m)) {
-            $id = (int) $m[1];
-            $uri = rawurldecode($m[2]);
-            if ($method === 'GET') {
-                return ['contact' => $this->contacts->getContact($username, $id, $uri)];
-            }
-            if ($method === 'PATCH' || $method === 'PUT') {
-                $body = $this->jsonBody();
-                $contact = $this->contacts->updateContact($username, $id, $uri, $body);
-
-                return ['contact' => $contact];
-            }
-            if ($method === 'DELETE') {
-                $this->contacts->deleteContact($username, $id, $uri);
-
-                return ['ok' => true];
-            }
-        }
-
-        // --- Private WebDAV files (portal Files tab) ---
         $fileRoutes = $this->dispatchFileRoutes($method, $path, $username);
         if ($fileRoutes !== null) {
             return $fileRoutes;
         }
 
-        // --- Tasks (VTODO) / Notes (VJOURNAL) ---
-        $itemRoutes = $this->dispatchItemRoutes($method, $path, $username);
+        $itemRoutes = $this->itemRoutes->dispatch($method, $path, $username);
         if ($itemRoutes !== null) {
             return $itemRoutes;
         }
@@ -845,7 +637,7 @@ class App {
                 return ['data' => $this->adminSettings->getSystemSettings()];
             }
             if ($method === 'PUT' || $method === 'PATCH') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 // Non-secret keys present in the request (for ops diagnosis only)
                 $keysCtx = $this->adminSettingsBodyKeysForLog($body);
                 try {
@@ -887,7 +679,7 @@ class App {
         // Factory reset → installer (removes baikal.yaml + INSTALL_DISABLED)
         if ($adminPath === '/admin/settings/reset-to-default' || $adminPath === '/admin/settings/reset-to-default/') {
             if ($method === 'POST') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
                 $reauthPassword = (string) ($body['password'] ?? $body['admin_password'] ?? '');
                 if ($reauthPassword === '') {
@@ -935,7 +727,7 @@ class App {
         // Optional live connection probe (no YAML write)
         if ($adminPath === '/admin/settings/database/test' || $adminPath === '/admin/settings/database/test/') {
             if ($method === 'POST') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 $result = $this->adminSettings->testDatabaseConnection($body);
                 $this->adminAudit->mutation(
                     $adminUser,
@@ -956,7 +748,7 @@ class App {
                 return ['data' => $this->adminSettings->getDatabaseSettings()];
             }
             if ($method === 'PUT' || $method === 'PATCH' || $method === 'POST') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 $keysCtx = [
                     'keys'    => implode(',', array_values(array_filter(
                         array_keys($body),
@@ -1009,7 +801,7 @@ class App {
                 ];
             }
             if ($method === 'POST') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 try {
                     $user = $this->adminUsers->createUser($body);
                     $this->adminAudit->mutation(
@@ -1041,7 +833,7 @@ class App {
                     return ['calendars' => $this->adminResources->listCalendars($uname)];
                 }
                 if ($method === 'POST') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     try {
                         $cal = $this->adminResources->createCalendar($uname, $body);
                         $this->adminAudit->mutation(
@@ -1067,7 +859,7 @@ class App {
                     return ['calendar' => $this->adminResources->getCalendar($uname, $calId)];
                 }
                 if ($method === 'PATCH' || $method === 'PUT') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     try {
                         $cal = $this->adminResources->updateCalendar($uname, $calId, $body);
                         $this->adminAudit->mutation(
@@ -1089,7 +881,7 @@ class App {
                     }
                 }
                 if ($method === 'DELETE') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     $confirm = !empty($body['confirm'])
                         || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
                     try {
@@ -1124,7 +916,7 @@ class App {
                     return ['addressbooks' => $this->adminResources->listAddressBooks($uname)];
                 }
                 if ($method === 'POST') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     try {
                         $ab = $this->adminResources->createAddressBook($uname, $body);
                         $this->adminAudit->mutation(
@@ -1150,7 +942,7 @@ class App {
                     return ['addressbook' => $this->adminResources->getAddressBook($uname, $abId)];
                 }
                 if ($method === 'PATCH' || $method === 'PUT') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     try {
                         $ab = $this->adminResources->updateAddressBook($uname, $abId, $body);
                         $this->adminAudit->mutation(
@@ -1172,7 +964,7 @@ class App {
                     }
                 }
                 if ($method === 'DELETE') {
-                    $body = $this->jsonBody();
+                    $body = $this->http->jsonBody();
                     $confirm = !empty($body['confirm'])
                         || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
                     $force = !empty($body['force'])
@@ -1208,7 +1000,7 @@ class App {
                 ];
             }
             if ($method === 'PATCH' || $method === 'PUT') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 try {
                     $user = $this->adminUsers->updateUser($uname, $body);
                     $this->adminAudit->mutation(
@@ -1233,7 +1025,7 @@ class App {
                 }
             }
             if ($method === 'DELETE') {
-                $body = $this->jsonBody();
+                $body = $this->http->jsonBody();
                 $confirm = !empty($body['confirm'])
                     || (isset($_GET['confirm']) && (string) $_GET['confirm'] !== '0' && (string) $_GET['confirm'] !== '');
                 try {
@@ -1297,7 +1089,7 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/files/mkdir') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $created = $this->files->createDirectory(
                 $username,
                 (string) ($body['path'] ?? ''),
@@ -1354,7 +1146,7 @@ class App {
                 if ($name === '') {
                     throw new ApiException('Missing file name (query name= or multipart file)', 400);
                 }
-                $data = $this->rawRequestBody();
+                $data = $this->http->rawRequestBody();
             }
 
             try {
@@ -1378,7 +1170,7 @@ class App {
         }
 
         if ($method === 'DELETE' && $path === '/files/entry') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $entryPath = (string) ($body['path'] ?? ($_GET['path'] ?? ''));
             $this->files->delete($username, $entryPath);
             $this->portalServerLog(
@@ -1390,7 +1182,7 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/files/rename') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $renamed = $this->files->rename(
                 $username,
                 (string) ($body['path'] ?? ''),
@@ -1405,7 +1197,7 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/files/move') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $moved = $this->files->move(
                 $username,
                 (string) ($body['from'] ?? $body['path'] ?? ''),
@@ -1421,7 +1213,7 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/files/copy') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $copied = $this->files->copy(
                 $username,
                 (string) ($body['path'] ?? ''),
@@ -1439,7 +1231,7 @@ class App {
         }
 
         if ($method === 'POST' && $path === '/files/bulk') {
-            $body = $this->jsonBody();
+            $body = $this->http->jsonBody();
             $op = (string) ($body['op'] ?? '');
             $paths = $body['paths'] ?? [];
             if (!is_array($paths)) {
@@ -1483,353 +1275,6 @@ class App {
                 return 'Server failed to write the upload';
             default:
                 return 'Upload failed (error ' . $code . ')';
-        }
-    }
-
-    /**
-     * Stream a file from disk for the portal Files download endpoint.
-     */
-    private function streamFileDownload(
-        string $absolutePath,
-        string $filename,
-        string $contentType,
-        int $size,
-        string $etag,
-        bool $inline = false
-    ): void {
-        $this->responseSent = true;
-        $safe = preg_replace('/[^a-zA-Z0-9._ -]+/', '-', $filename) ?: 'download';
-        $safe = trim($safe, '.- ') ?: 'download';
-        $contentType = preg_replace('/[\r\n]+/', '', $contentType) ?: 'application/octet-stream';
-        // Release session so long downloads do not block other portal tabs
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            session_write_close();
-        }
-        while (ob_get_level() > 0) {
-            @ob_end_clean();
-        }
-        http_response_code(200);
-        header('Content-Type: ' . $contentType);
-        $disposition = $inline ? 'inline' : 'attachment';
-        header('Content-Disposition: ' . $disposition . '; filename="' . $safe . '"');
-        header('Cache-Control: private, no-store');
-        header('X-Content-Type-Options: nosniff');
-        header('ETag: ' . $etag);
-        if ($size >= 0) {
-            header('Content-Length: ' . (string) $size);
-        }
-        $fp = fopen($absolutePath, 'rb');
-        if ($fp === false) {
-            throw new ApiException('Unable to read file', 500);
-        }
-        try {
-            fpassthru($fp);
-        } finally {
-            fclose($fp);
-        }
-    }
-
-    /**
-     * @return array<string, mixed>|list<mixed>|null
-     */
-    private function dispatchItemRoutes(string $method, string $path, string $username) {
-        foreach (['tasks' => CalendarItemService::KIND_TASK, 'notes' => CalendarItemService::KIND_NOTE] as $seg => $kind) {
-            if ($method === 'GET' && $path === '/' . $seg) {
-                $q = isset($_GET['q']) ? (string) $_GET['q'] : '';
-                $sort = isset($_GET['sort']) ? (string) $_GET['sort'] : '';
-                $order = isset($_GET['order']) ? (string) $_GET['order'] : 'asc';
-
-                return [
-                    $seg        => $this->items->listItems($username, $kind, $q, $sort, $order),
-                    'calendars' => $this->items->writableCalendars($username, $kind),
-                ];
-            }
-            if ($method === 'POST' && $path === '/' . $seg) {
-                $body = $this->jsonBody();
-                $item = $this->items->createItem($username, $kind, $body);
-
-                return [rtrim($seg, 's') => $item]; // task / note
-            }
-            // POST /tasks/bulk — multi select update/delete
-            if ($method === 'POST' && $path === '/' . $seg . '/bulk') {
-                $body = $this->jsonBody();
-                $op = (string) ($body['op'] ?? '');
-                $items = $body['items'] ?? [];
-                if (!is_array($items)) {
-                    throw new ApiException('items must be an array', 400);
-                }
-                $fields = $body['fields'] ?? [];
-                if (!is_array($fields)) {
-                    $fields = [];
-                }
-
-                return $this->items->bulkItems($username, $kind, $op, $items, $fields);
-            }
-            // /tasks/{instanceId}/{uri}
-            if (preg_match('#^/' . $seg . '/(\d+)/([^/]+)$#', $path, $m)) {
-                $instanceId = (int) $m[1];
-                $uri = rawurldecode($m[2]);
-                $key = rtrim($seg, 's');
-                if ($method === 'GET') {
-                    return [$key => $this->items->getItem($username, $kind, $instanceId, $uri)];
-                }
-                if ($method === 'PATCH' || $method === 'PUT') {
-                    $body = $this->jsonBody();
-                    $item = $this->items->updateItem($username, $kind, $instanceId, $uri, $body);
-
-                    return [$key => $item];
-                }
-                if ($method === 'DELETE') {
-                    $this->items->deleteItem($username, $kind, $instanceId, $uri);
-
-                    return ['ok' => true];
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private function readIcsPayload(): string {
-        return $this->readPayloadField('ics', ['text/calendar']);
-    }
-
-    private function csrfFromRequest(): string {
-        $h = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_SERVER['HTTP_X_BAIKAL_CSRF'] ?? '';
-        if (is_string($h) && $h !== '') {
-            return $h;
-        }
-
-        return '';
-    }
-
-    /**
-     * Reject cross-site browser requests (defense in depth with SameSite=Lax + CSRF).
-     * Fail closed when neither Origin nor Referer is present on state-changing calls.
-     */
-    private function assertSameOrigin(): void {
-        SameOrigin::assert($_SERVER);
-    }
-
-    /** @var string|null Raw php://input (one-shot stream — cache for reuse) */
-    private $rawBodyCache;
-
-    private function rawRequestBody(): string {
-        if ($this->rawBodyCache !== null) {
-            return $this->rawBodyCache;
-        }
-        $raw = file_get_contents('php://input');
-        $this->rawBodyCache = $raw === false ? '' : $raw;
-
-        return $this->rawBodyCache;
-    }
-
-    /**
-     * @param list<string> $rawContentTypes
-     */
-    private function readPayloadField(string $jsonField, array $rawContentTypes): string {
-        $ct = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? ''));
-        $raw = $this->rawRequestBody();
-
-        // Prefer raw calendar/vcard bodies (portal import) — avoid JSON round-trip
-        foreach ($rawContentTypes as $t) {
-            if (str_contains($ct, $t)) {
-                if (trim($raw) === '') {
-                    throw new ApiException('Request body is empty', 400);
-                }
-
-                return $raw;
-            }
-        }
-
-        $isJson = str_contains($ct, 'application/json')
-            || (isset($raw[0]) && ($raw[0] === '{' || $raw[0] === '['));
-        if ($isJson) {
-            $data = json_decode($raw, true);
-            if (!is_array($data)) {
-                throw new ApiException('Invalid JSON body (import prefers raw text/calendar or text/vcard)', 400);
-            }
-            if (isset($data[$jsonField]) && is_string($data[$jsonField]) && $data[$jsonField] !== '') {
-                return $data[$jsonField];
-            }
-            throw new ApiException('JSON body must include string field "' . $jsonField . '"', 400);
-        }
-
-        // Allow plain text uploads
-        if (trim($raw) === '') {
-            throw new ApiException('Request body is empty', 400);
-        }
-
-        return $raw;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function jsonBody(): array {
-        if ($this->jsonBodyCache !== null) {
-            return $this->jsonBodyCache;
-        }
-        $raw = $this->rawRequestBody();
-        if (trim($raw) === '') {
-            $this->jsonBodyCache = [];
-
-            return [];
-        }
-        $data = json_decode($raw, true);
-        if (!is_array($data)) {
-            throw new ApiException('Invalid JSON body', 400);
-        }
-        $this->jsonBodyCache = $data;
-
-        return $data;
-    }
-
-    /**
-     * @param array<string, mixed>|list<mixed> $payload
-     */
-    private function json(int $status, $payload): void {
-        http_response_code($status);
-        header('Content-Type: application/json; charset=utf-8');
-        header('Cache-Control: no-store');
-        header('X-Content-Type-Options: nosniff');
-        // JSON_INVALID_UTF8_SUBSTITUTE: never fail the whole API if one field has bad bytes
-        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
-            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
-        }
-        $json = json_encode($payload, $flags);
-        if ($json === false) {
-            error_log('AngaraDAV portal JSON encode failed: ' . json_last_error_msg());
-            $json = json_encode(['error' => 'Response encoding failed'], JSON_UNESCAPED_SLASHES) ?: '{"error":"Response encoding failed"}';
-            http_response_code(500);
-        }
-        echo $json . "\n";
-    }
-
-    private function fileDownload(string $body, string $filename, string $contentType): void {
-        $filename = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $filename) ?: 'download';
-        http_response_code(200);
-        header('Content-Type: ' . $contentType);
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: no-store');
-        header('X-Content-Type-Options: nosniff');
-        header('Content-Length: ' . (string) strlen($body));
-        echo $body;
-    }
-
-    /** Portal import UI requests Accept: application/x-ndjson for live %. */
-    private function wantsImportProgressStream(): bool {
-        $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
-
-        return str_contains($accept, 'application/x-ndjson')
-            || (isset($_GET['progress']) && (string) $_GET['progress'] === '1');
-    }
-
-    /**
-     * Stream NDJSON progress for long imports (each line is one JSON object).
-     * progress → {type,current,total,percent,imported,updated,skipped}
-     * done     → {type,result:{imported,updated,skipped}}
-     * error    → {type,error,status}.
-     *
-     * Keep this minimal: only echo + flush. Do not call ob_flush() with no buffer
-     * (that aborts the import under error handlers that promote notices to exceptions).
-     *
-     * @param callable(?callable): array{imported: int, updated: int, skipped: int} $importFn
-     */
-    private function streamImportProgress(callable $importFn): void {
-        $this->responseSent = true;
-
-        // Drop any existing output buffers cleanly (no flush — may have no buffer left)
-        while (ob_get_level() > 0) {
-            @ob_end_clean();
-        }
-        @ini_set('zlib.output_compression', '0');
-        @ini_set('implicit_flush', '1');
-        if (function_exists('apache_setenv')) {
-            @apache_setenv('no-gzip', '1');
-        }
-
-        http_response_code(200);
-        header('Content-Type: application/x-ndjson; charset=utf-8');
-        header('Cache-Control: no-store');
-        header('X-Content-Type-Options: nosniff');
-        header('X-Accel-Buffering: no');
-
-        $emit = static function (array $payload): void {
-            $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-            if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
-                $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
-            }
-            $line = json_encode($payload, $flags);
-            if ($line === false) {
-                $line = '{"type":"error","error":"Progress encode failed","status":500}';
-            }
-            echo $line . "\n";
-            // Never call ob_flush() when level is 0 — that is the "Failed to flush buffer" crash
-            if (ob_get_level() > 0) {
-                @ob_flush();
-            }
-            flush();
-        };
-
-        try {
-            // First line immediately so nginx leaves "waiting for headers"
-            $emit([
-                'type'     => 'progress',
-                'current'  => 0,
-                'total'    => 0,
-                'percent'  => 0,
-                'imported' => 0,
-                'updated'  => 0,
-                'skipped'  => 0,
-            ]);
-
-            $result = $importFn(static function (
-                int $current,
-                int $total,
-                int $imported,
-                int $updated,
-                int $skipped
-            ) use ($emit): void {
-                $percent = $total > 0 ? (int) min(100, max(0, (int) round(100 * $current / $total))) : 0;
-                $emit([
-                    'type'     => 'progress',
-                    'current'  => $current,
-                    'total'    => $total,
-                    'percent'  => $percent,
-                    'imported' => $imported,
-                    'updated'  => $updated,
-                    'skipped'  => $skipped,
-                ]);
-            });
-            $emit([
-                'type'   => 'done',
-                'result' => [
-                    'imported' => (int) ($result['imported'] ?? 0),
-                    'updated'  => (int) ($result['updated'] ?? 0),
-                    'skipped'  => (int) ($result['skipped'] ?? 0),
-                ],
-            ]);
-        } catch (ApiException $e) {
-            $emit([
-                'type'   => 'error',
-                'error'  => $e->getMessage(),
-                'status' => $e->getStatus(),
-            ]);
-        } catch (\Throwable $e) {
-            error_log('AngaraDAV portal import stream: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
-            $msg = 'Internal server error';
-            if (stripos($e->getMessage(), 'Maximum execution time') !== false) {
-                $msg = 'Import timed out. Try a smaller export, or import again (already-imported items update faster).';
-            } elseif (stripos($e->getMessage(), 'ob_flush') !== false) {
-                $msg = 'Import progress flush failed; please retry after updating the image.';
-            }
-            $emit([
-                'type'   => 'error',
-                'error'  => $msg,
-                'status' => 500,
-            ]);
         }
     }
 }

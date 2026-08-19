@@ -179,7 +179,7 @@ export function renderModal(opts: ModalOptions): string {
       ${footerBlock}`;
   }
 
-  return `<div class="cal-modal${rootExtra}"${rootId}${rootAttrs} role="dialog" aria-modal="true" aria-labelledby="${esc(titleId)}">
+  return `<div class="cal-modal${rootExtra}"${rootId}${rootAttrs} role="dialog" aria-modal="true" aria-labelledby="${esc(titleId)}" data-focus-trap="1">
       <div class="cal-modal-backdrop"${backdropAction}></div>
       <div class="cal-modal-card${cardExtra}">
         <header class="cal-modal-header">
