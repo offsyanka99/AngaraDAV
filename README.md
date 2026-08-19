@@ -6,8 +6,8 @@ AngaraDAV
 
 AngaraDAV is a self-hosted calendar, contacts, tasks, notes, and WebDAV file server powered by SabreDAV. It is derived from [Baïkal](https://sabre.io/baikal/) **0.11.1** and now has an independent product identity and release path.
 
-**Version:** `2.2.3`
-**Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml)
+**Version:** `2.3.0`
+**Docs:** [docs/](docs/) · [Deployment](docs/DEPLOYMENT.md) · [TrueNAS compose](docs/truenas-scale.compose.yaml) · [Improvements plan](docs/IMPROVEMENTS.md)
 
 **Related project:** [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) — Android app for syncing a private WebDAV file home with AngaraDAV (and other WebDAV servers).
 
@@ -25,7 +25,7 @@ AngaraDAV includes:
   - **Calendar** tab: owned list (Edit / Delete), month event grid, create/edit/delete events (incl. RRULE), holidays/read-only, details/share/import/export; **Add calendar → Import .ics**; large imports with live **%** progress
   - **Contacts** tab: address books (CRUD + delete confirm), contact list/search/edit, multi email/phone, photos, birthday/special dates, per-contact and book `.vcf` export (progress dialog for large `.vcf`)
   - **Tasks** / **Notes** tabs: CalDAV `VTODO` / `VJOURNAL` (bulk actions on tasks); Contacts/Tasks/Notes tables support **↑/↓/Enter** keyboard navigation
-  - **Files** tab: browse/upload (toolbar **Upload ▾** Files…/Folder…, drop mix onto list)/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
+  - **Files** tab: browse/upload (toolbar **Upload ▾** Files…/Folder…, drop mix onto list)/view/download/copy/move/rename/delete private WebDAV home (`/dav.php/files/{username}/`) when file storage is enabled; in-browser preview for images, PDF, text, audio, and video; upload progress dialog; folder item counts; Copy/Move use a folder tree; same-folder copies get a ` (copy)` name, cross-folder copies keep the original filename
   - User tabs (**Calendar / Contacts / Tasks / Notes / Files**) follow Admin **DAV services** toggles (CalDAV, CardDAV, Tasks, Notes, Files); disabled services hide the matching tab
   - **Administration** (Admin-role DAV users): Overview, System settings, Users CRUD, Database (CONFIRM write), installer at **`/portal/install/`**. See [Portal Administration](docs/DEPLOYMENT.md#portal-administration).
   - Fast portal imports via **chunked SQLite transactions** (large Thunderbird calendars in seconds on NAS)
@@ -72,8 +72,9 @@ Legacy release history
 | `2.2.1` | Portal `onAction` domain routers; multi-user calendar share href fix; Files drop merge + Skip existing; themed delete confirms; DT picker outside-click; anonymous `/api/me` 200 |
 | `2.2.2` | Portal delegated event listeners; list keyboard nav; tabs gated by DAV services; calendar multi-select + Escape/modal polish |
 | `2.2.3` | Portal remembers selected calendars across sessions (localStorage per user) |
+| `2.3.0` | Portal Files **View**: in-browser preview for images, PDF, text, audio, and video; inline download MIME allowlist (HTML/JS/SVG as text) |
 
-Image tags: `latest`, `2.2.3`, `sha-…`.
+Image tags: `latest`, `2.3.0`, `sha-…`.
 
 Quick start (Docker)
 --------------------

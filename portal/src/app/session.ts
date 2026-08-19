@@ -178,6 +178,15 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.filesDeletePaths = null;
   hooks.resetFilesTransferTree();
   state.filesMkdirOpen = false;
+  if (state.filesPreview?.objectUrl) {
+    try {
+      URL.revokeObjectURL(state.filesPreview.objectUrl);
+    } catch {
+      /* ignore */
+    }
+  }
+  state.filesPreview = null;
+  state.filesPreviewSeq += 1;
   state.filesUploadMenuOpen = false;
   hooks.unbindFilesUploadMenuOutside();
   state.filesUploadDropActive = false;

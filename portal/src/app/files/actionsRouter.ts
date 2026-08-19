@@ -11,6 +11,7 @@ import {
   openFilesTransfer,
   resetFilesTransferTree,
 } from "./transfer";
+import { closeFilesPreview, openFilesPreview } from "./preview";
 import {
   closeFilesUploadProgress,
   resolveFilesUploadConflict,
@@ -56,6 +57,7 @@ export async function handleFilesAction(
     state.filesDeletePaths = null;
     state.filesTransfer = null;
     state.filesMkdirOpen = false;
+    closeFilesPreview(host);
     state.checkedFilePaths = [];
     state.busy = true;
     host.clearFlash();
@@ -95,22 +97,26 @@ export async function handleFilesAction(
   if (action === "files-copy") {
     const path = t.dataset.path ?? "";
     if (!path) return true;
+    closeFilesPreview(host);
     void openFilesTransfer(host, "copy", [path]);
     return true;
   }
   if (action === "files-move") {
     const path = t.dataset.path ?? "";
     if (!path) return true;
+    closeFilesPreview(host);
     void openFilesTransfer(host, "move", [path]);
     return true;
   }
   if (action === "files-bulk-copy") {
     if (state.checkedFilePaths.length === 0) return true;
+    closeFilesPreview(host);
     void openFilesTransfer(host, "copy", [...state.checkedFilePaths]);
     return true;
   }
   if (action === "files-bulk-move") {
     if (state.checkedFilePaths.length === 0) return true;
+    closeFilesPreview(host);
     void openFilesTransfer(host, "move", [...state.checkedFilePaths]);
     return true;
   }
@@ -159,6 +165,7 @@ export async function handleFilesAction(
     state.filesDeletePaths = [...state.checkedFilePaths];
     state.filesRenamePath = null;
     resetFilesTransferTree(host);
+    closeFilesPreview(host);
     host.render();
     return true;
   }
@@ -185,6 +192,7 @@ export async function handleFilesAction(
     state.filesRenamePath = null;
     state.filesDeletePaths = null;
     resetFilesTransferTree(host);
+    closeFilesPreview(host);
     host.clearFlash();
     host.render();
     return true;
@@ -200,6 +208,7 @@ export async function handleFilesAction(
     resetFilesTransferTree(host);
     state.filesUploadMenuOpen = false;
     unbindFilesUploadMenuOutside(host);
+    closeFilesPreview(host);
     host.render();
     return true;
   }
@@ -215,6 +224,7 @@ export async function handleFilesAction(
     resetFilesTransferTree(host);
     state.filesUploadMenuOpen = false;
     unbindFilesUploadMenuOutside(host);
+    closeFilesPreview(host);
     host.render();
     return true;
   }
@@ -264,6 +274,30 @@ export async function handleFilesAction(
   }
   if (action === "files-download") {
     log.event("files.download", { path: t.getAttribute("href") ?? "" });
+    return true;
+  }
+  if (action === "files-preview-open") {
+    const path = t.dataset.path ?? "";
+    if (!path) return true;
+    void openFilesPreview(host, path);
+    return true;
+  }
+  if (action === "files-preview-close") {
+    closeFilesPreview(host);
+    host.render();
+    return true;
+  }
+  if (action === "files-preview-download") {
+    const preview = state.filesPreview;
+    if (!preview) return true;
+    const a = document.createElement("a");
+    a.href = api.filesDownloadUrl(preview.path);
+    a.download = preview.name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    log.event("files.download", { path: preview.path, via: "preview" });
     return true;
   }
   if (action === "close-files-upload-progress") {

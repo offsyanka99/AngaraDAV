@@ -279,6 +279,122 @@ class FileService {
         ];
     }
 
+    /**
+     * MIME type safe to send with Content-Disposition: inline (portal file viewer).
+     *
+     * HTML, JavaScript, and SVG are forced to text/plain so they cannot execute
+     * if the browser navigates to the download URL or embeds it.
+     */
+    public static function contentTypeForInline(string $filename, string $detected): string {
+        $detected = strtolower(trim(explode(';', $detected)[0]));
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        $byExt = [
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'jfif' => 'image/jpeg',
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'bmp'  => 'image/bmp',
+            'avif' => 'image/avif',
+            'ico'  => 'image/x-icon',
+            'pdf'  => 'application/pdf',
+            'mp3'  => 'audio/mpeg',
+            'wav'  => 'audio/wav',
+            'ogg'  => 'audio/ogg',
+            'oga'  => 'audio/ogg',
+            'flac' => 'audio/flac',
+            'aac'  => 'audio/aac',
+            'm4a'  => 'audio/mp4',
+            'opus' => 'audio/ogg',
+            'weba' => 'audio/webm',
+            'mp4'  => 'video/mp4',
+            'm4v'  => 'video/mp4',
+            'webm' => 'video/webm',
+            'ogv'  => 'video/ogg',
+            'mov'  => 'video/quicktime',
+            'txt'  => 'text/plain; charset=utf-8',
+            'md'   => 'text/plain; charset=utf-8',
+            'csv'  => 'text/csv; charset=utf-8',
+            'tsv'  => 'text/plain; charset=utf-8',
+            'json' => 'application/json; charset=utf-8',
+            'xml'  => 'text/plain; charset=utf-8',
+            'yml'  => 'text/plain; charset=utf-8',
+            'yaml' => 'text/plain; charset=utf-8',
+            'css'  => 'text/plain; charset=utf-8',
+            'html' => 'text/plain; charset=utf-8',
+            'htm'  => 'text/plain; charset=utf-8',
+            'js'   => 'text/plain; charset=utf-8',
+            'mjs'  => 'text/plain; charset=utf-8',
+            'ts'   => 'text/plain; charset=utf-8',
+            'tsx'  => 'text/plain; charset=utf-8',
+            'jsx'  => 'text/plain; charset=utf-8',
+            'svg'  => 'text/plain; charset=utf-8',
+            'php'  => 'text/plain; charset=utf-8',
+            'py'   => 'text/plain; charset=utf-8',
+            'sh'   => 'text/plain; charset=utf-8',
+            'log'  => 'text/plain; charset=utf-8',
+        ];
+        if ($ext !== '' && isset($byExt[$ext])) {
+            return $byExt[$ext];
+        }
+
+        $unsafe = [
+            'text/html',
+            'application/javascript',
+            'text/javascript',
+            'application/x-javascript',
+            'image/svg+xml',
+            'application/xhtml+xml',
+        ];
+        if (in_array($detected, $unsafe, true)) {
+            return 'text/plain; charset=utf-8';
+        }
+
+        $safe = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/bmp',
+            'image/avif',
+            'image/x-icon',
+            'application/pdf',
+            'text/plain',
+            'text/csv',
+            'text/css',
+            'text/markdown',
+            'application/json',
+            'audio/mpeg',
+            'audio/ogg',
+            'audio/wav',
+            'audio/webm',
+            'audio/mp4',
+            'audio/flac',
+            'audio/aac',
+            'video/mp4',
+            'video/webm',
+            'video/ogg',
+            'video/quicktime',
+        ];
+        if (in_array($detected, $safe, true)) {
+            return $detected;
+        }
+        if (str_starts_with($detected, 'text/')) {
+            return 'text/plain; charset=utf-8';
+        }
+        if (
+            (str_starts_with($detected, 'image/') && $detected !== 'image/svg+xml')
+            || str_starts_with($detected, 'audio/')
+            || str_starts_with($detected, 'video/')
+        ) {
+            return $detected;
+        }
+
+        return 'application/octet-stream';
+    }
+
     public function delete(string $username, string $path): void {
         $username = $this->assertUsername($username);
         $storage = $this->storageFor($username);

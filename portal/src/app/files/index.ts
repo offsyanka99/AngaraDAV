@@ -31,3 +31,10 @@ export { filesBreadcrumb, renderFilesTab } from "./render";
 export { onFilesRename, onFilesMkdir } from "./actions";
 export { handleFilesAction } from "./actionsRouter";
 export { bindFilesDom } from "./bind";
+export {
+  classifyFilesPreview,
+  closeFilesPreview,
+  disposeFilesPreviewState,
+  openFilesPreview,
+  renderFilesPreviewModal,
+} from "./preview";

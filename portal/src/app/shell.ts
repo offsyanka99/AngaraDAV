@@ -83,6 +83,7 @@ export function shell(
     state.filesDeletePaths !== null ||
     state.filesTransfer !== null ||
     state.filesMkdirOpen ||
+    state.filesPreview !== null ||
     state.filesUploadConflict !== null ||
     state.filesUploadProgress !== null ||
     state.confirmDelete !== null

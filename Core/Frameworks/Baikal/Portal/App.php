@@ -308,19 +308,25 @@ class App {
             if ($method === 'GET' && $path === '/files/download') {
                 $username = $this->auth->requireUser();
                 $filePath = isset($_GET['path']) ? (string) $_GET['path'] : '';
+                $inline = isset($_GET['inline']) && (string) $_GET['inline'] !== '' && (string) $_GET['inline'] !== '0';
                 $meta = $this->files->openDownload($username, $filePath);
+                $contentType = $inline
+                    ? FileService::contentTypeForInline($meta['name'], $meta['contentType'])
+                    : $meta['contentType'];
                 $this->streamFileDownload(
                     $meta['absolutePath'],
                     $meta['name'],
-                    $meta['contentType'],
+                    $contentType,
                     $meta['size'],
-                    $meta['etag']
+                    $meta['etag'],
+                    $inline
                 );
                 $this->portalServerLog(
                     sprintf(
-                        '%s %s → 200 files download path=%s size=%d user=%s (%dms)',
+                        '%s %s → 200 files %s path=%s size=%d user=%s (%dms)',
                         $method,
                         $path,
+                        $inline ? 'view' : 'download',
                         $meta['path'],
                         $meta['size'],
                         $username,
@@ -1488,11 +1494,13 @@ class App {
         string $filename,
         string $contentType,
         int $size,
-        string $etag
+        string $etag,
+        bool $inline = false
     ): void {
         $this->responseSent = true;
         $safe = preg_replace('/[^a-zA-Z0-9._ -]+/', '-', $filename) ?: 'download';
         $safe = trim($safe, '.- ') ?: 'download';
+        $contentType = preg_replace('/[\r\n]+/', '', $contentType) ?: 'application/octet-stream';
         // Release session so long downloads do not block other portal tabs
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
@@ -1502,7 +1510,8 @@ class App {
         }
         http_response_code(200);
         header('Content-Type: ' . $contentType);
-        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        $disposition = $inline ? 'inline' : 'attachment';
+        header('Content-Disposition: ' . $disposition . '; filename="' . $safe . '"');
         header('Cache-Control: private, no-store');
         header('X-Content-Type-Options: nosniff');
         header('ETag: ' . $etag);

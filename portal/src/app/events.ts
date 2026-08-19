@@ -673,6 +673,11 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     files.resolveFilesUploadConflict(o.filesHost, "cancel");
     return;
   }
+  if (state.filesPreview !== null) {
+    files.closeFilesPreview(o.filesHost);
+    render();
+    return;
+  }
   if (
     state.filesRenamePath !== null ||
     state.filesDeletePaths !== null ||

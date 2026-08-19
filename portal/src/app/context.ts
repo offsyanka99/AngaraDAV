@@ -67,6 +67,21 @@ export type FilesUploadProgress = {
   errorSamples: string[];
 };
 
+/** In-app file viewer (Files tab). */
+export type FilesPreviewKind = "image" | "pdf" | "text" | "audio" | "video" | "unsupported";
+
+export type FilesPreview = {
+  path: string;
+  name: string;
+  size: number;
+  kind: FilesPreviewKind;
+  status: "loading" | "ready" | "error";
+  objectUrl: string | null;
+  text: string | null;
+  truncated: boolean;
+  error: string | null;
+};
+
 /** Portal-styled conflict dialog before upload (File objects held in upload.ts pending). */
 export type FilesUploadConflict = {
   /** Display paths/names for the list (already sorted). */
@@ -257,6 +272,9 @@ export type AppState = {
   filesTreeExpanded: string[];
   filesMkdirOpen: boolean;
   checkedFilePaths: string[];
+  filesPreview: FilesPreview | null;
+  /** Bumped to ignore stale preview fetches. */
+  filesPreviewSeq: number;
   filesUploadConflict: FilesUploadConflict | null;
   /** Themed delete confirm (event/task/note/contact/bulk/revoke). */
   confirmDelete: ConfirmDeleteState | null;
@@ -412,6 +430,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesTreeExpanded: [],
     filesMkdirOpen: false,
     checkedFilePaths: [],
+    filesPreview: null,
+    filesPreviewSeq: 0,
     filesUploadConflict: null,
     confirmDelete: null,
     dtPickerDocClick: null,
@@ -466,6 +486,7 @@ export const APP_STATE_KEYS = [
   "filesDropDepth",
   "filesUploadMenuOpen",
   "filesUploadProgress",
+  "filesPreviewSeq",
   "filesTransferDest",
   "filesTreeChildren",
   "filesTreeExpanded",
@@ -512,6 +533,7 @@ export const APP_STATE_KEYS = [
   "filesEntries",
   "filesLoading",
   "filesMkdirOpen",
+  "filesPreview",
   "filesUploadConflict",
   "confirmDelete",
   "dtPickerDocClick",

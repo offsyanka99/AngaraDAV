@@ -9,7 +9,7 @@ AngaraDAV packages a self-hosted calendar, contacts, tasks, notes, and file serv
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Default tracking `main` (GitHub Actions) |
-| `ghcr.io/offsyanka99/angaradav:2.2.3` | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:2.3.0` | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git SHA |
 | Build from `Dockerfile` | Dev / offline packaging |
 
@@ -105,7 +105,7 @@ Entrypoint also logs mount warnings at container start (`25-check-baikal-persist
 | `/info.php` | Public feature flags (no secrets); same `version` / `git` fields |
 | `/dav.php/` | Combined CalDAV + CardDAV + generic WebDAV + classic browser UI |
 | `/dav.php/files/{username}/` | Private generic WebDAV file home (when enabled) |
-| `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload files or folders with progress/download/rename/delete) |
+| `/portal/` → **Files** tab | Browser UI for the same private WebDAV home (list/upload files or folders with progress/view/download/rename/delete) |
 | `/cal.php/` | CalDAV only |
 | `/card.php/` | CardDAV only |
 | `/portal/install/` | Installer / upgrade SPA |
@@ -123,7 +123,7 @@ Tabs: **Calendar** · **Contacts** · **Tasks** · **Notes** · **Files**. Secti
 | 3 | **Calendar:** owned list (Edit / Delete), month grid with create/edit/delete events (RRULE), holidays/read-only; details, share, import/export `.ics`; **select shared calendars** (read-only or full access) to view/edit events; **Add calendar → Import .ics**; large imports show **live %** (chunked SQLite txs keep NAS imports fast) |
 | 4 | **Contacts:** address books (delete confirm), contact search/CRUD, photos, birthday/special dates, custom fields, book + single-contact `.vcf` export (progress dialog with **live %** of cards + result) |
 | 5 | **Tasks / Notes:** CalDAV `VTODO` / `VJOURNAL` on writable calendars (bulk actions on tasks) |
-| 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`); upload files or a whole folder (nested dirs created automatically); progress dialog for large/multi-file uploads; item count under the list |
+| 6 | **Files:** private WebDAV home when enabled (same data as `/dav.php/files/{username}/`); upload files or a whole folder (nested dirs created automatically); progress dialog for large/multi-file uploads; **View** images, PDF, text, audio, and video in the browser; item count under the list |
 | 7 | **Administration** (Admin role only): Overview, System settings, Users CRUD, Database (CONFIRM gate on write) |
 
 ### Screenshots
@@ -468,7 +468,7 @@ CalDAV/CardDAV on Android remains the usual choice (e.g. DAVx⁵) against
 The **User portal** (`/portal/`) includes a **Files** tab that uses the same
 private home (session cookie + CSRF). Portal file operations are logged to
 `Specific/portal_debug.log` when `PORTAL_LOG_LEVEL` / `system.portal_log_level`
-is `info` or `debug` (list/upload/download/mkdir/rename/delete/copy/move).
+is `info` or `debug` (list/upload/download/view/mkdir/rename/delete/copy/move).
 
 **Upload:** a single **Upload** button opens a dialog. Drop files and/or folders
 (mixed selections keep nested structure), or use **Choose files…** /
@@ -476,6 +476,12 @@ is `info` or `debug` (list/upload/download/mkdir/rename/delete/copy/move).
 at once). A **progress dialog** shows file count, bytes, and current name — keep
 the tab open until it finishes. A status line under the table shows item counts
 (and selection counts when checkboxes are used).
+
+**View:** click a file name or **View** to preview it in the portal. Images, PDF,
+plain text (and common source/markup files), audio, and video open in a dialog.
+HTML, JavaScript, and SVG are shown as text, not executed. Other types cannot be
+previewed — use **Download**. Large PDFs (over 50 MiB) and huge text files are
+capped; download those instead.
 
 **Copy / Move:** the SPA opens a destination **folder tree** (Home + subfolders;
 expand on demand). You do not need to type a path.
@@ -767,6 +773,14 @@ Core CalDAV/CardDAV remains based on [sabre-io/Baikal](https://github.com/sabre-
 AngaraDAV `1.0.0` is the first independent release, replacing the inherited fork-version scheme. Compatibility identifiers and data paths remain stable for upgrades.
 
 ## Release notes
+
+### 2.3.0
+
+- **Product version** `2.3.0`.
+- **Portal Files — View:** click a file name or **View** to preview in a dialog. Images, PDF, text (and common source/markup), audio, and video open in the browser; other types prompt to download. HTML, JavaScript, and SVG are shown as text (not executed). Large PDFs (over 50 MiB) and huge text files are capped.
+- **Download API:** `GET /api/files/download?inline=1` uses `Content-Disposition: inline` with a safe MIME allowlist (`FileService::contentTypeForInline`).
+- **CSP:** nginx allows `media-src 'self' blob:` and `frame-src 'self' blob:` so PDF preview can use a blob iframe. Recreate the container from a rebuilt image (a process restart is not enough).
+- **Docs:** [Improvements and refactoring plan](IMPROVEMENTS.md).
 
 ### 2.2.3
 

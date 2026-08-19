@@ -114,6 +114,7 @@ export function renderHome(o: AppOrchestrator): void {
       state.filesDeletePaths !== null ||
       state.filesTransfer !== null ||
       state.filesMkdirOpen ||
+      state.filesPreview !== null ||
       state.filesUploadConflict !== null ||
       state.confirmDelete !== null ||
       state.adminUserCreateOpen ||

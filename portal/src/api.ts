@@ -543,6 +543,46 @@ function notifyUnauthorized(path: string, message: string): void {
   }
 }
 
+/** Binary GET (portal file viewer / downloads that are not JSON). */
+async function requestBlob(
+  path: string,
+): Promise<{ blob: Blob; contentType: string }> {
+  const t0 =
+    typeof performance !== "undefined" ? performance.now() : Date.now();
+  log.debug(`api → GET ${path}`);
+  const res = await fetch(`/api${path}`, { credentials: "same-origin" });
+  const ms = Math.round(
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0,
+  );
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    let payload: Record<string, unknown> = {};
+    try {
+      const data = (await res.json()) as Record<string, unknown>;
+      payload = { ...data };
+      if (typeof data.error === "string") {
+        msg = data.error;
+      }
+    } catch {
+      /* ignore */
+    }
+    if (res.status >= 500) {
+      log.error(`api ← GET ${path} ${res.status} (${ms}ms)`, msg);
+    } else if (res.status !== 401) {
+      log.warn(`api ← GET ${path} ${res.status} (${ms}ms)`, msg);
+    } else {
+      log.debug(`api ← GET ${path} 401 (${ms}ms)`);
+      notifyUnauthorized(path, msg);
+    }
+    throw new ApiError(msg, res.status, payload);
+  }
+  log.info(`api ← GET ${path} ${res.status} (${ms}ms)`);
+  notifySessionActivity(path);
+  const contentType = res.headers.get("Content-Type") || "application/octet-stream";
+  const blob = await res.blob();
+  return { blob, contentType };
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -1387,10 +1427,17 @@ export const api = {
       xhr.send(body);
     });
   },
-  filesDownloadUrl: (path: string) => {
+  filesDownloadUrl: (path: string, opts?: { inline?: boolean }) => {
     const p = new URLSearchParams();
     p.set("path", path);
+    if (opts?.inline) p.set("inline", "1");
     return `/api/files/download?${p}`;
+  },
+  filesGetBlob: (path: string, opts?: { inline?: boolean }) => {
+    const p = new URLSearchParams();
+    p.set("path", path);
+    if (opts?.inline) p.set("inline", "1");
+    return requestBlob(`/files/download?${p}`);
   },
   filesDelete: (path: string) =>
     request<{ ok: boolean }>("/files/entry", {

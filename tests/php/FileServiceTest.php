@@ -111,6 +111,27 @@ assert_true(is_file($meta['absolutePath']), 'download absolute path is a file');
 assert_true(file_get_contents($meta['absolutePath']) === "hello portal\n", 'download contents match');
 assert_true($meta['name'] === 'hello.txt', 'download basename');
 
+assert_true(
+    FileService::contentTypeForInline('notes.html', 'text/html') === 'text/plain; charset=utf-8',
+    'inline HTML is forced to text/plain'
+);
+assert_true(
+    FileService::contentTypeForInline('icon.svg', 'image/svg+xml') === 'text/plain; charset=utf-8',
+    'inline SVG is forced to text/plain'
+);
+assert_true(
+    FileService::contentTypeForInline('photo.jpg', 'application/octet-stream') === 'image/jpeg',
+    'inline JPEG uses extension when detection is generic'
+);
+assert_true(
+    FileService::contentTypeForInline('report.pdf', 'application/pdf') === 'application/pdf',
+    'inline PDF keeps application/pdf'
+);
+assert_true(
+    FileService::contentTypeForInline('blob.bin', 'application/octet-stream') === 'application/octet-stream',
+    'inline unknown stays octet-stream'
+);
+
 $renamed = $svc->rename('alice', 'docs/hello.txt', 'hi.txt');
 assert_true($renamed['path'] === 'docs/hi.txt', 'rename within folder');
 
