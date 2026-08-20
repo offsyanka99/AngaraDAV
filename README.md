@@ -21,8 +21,11 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.3.1`, `sha-…`) · linux/
 | **Notes** — VJOURNAL with rich text | CalDAV |
 | **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename | WebDAV `/dav.php/files/{username}/` |
 | **Administration** — users, system settings, database (Admin-role DAV users) | `/portal/install/` for setup |
+| **WebDAV-Push** (optional) — near-real-time CalDAV/CardDAV change notices (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
 
 Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Tabs follow Admin **DAV services** toggles.
+
+Optional **WebDAV-Push** wakes CalDAV/CardDAV clients instead of waiting for the next poll (shared calendars included; portal writes enqueue the same jobs as `/dav.php/`). Enable it in **Administration → AngaraDAV Settings → Enable WebDAV-Push** and set the canonical HTTPS DAV base (`push_external_url` or `BAIKAL_PUSH_EXTERNAL_URL`, typically `https://your-host/dav.php/`). Push is not advertised until that URL is valid HTTPS. It does **not** cover WebDAV file homes.
 
 Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for Android file homes.
 
@@ -31,7 +34,7 @@ Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for And
 ## Screenshots
 
 | | |
-|---|---|
+|---|--|
 | **Calendar** | **Contacts** |
 | ![Calendar](docs/images/portal-calendar.png) | ![Contacts](docs/images/portal-contacts.png) |
 | **Tasks** | **Notes** |
@@ -77,7 +80,7 @@ Put **HTTPS** in front for anything beyond a laptop. Do not expose port 80 to th
 |------|---------|
 | `/portal/` | User portal + Administration |
 | `/portal/install/` | Installer / upgrade |
-| `/dav.php/` | CalDAV + CardDAV + WebDAV |
+| `/dav.php/` | CalDAV + CardDAV + WebDAV (WebDAV-Push on collections when enabled) |
 | `/dav.php/files/{username}/` | Private file home (when enabled) |
 | `/cal.php/` · `/card.php/` | CalDAV / CardDAV only |
 | `/api/` | Portal JSON API (session cookie) |
