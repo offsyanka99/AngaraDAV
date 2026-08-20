@@ -3,7 +3,7 @@
  */
 import type { CalendarEvent } from "../../api";
 import { esc } from "../../ui";
-import { eventDayKeys, ymd } from "../datetime";
+import { eventDayKeys, isoWeekNumberForRow, ymd } from "../datetime";
 import { renderAgendaView } from "./agenda";
 import { formatEventChipLabel, visibleCalendarEvents } from "./eventsView";
 import type { CalendarsHost } from "./host";
@@ -44,6 +44,7 @@ function renderMonthGridInner(host: CalendarsHost): string {
     }
   }
 
+  const showWeekNumbers = host.state.userSettings.showWeekNumbers;
   const cells: string[] = [];
   const totalCells = Math.ceil((startPad + daysInMonth) / 7) * 7;
   for (let i = 0; i < totalCells; i++) {
@@ -94,6 +95,12 @@ function renderMonthGridInner(host: CalendarsHost): string {
       !primary.readOnly &&
       (primary.canShare || primary.access === "readwrite")
     );
+    if (showWeekNumbers && i % 7 === 0) {
+      const wn = isoWeekNumberForRow(cellDate, weekStart);
+      cells.push(
+        `<div class="month-weeknum" title="ISO week ${wn}"><span>${wn}</span></div>`,
+      );
+    }
     cells.push(`<div class="month-cell${inMonth ? "" : " is-outside"}${isToday ? " is-today" : ""}${canCreate ? " is-clickable" : ""}"${
       canCreate
         ? ` data-action="new-event-day" data-day="${esc(key)}" role="button" tabindex="0" title="Add event on ${esc(key)}"`
@@ -109,11 +116,12 @@ function renderMonthGridInner(host: CalendarsHost): string {
   return `<section class="card month-cal-card">
     ${chrome.toolbar}
     ${chrome.emptyHint}
-    <div class="month-grid-wrap" role="grid" aria-label="Month calendar">
-      <div class="month-dow-row" role="row">
+    <div class="month-grid-wrap${showWeekNumbers ? " has-weeknums" : ""}" role="grid" aria-label="Month calendar">
+      <div class="month-dow-row${showWeekNumbers ? " has-weeknums" : ""}" role="row">
+        ${showWeekNumbers ? `<div class="month-weeknum-hd" title="ISO week">Wk</div>` : ""}
         ${dowLabels.map((l) => `<div class="month-dow">${esc(l)}</div>`).join("")}
       </div>
-      <div class="month-grid" role="rowgroup">
+      <div class="month-grid${showWeekNumbers ? " has-weeknums" : ""}" role="rowgroup">
         ${cells.join("")}
       </div>
     </div>

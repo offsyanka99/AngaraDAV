@@ -34,6 +34,7 @@ import type { ConfirmDeleteState } from "./confirmDelete";
 import type { FilesPreviewKind } from "./files/previewKind";
 import type { FilesSort, FilesTypeFilter } from "./files/listing";
 import type { AdminPageId, Flash, TabId } from "./types";
+import { readStoredUserSettings, type UserSettings } from "./userSettings";
 
 export type { FilesPreviewKind };
 
@@ -191,6 +192,8 @@ export type AppState = {
   adminDbPendingBody: Record<string, unknown> | null;
   userMenuOpen: boolean;
   userMenuDocClick: ((ev: MouseEvent) => void) | null;
+  userSettings: UserSettings;
+  userSettingsOpen: boolean;
   calendars: Calendar[];
   directory: DirectoryUser[];
   holidayCountries: HolidayCountry[];
@@ -367,6 +370,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     adminDbPendingBody: null,
     userMenuOpen: false,
     userMenuDocClick: null,
+    userSettings: readStoredUserSettings(),
+    userSettingsOpen: false,
     calendars: [],
     directory: [],
     holidayCountries: [],

@@ -293,7 +293,9 @@ label.check-row {
 }
 
 .check-row input[type="checkbox"],
-label.check-row input[type="checkbox"] {
+label.check-row input[type="checkbox"],
+.check-row input[type="radio"],
+label.check-row input[type="radio"] {
   width: auto;
   max-width: none;
   margin: 0;

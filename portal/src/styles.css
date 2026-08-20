@@ -2533,6 +2533,21 @@ section.stack {
   );
 }
 
+.week-workday {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--day-start-h, 8) * var(--week-hour, 40px));
+  height: calc((var(--day-end-h, 18) - var(--day-start-h, 8)) * var(--week-hour, 40px));
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--text) 7%, transparent),
+    color-mix(in srgb, var(--text) 13%, transparent)
+  );
+}
+
 .week-timed.is-today {
   background-color: color-mix(in srgb, var(--primary) 8%, var(--surface-2));
 }
@@ -2540,7 +2555,7 @@ section.stack {
 .week-slots {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
 }
@@ -2590,7 +2605,7 @@ section.stack {
   left: 0;
   right: 0;
   width: auto;
-  z-index: 1;
+  z-index: 2;
 }
 
 .week-hour-label {
@@ -2600,6 +2615,11 @@ section.stack {
   text-align: right;
   box-sizing: border-box;
   background: var(--surface);
+}
+
+.week-hour-label.is-workhour {
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--text);
 }
 
 .agenda-wrap {
@@ -2680,6 +2700,33 @@ section.stack {
   gap: 1px;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.month-dow-row.has-weeknums,
+.month-grid.has-weeknums {
+  grid-template-columns: 2.15rem repeat(7, minmax(0, 1fr));
+}
+
+.month-weeknum-hd,
+.month-weeknum {
+  background: var(--thead-bg);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.month-weeknum-hd {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.45rem 0.1rem;
+}
+
+.month-weeknum span {
+  writing-mode: horizontal-tb;
 }
 
 .month-dow {
@@ -3440,4 +3487,23 @@ body.info-modal-open {
 
 .holidays-country[hidden] {
   display: none !important;
+}
+
+.user-settings-fieldset {
+  margin: 0;
+  padding: 0.65rem 0.75rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.user-settings-fieldset legend {
+  padding: 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.user-settings-form {
+  gap: 0.85rem;
 }

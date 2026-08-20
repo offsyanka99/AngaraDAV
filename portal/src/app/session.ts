@@ -156,6 +156,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.deleteConfirmId = null;
   state.deleteAbConfirmId = null;
   state.eventModalOpen = false;
+  state.userSettingsOpen = false;
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];

@@ -9,7 +9,8 @@ import { closeAboutModal, openAboutModal } from "./about";
 import { closeConfirmDelete } from "./confirmDelete";
 import type { AppOrchestrator } from "./orchestrator";
 import { parseTabId } from "./routing";
-import { applyTheme, parseTheme, persistTheme } from "./theme";
+import { applyTheme, parseTheme } from "./theme";
+import { closeUserSettings } from "./userSettings";
 /**
  * Handle shell-level actions. Returns true if the action was recognized
  * (even when it is a no-op, e.g. close-import-progress while import is running).
@@ -221,11 +222,26 @@ export async function handleShellAction(
     return true;
   }
 
+  if (action === "user-settings-open") {
+    state.userMenuOpen = false;
+    state.userSettingsOpen = true;
+    render();
+    return true;
+  }
+
+  if (action === "user-settings-close") {
+    closeUserSettings(state);
+    render();
+    return true;
+  }
+
   if (action === "set-theme") {
     const theme = parseTheme(t.dataset.theme);
     if (theme) {
-      persistTheme(theme, state.user?.username ?? null);
       applyTheme(theme);
+      if (state.userSettingsOpen) {
+        return true;
+      }
       render();
     }
     return true;

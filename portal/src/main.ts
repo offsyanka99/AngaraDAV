@@ -1,9 +1,9 @@
 import "./styles.css";
-import { applyStoredTheme } from "./app/theme";
+import { applyStoredUserSettings } from "./app/userSettings";
 import { mountApp } from "./app";
 import { mountInstall } from "./install";
 
-applyStoredTheme();
+applyStoredUserSettings();
 
 const root = document.getElementById("app");
 if (!root) {

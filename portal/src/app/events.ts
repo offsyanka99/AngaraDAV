@@ -18,6 +18,8 @@ import * as contacts from "./contacts";
 import * as files from "./files";
 import { aboutModalIsOpen, closeAboutModal } from "./about";
 import { unbindDtPickerOutside } from "./shell";
+import { closeUserSettings, persistUserSettings, readUserSettingsFromForm } from "./userSettings";
+import { applyTheme } from "./theme";
 
 /** Prevent double registration when mountApp runs twice on the same root (e.g. HMR). */
 const boundRoots = new WeakMap<HTMLElement, true>();
@@ -64,7 +66,14 @@ function onRootClick(o: AppOrchestrator, ev: Event): void {
 
   const action = t.dataset.action ?? "";
   // Match prior bind.ts: info buttons must not bubble into other handlers
-  if (action === "info" || action === "info-close" || action === "about-open" || action === "about-close") {
+  if (
+    action === "info" ||
+    action === "info-close" ||
+    action === "about-open" ||
+    action === "about-close" ||
+    action === "user-settings-open" ||
+    action === "user-settings-close"
+  ) {
     ev.preventDefault();
     ev.stopPropagation();
   }
@@ -173,6 +182,21 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
     case "admin-database":
       admin.onAdminDatabaseFormSubmit(o.adminHost, form);
       return;
+    case "user-settings": {
+      const next = readUserSettingsFromForm(form);
+      if ("error" in next) {
+        o.setFlash("error", next.error);
+        o.render();
+        return;
+      }
+      persistUserSettings(next, o.state.user?.username ?? null);
+      o.state.userSettings = next;
+      o.state.userSettingsOpen = false;
+      applyTheme(next.theme);
+      o.clearFlash();
+      o.render();
+      return;
+    }
     default:
       log.debug("portalEvents.submit.unknown", { form: kind });
   }
@@ -792,6 +816,11 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     return;
   }
   // About / info modals stack above other dialogs — close only them first
+  if (state.userSettingsOpen) {
+    closeUserSettings(state);
+    render();
+    return;
+  }
   if (aboutModalIsOpen(o.root)) {
     closeAboutModal(o.root);
     return;

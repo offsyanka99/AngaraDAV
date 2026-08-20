@@ -5,7 +5,7 @@
  * Stateful DT field open/set (editingEvent, etc.) remains in app.ts until Phase 6.
  */
 import type { CalendarEvent } from "../api";
-import { esc } from "../ui";
+import { esc } from "../ui.ts";
 
 export type TimeFormatPref = "auto" | "12h" | "24h";
 export type WeekStartPref = "auto" | "monday" | "sunday";
@@ -32,6 +32,24 @@ export function parseYmd(key: string): Date | null {
 
 export function addDays(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+/**
+ * ISO-8601 week number (1–53). Week 1 contains 4 January;
+ * weeks are Monday–Sunday for numbering.
+ */
+export function isoWeekNumber(d: Date): number {
+  const utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/** ISO week of the Thursday in the 7-day row that starts on `rowStart`. */
+export function isoWeekNumberForRow(rowStart: Date, weekStart: number): number {
+  const toThursday = (4 - weekStart + 7) % 7;
+  return isoWeekNumber(addDays(rowStart, toThursday));
 }
 
 /** Inclusive week containing `day`, starting on locale weekStart (0=Sun). */

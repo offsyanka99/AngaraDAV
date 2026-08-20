@@ -7,7 +7,7 @@ import { DOCS_URL } from "./constants";
 import type { AppState } from "./context";
 import { renderFlashBanner } from "./flash";
 import { adminUiEnabled, userIsAdmin } from "./session";
-import { currentTheme } from "./theme";
+import { userSettingsModalHtml } from "./userSettings";
 
 export type ShellOpts = { auth?: boolean; tabs?: string };
 
@@ -31,16 +31,6 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
               User portal
             </button>`
     : "";
-  const theme = currentTheme();
-  const themeMenu = `<div class="user-menu-theme" role="group" aria-label="Theme">
-              <button type="button" class="user-menu-item${theme === "dark" ? " is-active" : ""}" role="menuitem" data-action="set-theme" data-theme="dark">
-                Dark
-              </button>
-              <button type="button" class="user-menu-item${theme === "light" ? " is-active" : ""}" role="menuitem" data-action="set-theme" data-theme="light">
-                Light
-              </button>
-            </div>
-            <div class="user-menu-sep" role="separator"></div>`;
   const userMenu = state.user
     ? `<div class="user-menu${state.userMenuOpen ? " is-open" : ""}">
             <button type="button" class="user-menu-trigger" data-action="user-menu-toggle"
@@ -52,7 +42,10 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
             <div class="user-menu-dropdown" role="menu" ${state.userMenuOpen ? "" : "hidden"}>
               ${userPortalMenuItem}
               ${adminMenuItem}
-              ${themeMenu}
+              <button type="button" class="user-menu-item" role="menuitem" data-action="user-settings-open">
+                User settings
+              </button>
+              <div class="user-menu-sep" role="separator"></div>
               <button type="button" class="user-menu-item user-menu-item-danger" role="menuitem" data-action="logout">
                 Log out
               </button>
@@ -111,7 +104,8 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
           <a href="${esc(DOCS_URL)}" target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
       </footer>
-      ${aboutModalHtml(state)}`;
+      ${aboutModalHtml(state)}
+      ${userSettingsModalHtml(state)}`;
 
   // Preserve layout-* toggles applied after shell (e.g. layout-contacts); auth replaces them.
   if (opts.auth) {

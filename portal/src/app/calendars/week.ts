@@ -53,10 +53,13 @@ export function renderWeekView(host: CalendarsHost): string {
     }
   }
 
+  const dayStart = host.state.userSettings.dayStartHour;
+  const dayEnd = host.state.userSettings.dayEndHour;
   const hourLabels = Array.from({ length: 24 }, (_, h) => {
     const d = new Date(2024, 0, 1, h);
     const label = d.toLocaleTimeString(undefined, host.timeFormatOpts());
-    return `<div class="week-hour-label" style="height:${HOUR_PX}px">${esc(label)}</div>`;
+    const work = h >= dayStart && h < dayEnd ? " is-workhour" : "";
+    return `<div class="week-hour-label${work}" style="height:${HOUR_PX}px">${esc(label)}</div>`;
   }).join("");
 
   const canCreate = (() => {
@@ -93,15 +96,19 @@ export function renderWeekView(host: CalendarsHost): string {
           return `<button type="button" class="week-slot" data-action="new-event-slot" data-day="${esc(key)}" data-hour="${h}" title="Add event at ${esc(key)} ${hh}:00" ${host.state.busy ? "disabled" : ""}></button>`;
         }).join("")}</div>`
       : "";
+    const workBand =
+      dayEnd > dayStart
+        ? `<div class="week-workday" aria-hidden="true"></div>`
+        : "";
     timedCols.push(
-      `<div class="week-timed${isToday ? " is-today" : ""}${canCreate ? " is-clickable" : ""}" style="height:${24 * HOUR_PX}px">${slots}${timedHtml}</div>`,
+      `<div class="week-timed${isToday ? " is-today" : ""}${canCreate ? " is-clickable" : ""}" style="height:${24 * HOUR_PX}px">${workBand}${slots}${timedHtml}</div>`,
     );
   }
 
   return `<section class="card month-cal-card week-cal-card">
     ${chrome.toolbar}
     ${chrome.emptyHint}
-    <div class="week-wrap">
+    <div class="week-wrap" style="--week-hour:${HOUR_PX}px;--day-start-h:${dayStart};--day-end-h:${dayEnd}">
       <div class="week-frozen">
         <div class="week-grid-row week-head-row">
           <div class="week-gutter-head"></div>
