@@ -4,6 +4,7 @@
  */
 import type { AppOrchestrator } from "../orchestrator";
 import { applyNoteFormat } from "./editor";
+import { runBulkNoteAction } from "./actions";
 
 /**
  * Handle note actions. Returns true if the action was recognized
@@ -44,7 +45,67 @@ export async function handleNotesAction(
     return true;
   }
 
+  if (action === "note-check") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const instanceId = Number(t.dataset.instance);
+    const uri = t.dataset.uri ?? "";
+    if (!Number.isFinite(instanceId) || !uri) return true;
+    const key = o.itemKey(instanceId, uri);
+    const note = state.notes.find((x) => o.itemKey(x.instanceId, x.uri) === key);
+    if (!note || !note.canWrite || note.readOnly) return true;
+    if (state.checkedNoteKeys.includes(key)) {
+      state.checkedNoteKeys = state.checkedNoteKeys.filter((k) => k !== key);
+    } else {
+      state.checkedNoteKeys = [...state.checkedNoteKeys, key];
+    }
+    render();
+    return true;
+  }
+
+  if (action === "note-select-all") {
+    ev.preventDefault();
+    const writable = state.notes.filter((x) => x.canWrite && !x.readOnly);
+    const allOn =
+      writable.length > 0 &&
+      writable.every((x) => state.checkedNoteKeys.includes(o.itemKey(x.instanceId, x.uri)));
+    state.checkedNoteKeys = allOn ? [] : writable.map((x) => o.itemKey(x.instanceId, x.uri));
+    render();
+    return true;
+  }
+
+  if (action === "note-clear-selection") {
+    state.checkedNoteKeys = [];
+    render();
+    return true;
+  }
+
+  if (action === "note-bulk-copy") {
+    await runBulkNoteAction(o.notesHost, "copy");
+    return true;
+  }
+
+  if (action === "note-bulk-delete") {
+    const n = state.notes.filter(
+      (x) => x.canWrite && !x.readOnly && state.checkedNoteKeys.includes(o.itemKey(x.instanceId, x.uri)),
+    ).length;
+    if (n === 0) {
+      setFlash("error", "No writable notes selected");
+      render();
+      return true;
+    }
+    state.confirmDelete = {
+      scope: "bulk-note",
+      title: n === 1 ? "Delete note" : `Delete ${n} notes`,
+      message: n === 1 ? "Delete the selected note?" : `Delete ${n} selected notes?`,
+      detail: "CalDAV clients will sync the removal. This cannot be undone.",
+    };
+    render();
+    return true;
+  }
+
   if (action === "select-note") {
+    if ((ev.target as HTMLElement).closest("[data-stop-row], .row-check")) return true;
     const instanceId = Number(t.dataset.instance);
     const uri = t.dataset.uri ?? "";
     if (!Number.isFinite(instanceId) || !uri) return true;

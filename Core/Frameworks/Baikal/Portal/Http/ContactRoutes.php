@@ -2,6 +2,7 @@
 
 namespace Baikal\Portal\Http;
 
+use Baikal\Portal\ApiException;
 use Baikal\Portal\ContactImportService;
 use Baikal\Portal\ContactService;
 
@@ -67,6 +68,29 @@ class ContactRoutes {
             }
 
             return $this->import->importAddressBook($username, $id, $vcf);
+        }
+
+        if ($method === 'POST' && preg_match('#^/addressbooks/(\d+)/contacts/bulk$#', $path, $m)) {
+            $id = (int) $m[1];
+            $body = $this->http->jsonBody();
+            $op = (string) ($body['op'] ?? '');
+            $uris = $body['uris'] ?? [];
+            if (!is_array($uris)) {
+                throw new ApiException('uris must be an array', 400);
+            }
+
+            return $this->contacts->bulkContacts($username, $id, $op, $uris);
+        }
+
+        if ($method === 'POST' && preg_match('#^/addressbooks/(\d+)/contacts/export$#', $path, $m)) {
+            $id = (int) $m[1];
+            $body = $this->http->jsonBody();
+            $uris = $body['uris'] ?? [];
+            if (!is_array($uris)) {
+                throw new ApiException('uris must be an array', 400);
+            }
+
+            return $this->import->exportContacts($username, $id, $uris);
         }
 
         if (preg_match('#^/addressbooks/(\d+)/contacts$#', $path, $m)) {

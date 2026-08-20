@@ -11,7 +11,8 @@
         "CalDAV",
         "CardDAV",
         "iCalendar",
-        "lightweight"
+        "lightweight",
+        "WebDAV-push"
     ],
     "homepage": "https://github.com/offsyanka99/AngaraDAV",
     "license": "GPL-3.0-only",

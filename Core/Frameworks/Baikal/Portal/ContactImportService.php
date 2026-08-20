@@ -103,6 +103,65 @@ class ContactImportService {
     }
 
     /**
+     * Export selected contacts as a multi-vCard .vcf.
+     *
+     * @param list<mixed> $uris
+     *
+     * @return array{vcf: string, filename: string, count: int}
+     */
+    public function exportContacts(string $username, int $addressBookId, array $uris): array {
+        $meta = $this->store->requireOwnedAddressBook($username, $addressBookId);
+        if ($uris === []) {
+            throw new ApiException('No contacts selected', 400);
+        }
+        if (count($uris) > 200) {
+            throw new ApiException('Too many items (max 200)', 400);
+        }
+        $wanted = [];
+        foreach ($uris as $raw) {
+            if (!is_string($raw) || $raw === '') {
+                continue;
+            }
+            try {
+                $wanted[] = $this->store->normalizeCardUri($raw);
+            } catch (ApiException $e) {
+                continue;
+            }
+        }
+        $wanted = array_values(array_unique($wanted));
+        if ($wanted === []) {
+            throw new ApiException('No contacts selected', 400);
+        }
+
+        $parts = [];
+        $count = 0;
+        foreach ($this->store->backend()->getMultipleCards($addressBookId, $wanted) as $row) {
+            if (empty($row['carddata'])) {
+                continue;
+            }
+            $data = trim($this->store->cardDataToString($row['carddata']));
+            if ($data === '') {
+                continue;
+            }
+            $parts[] = rtrim($data, "\r\n") . "\r\n";
+            ++$count;
+        }
+        if ($count === 0) {
+            throw new ApiException('No contacts found', 404);
+        }
+
+        $safeName = preg_replace('/[^a-zA-Z0-9-_ ]/u', '', $meta['displayname']) ?: 'contacts';
+        $safeName = trim(preg_replace('/\s+/', '-', $safeName) ?? 'contacts', '-');
+        $filename = $safeName . '-selected-' . date('Y-m-d') . '.vcf';
+
+        return [
+            'vcf'      => implode("\r\n", $parts),
+            'filename' => $filename,
+            'count'    => $count,
+        ];
+    }
+
+    /**
      * Optional $onProgress(current, total, imported, updated, skipped) for streaming UIs.
      *
      * @param callable(int, int, int, int, int): void|null $onProgress

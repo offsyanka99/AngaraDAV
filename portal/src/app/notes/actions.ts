@@ -30,6 +30,55 @@ export function syncEditingNoteFromForm(host: NotesHost, form: HTMLFormElement):
   };
 }
 
+export async function runBulkNoteAction(host: NotesHost, op: "copy" | "delete"): Promise<void> {
+  const selected = host.state.notes.filter(
+    (n) =>
+      n.canWrite &&
+      !n.readOnly &&
+      host.state.checkedNoteKeys.includes(itemKey(n.instanceId, n.uri)),
+  );
+  if (selected.length === 0) {
+    host.setFlash("error", "No writable notes selected");
+    host.render();
+    return;
+  }
+  const items = selected.map((n) => ({ instanceId: n.instanceId, uri: n.uri }));
+  host.state.busy = true;
+  host.clearFlash();
+  host.render();
+  try {
+    const res = await api.bulkNotes({ op, items });
+    const selectedKeys = new Set(selected.map((n) => itemKey(n.instanceId, n.uri)));
+    if (op === "delete") {
+      host.state.checkedNoteKeys = [];
+      if (host.state.selectedNoteKey && selectedKeys.has(host.state.selectedNoteKey)) {
+        host.state.selectedNoteKey = null;
+        host.state.editingNote = null;
+        host.state.creatingNote = false;
+      }
+    }
+    await loadNotes(host);
+    if (res.failed > 0) {
+      host.setFlash(
+        "error",
+        `${op === "copy" ? "Copied" : "Deleted"} ${res.ok}, failed ${res.failed}${res.errors[0] ? `: ${res.errors[0]}` : ""}`,
+      );
+    } else {
+      host.setFlash(
+        "success",
+        op === "copy"
+          ? `Copied ${res.ok} note${res.ok === 1 ? "" : "s"}`
+          : `Deleted ${res.ok} note${res.ok === 1 ? "" : "s"}`,
+      );
+    }
+  } catch (e) {
+    host.setFlash("error", e instanceof Error ? e.message : "Bulk action failed");
+  } finally {
+    host.state.busy = false;
+    host.render();
+  }
+}
+
 export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
   const editor = form.querySelector<HTMLElement>("[data-note-editor]");
   const hidden = form.querySelector<HTMLTextAreaElement>('textarea[name="description"]');

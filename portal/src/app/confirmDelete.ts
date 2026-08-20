@@ -11,6 +11,8 @@ export type ConfirmDeleteScope =
   | "note"
   | "contact"
   | "bulk-task"
+  | "bulk-note"
+  | "bulk-contact"
   | "revoke-share";
 
 export type ConfirmDeleteState = {

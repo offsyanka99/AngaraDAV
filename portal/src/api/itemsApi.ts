@@ -35,7 +35,7 @@ export const itemsApi = {
     }),
   /** Bulk delete or update selected tasks (status / due / percent). */
   bulkTasks: (body: {
-    op: "delete" | "update";
+    op: "delete" | "update" | "copy";
     items: { instanceId: number; uri: string }[];
     fields?: { status?: string; due?: string | null; percent?: number };
   }) =>
@@ -67,6 +67,14 @@ export const itemsApi = {
   deleteNote: (instanceId: number, uri: string) =>
     request<{ ok: boolean }>(`/notes/${instanceId}/${encUri(uri)}`, {
       method: "DELETE",
+    }),
+  bulkNotes: (body: {
+    op: "delete" | "copy";
+    items: { instanceId: number; uri: string }[];
+  }) =>
+    request<{ ok: number; failed: number; errors: string[] }>("/notes/bulk", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 
 };

@@ -4,6 +4,7 @@
  */
 import { api } from "../../api";
 import type { AppOrchestrator } from "../orchestrator";
+import { runBulkContactAction } from "./actions";
 import { syncContactFormFromDom } from "./form";
 
 /**
@@ -31,6 +32,7 @@ export async function handleContactsAction(
     // Clear list immediately so we never paint previous AB contacts with the new AB id
     // (that caused /addressbooks/{newId}/contacts/{oldUri}/photo → 404).
     state.contacts = [];
+    state.checkedContactUris = [];
     state.photoPreview = null;
     state.photoBase64Pending = null;
     state.removePhotoPending = false;
@@ -65,6 +67,7 @@ export async function handleContactsAction(
       state.creatingContact = false;
       state.contactSearch = "";
       state.contacts = [];
+      state.checkedContactUris = [];
       state.photoPreview = null;
       state.photoBase64Pending = null;
       state.removePhotoPending = false;
@@ -90,7 +93,85 @@ export async function handleContactsAction(
     return true;
   }
 
+  if (action === "contact-check") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const uri = t.dataset.uri ?? "";
+    if (!uri) return true;
+    if (state.checkedContactUris.includes(uri)) {
+      state.checkedContactUris = state.checkedContactUris.filter((u) => u !== uri);
+    } else {
+      state.checkedContactUris = [...state.checkedContactUris, uri];
+    }
+    render();
+    return true;
+  }
+
+  if (action === "contact-select-all") {
+    ev.preventDefault();
+    const allOn =
+      state.contacts.length > 0 &&
+      state.contacts.every((c) => state.checkedContactUris.includes(c.uri));
+    state.checkedContactUris = allOn ? [] : state.contacts.map((c) => c.uri);
+    render();
+    return true;
+  }
+
+  if (action === "contact-clear-selection") {
+    state.checkedContactUris = [];
+    render();
+    return true;
+  }
+
+  if (action === "contact-bulk-copy") {
+    await runBulkContactAction(o.contactsHost, "copy");
+    return true;
+  }
+
+  if (action === "contact-bulk-delete") {
+    const n = state.checkedContactUris.length;
+    if (n === 0) {
+      setFlash("error", "No contacts selected");
+      render();
+      return true;
+    }
+    state.confirmDelete = {
+      scope: "bulk-contact",
+      title: n === 1 ? "Delete contact" : `Delete ${n} contacts`,
+      message: n === 1 ? "Delete the selected contact?" : `Delete ${n} selected contacts?`,
+      detail: "CardDAV clients will sync the removal. This cannot be undone.",
+    };
+    render();
+    return true;
+  }
+
+  if (action === "contact-bulk-export") {
+    const uris = [...state.checkedContactUris];
+    if (state.selectedAbId === null || uris.length === 0) {
+      setFlash("error", "No contacts selected");
+      render();
+      return true;
+    }
+    state.busy = true;
+    clearFlash();
+    render();
+    try {
+      const { blob, filename } = await api.exportContacts(state.selectedAbId, uris);
+      const outcome = await o.saveBlobAsFile(blob, filename);
+      if (outcome === "cancelled") setFlash("info", "Export cancelled");
+      else if (outcome === "saved") setFlash("success", `Saved ${filename}`);
+      else setFlash("success", `Download started: ${filename}`);
+    } catch (e) {
+      setFlash("error", e instanceof Error ? e.message : "Export failed");
+    } finally {
+      state.busy = false;
+      render();
+    }
+    return true;
+  }
+
   if (action === "select-contact") {
+    if ((ev.target as HTMLElement).closest("[data-stop-row], .row-check")) return true;
     const uri = t.dataset.uri ?? "";
     if (!uri) return true;
     // Avoid intermediate busy re-render (that jumps scroll); load then paint once.

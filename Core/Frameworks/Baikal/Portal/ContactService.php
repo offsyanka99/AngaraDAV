@@ -322,6 +322,115 @@ class ContactService {
     }
 
     /**
+     * Duplicate a contact in the same address book (new UID / URI).
+     *
+     * @return array<string, mixed>
+     */
+    public function duplicateContact(string $username, int $addressBookId, string $uri): array {
+        $this->store->requireOwnedAddressBook($username, $addressBookId);
+        $uri = $this->store->normalizeCardUri($uri);
+        $row = $this->store->backend()->getCard($addressBookId, $uri);
+        if (!$row) {
+            throw new ApiException('Contact not found', 404);
+        }
+        $carddata = $this->store->cardDataToString($row['carddata'] ?? '');
+        if ($carddata === '') {
+            throw new ApiException('Contact data is empty or unreadable', 500);
+        }
+
+        try {
+            $vcard = Reader::read($carddata, Reader::OPTION_FORGIVING);
+        } catch (\Throwable $e) {
+            throw new ApiException('Existing contact has invalid vCard data', 500);
+        }
+        if (!$vcard instanceof VCard) {
+            throw new ApiException('Existing contact is not a vCard', 500);
+        }
+
+        $uid = UUIDUtil::getUUID();
+        $vcard->UID = $uid;
+        if (isset($vcard->FN)) {
+            $fn = trim((string) $vcard->FN);
+            if ($fn !== '' && !str_ends_with($fn, ' (copy)')) {
+                $vcard->FN = $fn . ' (copy)';
+            }
+        }
+        $vcard->REV = gmdate('Ymd\\THis\\Z');
+        $newUri = $this->store->cardUriFromUid($uid);
+        $serialized = $vcard->serialize();
+        $vcard->destroy();
+        $this->store->backend()->createCard($addressBookId, $newUri, $serialized);
+        $this->store->notifyAddressBookPush($username, $addressBookId);
+
+        return $this->getContact($username, $addressBookId, $newUri);
+    }
+
+    /**
+     * Bulk copy (duplicate) or delete contacts in one address book.
+     *
+     * @param list<mixed> $uris
+     *
+     * @return array{ok: int, failed: int, errors: list<string>}
+     */
+    public function bulkContacts(string $username, int $addressBookId, string $op, array $uris): array {
+        $this->store->requireOwnedAddressBook($username, $addressBookId);
+        $op = strtolower(trim($op));
+        if ($op !== 'copy' && $op !== 'delete') {
+            throw new ApiException('Bulk op must be "copy" or "delete"', 400);
+        }
+        if ($uris === []) {
+            throw new ApiException('No contacts selected', 400);
+        }
+        if (count($uris) > 200) {
+            throw new ApiException('Too many items (max 200)', 400);
+        }
+
+        $ok = 0;
+        $failed = 0;
+        $errors = [];
+        $seen = [];
+        foreach ($uris as $i => $raw) {
+            $uri = is_string($raw) ? $raw : '';
+            if ($uri === '') {
+                ++$failed;
+                $errors[] = 'Item #' . ($i + 1) . ': uri required';
+                continue;
+            }
+            try {
+                $norm = $this->store->normalizeCardUri($uri);
+            } catch (ApiException $e) {
+                ++$failed;
+                $errors[] = $uri . ': ' . $e->getMessage();
+                continue;
+            }
+            if (isset($seen[$norm])) {
+                continue;
+            }
+            $seen[$norm] = true;
+            try {
+                if ($op === 'copy') {
+                    $this->duplicateContact($username, $addressBookId, $norm);
+                } else {
+                    $this->deleteContact($username, $addressBookId, $norm);
+                }
+                ++$ok;
+            } catch (ApiException $e) {
+                ++$failed;
+                $errors[] = $norm . ': ' . $e->getMessage();
+            } catch (\Throwable $e) {
+                ++$failed;
+                $errors[] = $norm . ': failed';
+            }
+        }
+
+        return [
+            'ok'     => $ok,
+            'failed' => $failed,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
      * Binary JPEG photo for a contact, or null if none.
      *
      * @return array{bytes: string, contentType: string}|null

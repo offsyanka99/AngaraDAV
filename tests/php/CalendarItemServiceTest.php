@@ -154,6 +154,22 @@ $svc->deleteItem('alice', CalendarItemService::KIND_NOTE, 10, $htmlNote['uri']);
 $notes = $svc->listItems('alice', CalendarItemService::KIND_NOTE, '', 'summary', 'asc');
 assert_true(count($notes) === 1, 'list one note');
 
+$copied = $svc->bulkItems('alice', CalendarItemService::KIND_NOTE, 'copy', [
+    ['instanceId' => 10, 'uri' => $note['uri']],
+]);
+assert_true(($copied['ok'] ?? 0) === 1, 'copy note ok');
+$afterCopy = $svc->listItems('alice', CalendarItemService::KIND_NOTE, '', 'summary', 'asc');
+assert_true(count($afterCopy) === 2, 'list includes copied note');
+$copyRow = null;
+foreach ($afterCopy as $row) {
+    if (($row['uri'] ?? '') !== ($note['uri'] ?? '')) {
+        $copyRow = $row;
+        break;
+    }
+}
+assert_true($copyRow !== null && str_contains((string) ($copyRow['summary'] ?? ''), '(copy)'), 'copied note summary');
+$svc->deleteItem('alice', CalendarItemService::KIND_NOTE, 10, $copyRow['uri']);
+
 $svc->deleteItem('alice', CalendarItemService::KIND_TASK, 10, $task['uri']);
 assert_true(count($svc->listItems('alice', CalendarItemService::KIND_TASK)) === 0, 'task deleted');
 

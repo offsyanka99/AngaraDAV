@@ -292,6 +292,62 @@ class CalendarItemService {
     }
 
     /**
+     * Duplicate a task/note on the same calendar (new UID / URI).
+     *
+     * @return array<string, mixed>
+     */
+    public function duplicateItem(string $username, string $kind, int $instanceId, string $uri): array {
+        $component = $this->componentForKind($kind);
+        $calId = $this->requireAccess($username, $instanceId, true);
+        if ($this->meta->isReadOnly($instanceId)) {
+            throw new ApiException('This calendar is marked read-only', 403);
+        }
+        $uri = $this->normalizeObjectUri($uri);
+        $obj = $this->backend->getCalendarObject([$calId, $instanceId], $uri);
+        if (!$obj || empty($obj['calendardata'])) {
+            throw new ApiException(ucfirst($kind) . ' not found', 404);
+        }
+
+        try {
+            $vcal = Reader::read($this->calendardataToString($obj['calendardata']), Reader::OPTION_FORGIVING);
+        } catch (\Throwable $e) {
+            throw new ApiException('Invalid calendar data for this item', 500);
+        }
+        if (!$vcal instanceof VCalendar) {
+            throw new ApiException('Invalid calendar object', 500);
+        }
+
+        $comp = null;
+        foreach ($vcal->getComponents() as $c) {
+            if (strtoupper($c->name) === $component) {
+                $comp = $c;
+                break;
+            }
+        }
+        if ($comp === null) {
+            $vcal->destroy();
+            throw new ApiException('Object is not a ' . $component, 404);
+        }
+
+        $uid = UUIDUtil::getUUID();
+        $comp->UID = $uid;
+        if (isset($comp->SUMMARY)) {
+            $summary = trim((string) $comp->SUMMARY);
+            if ($summary !== '' && !str_ends_with($summary, ' (copy)')) {
+                $comp->SUMMARY = mb_substr($summary . ' (copy)', 0, self::MAX_SUMMARY);
+            }
+        }
+        $comp->DTSTAMP = new \DateTime('now', new \DateTimeZone('UTC'));
+        $newUri = $this->objectUriFromUid($uid);
+        $serialized = $vcal->serialize();
+        $vcal->destroy();
+        $this->backend->createCalendarObject([$calId, $instanceId], $newUri, $serialized);
+        $this->notifyCalendarPush($username, $instanceId, $calId);
+
+        return $this->getItem($username, $kind, $instanceId, $newUri);
+    }
+
+    /**
      * Bulk update or delete tasks/notes.
      *
      * @param list<array{instanceId?: int, uri?: string}> $items
@@ -302,8 +358,8 @@ class CalendarItemService {
     public function bulkItems(string $username, string $kind, string $op, array $items, array $fields = []): array {
         $this->componentForKind($kind);
         $op = strtolower(trim($op));
-        if ($op !== 'delete' && $op !== 'update') {
-            throw new ApiException('Bulk op must be "delete" or "update"', 400);
+        if ($op !== 'delete' && $op !== 'update' && $op !== 'copy') {
+            throw new ApiException('Bulk op must be "delete", "update", or "copy"', 400);
         }
         if ($items === []) {
             throw new ApiException('No items selected', 400);
@@ -353,6 +409,8 @@ class CalendarItemService {
             try {
                 if ($op === 'delete') {
                     $this->deleteItem($username, $kind, $instanceId, $uri);
+                } elseif ($op === 'copy') {
+                    $this->duplicateItem($username, $kind, $instanceId, $uri);
                 } else {
                     $this->updateItem($username, $kind, $instanceId, $uri, $allowedFields);
                 }

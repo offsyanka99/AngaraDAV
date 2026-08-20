@@ -4,6 +4,7 @@
 import { api, type ContactCustomField, type ContactPhone } from "../../api";
 import { esc, renderConfirmCheckbox, renderModal } from "../../ui";
 import { infoTitle } from "../sectionInfo";
+import { renderSelectionToolbar } from "../selectionToolbar";
 import type { AppOrchestrator } from "../orchestrator";
 
 export function renderContactsHome(o: AppOrchestrator): string {
@@ -28,10 +29,26 @@ export function renderContactsHome(o: AppOrchestrator): string {
     .join("");
 
   const selectedAb = state.addressBooks.find((a) => a.id === state.selectedAbId) ?? null;
+  const nChecked = state.checkedContactUris.length;
+  const allContactsChecked =
+    state.contacts.length > 0 && state.contacts.every((c) => state.checkedContactUris.includes(c.uri));
+  const someContactsChecked = nChecked > 0 && !allContactsChecked;
+  const contactToolbarActions =
+    nChecked > 0
+      ? renderSelectionToolbar({
+          count: nChecked,
+          busy: state.busy,
+          clearAction: "contact-clear-selection",
+          actionsHtml: `
+            <button type="button" class="btn btn-ghost btn-small" data-action="contact-bulk-copy" ${state.busy ? "disabled" : ""}>Copy</button>
+            <button type="button" class="btn btn-ghost btn-small" data-action="contact-bulk-export" ${state.busy ? "disabled" : ""}>Export</button>
+            <button type="button" class="btn btn-small btn-danger" data-action="contact-bulk-delete" ${state.busy ? "disabled" : ""}>Delete</button>`,
+        })
+      : `<button type="button" class="btn btn-primary" data-action="new-contact" ${state.busy ? "disabled" : ""}>Add contact</button>`;
 
   const contactTableBody =
     state.contacts.length === 0
-      ? `<tr class="contacts-empty-row"><td colspan="4" class="muted">${
+      ? `<tr class="contacts-empty-row"><td colspan="5" class="muted">${
           state.contactSearch
             ? "No contacts match your search."
             : "No contacts yet. Add one or import a .vcf file."
@@ -42,12 +59,17 @@ export function renderContactsHome(o: AppOrchestrator): string {
               !state.creatingContact && ct.uri === state.selectedContactUri
                 ? " is-selected"
                 : "";
+            const checked = state.checkedContactUris.includes(ct.uri);
             const initial = esc((ct.displayname || "?").slice(0, 1).toUpperCase());
             const avatar =
               ct.hasPhoto && state.selectedAbId !== null
                 ? `<img class="contact-avatar" src="${esc(api.contactPhotoUrl(state.selectedAbId, ct.uri))}" alt="" loading="lazy" data-avatar-fallback="${initial}" />`
                 : `<span class="contact-avatar contact-avatar-fallback" aria-hidden="true">${initial}</span>`;
-            return `<tr class="contact-table-row${active}" data-action="select-contact" data-uri="${esc(ct.uri)}" tabindex="0" role="button">
+            return `<tr class="contact-table-row${active}${checked ? " is-checked" : ""}" data-action="select-contact" data-uri="${esc(ct.uri)}" tabindex="0" role="button">
+              <td class="contact-col-check" data-stop-row>
+                <input type="checkbox" class="row-check" data-action="contact-check" data-uri="${esc(ct.uri)}"
+                  ${checked ? "checked" : ""} aria-label="Select ${esc(ct.displayname || ct.uri)}" ${state.busy ? "disabled" : ""} />
+              </td>
               <td class="contact-col-name">
                 <span class="contact-name-cell">
                   ${avatar}
@@ -360,13 +382,19 @@ export function renderContactsHome(o: AppOrchestrator): string {
                   <div class="contact-toolbar" style="margin-top:0.75rem">
                     <input type="search" name="contact-search" data-action="contact-search" placeholder="Search contacts…"
                       value="${esc(state.contactSearch)}" aria-label="Search contacts" ${state.busy ? "disabled" : ""} />
-                    <button type="button" class="btn btn-primary" data-action="new-contact" ${state.busy ? "disabled" : ""}>Add contact</button>
+                    ${contactToolbarActions}
                   </div>
                 </div>
                 <div class="contacts-table-wrap contacts-table-wrap-tall">
                   <table class="contacts-table">
                     <thead>
                       <tr>
+                        <th class="contact-col-check">
+                          <input type="checkbox" data-action="contact-select-all" aria-label="Select all contacts"
+                            ${allContactsChecked ? "checked" : ""}
+                            ${someContactsChecked ? "data-indeterminate=1" : ""}
+                            ${state.busy || state.contacts.length === 0 ? "disabled" : ""} />
+                        </th>
                         <th class="contact-col-name">Name</th>
                         <th class="contact-col-email">Email</th>
                         <th class="contact-col-phone">Phone</th>

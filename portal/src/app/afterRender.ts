@@ -32,6 +32,9 @@ export function bindAfterRender(o: AppOrchestrator): void {
 
   // Indeterminate select-all must be re-set after each paint
   files.bindFilesDom(o.filesHost);
+  o.root.querySelectorAll<HTMLInputElement>('input[data-indeterminate="1"]').forEach((cb) => {
+    cb.indeterminate = true;
+  });
   notes.bindNoteEditor(o.notesHost);
   // Create-cal holidays field visibility (no listener)
   o.bindHolidaysToggle();

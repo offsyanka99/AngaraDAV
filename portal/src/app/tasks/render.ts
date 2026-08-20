@@ -4,6 +4,7 @@ import { toLocalInputValue } from "../datetime";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
+import { renderSelectionToolbar } from "../selectionToolbar";
 import type { TasksHost } from "./host";
 import {
   parentTaskOptions,
@@ -27,7 +28,7 @@ export function renderTasksTab(host: TasksHost): string {
     .map((t) => itemKey(t.instanceId, t.uri));
   const allWritableChecked =
     writableKeys.length > 0 && writableKeys.every((k) => host.state.checkedTaskKeys.includes(k));
-  const someChecked = host.state.checkedTaskKeys.length > 0;
+  const someChecked = host.state.checkedTaskKeys.length > 0 && !allWritableChecked;
   const checkedWritable = writableCheckedTasks(host);
   const nChecked = checkedWritable.length;
 
@@ -69,55 +70,52 @@ export function renderTasksTab(host: TasksHost): string {
   const bulkApplyBtn = (action: string, label: string) =>
     `<button type="button" class="btn btn-small bulk-apply-btn" data-action="${action}"
       title="${esc(label)}" aria-label="${esc(label)}" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>${applyIcon}</button>`;
-  const bulkBar =
-    someChecked
-      ? `<div class="bulk-bar" style="margin-top:0.75rem">
-          <div class="bulk-bar-row">
-            <div class="bulk-bar-count">
-              <strong>${nChecked}</strong><span class="bulk-bar-count-label">selected</span>${
-                host.state.checkedTaskKeys.length !== nChecked
-                  ? `<span class="muted small bulk-bar-count-extra">(${host.state.checkedTaskKeys.length - nChecked} read-only skipped)</span>`
-                  : ""
-              }
-            </div>
-            <div class="bulk-group">
-              <label class="bulk-field">Status
-                <select id="bulk-task-status" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>
-                  <option value="">—</option>
-                  <option value="NEEDS-ACTION">To do</option>
-                  <option value="IN-PROCESS">In progress</option>
-                  <option value="COMPLETED">Done</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              </label>
-              ${bulkApplyBtn("bulk-task-status", "Apply status")}
-            </div>
-            <div class="bulk-group bulk-group-due">
-              ${host.renderPortalDateTimeField({
-                field: "bulk-due",
-                name: "bulkDue",
-                label: "Due",
-                value: host.state.bulkDueValue,
-                dateOnly: false,
-                disabled: host.state.busy || nChecked === 0,
-                allowClear: true,
-              })}
-              ${bulkApplyBtn("bulk-task-due", "Apply due")}
-              <button type="button" class="btn btn-small btn-ghost" data-action="bulk-task-clear-due" ${host.state.busy || nChecked === 0 ? "disabled" : ""} title="Clear due date">Clear due</button>
-            </div>
-            <div class="bulk-group">
-              <label class="bulk-field bulk-field-pct">%
-                <input type="number" id="bulk-task-percent" min="0" max="100" placeholder="0–100" ${host.state.busy || nChecked === 0 ? "disabled" : ""} />
-              </label>
-              ${bulkApplyBtn("bulk-task-percent", "Apply %")}
-            </div>
-          </div>
-          <div class="bulk-bar-actions">
-            <button type="button" class="btn btn-small btn-danger" data-action="bulk-task-delete" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Delete</button>
-            <button type="button" class="btn btn-small btn-ghost" data-action="bulk-task-clear" ${host.state.busy ? "disabled" : ""}>Clear selection</button>
-          </div>
-        </div>`
-      : "";
+  const skipped = host.state.checkedTaskKeys.length - nChecked;
+  const hasSelection = host.state.checkedTaskKeys.length > 0;
+  const toolbarActions = hasSelection
+    ? renderSelectionToolbar({
+        count: nChecked,
+        extra: skipped > 0 ? `(${skipped} read-only skipped)` : undefined,
+        busy: host.state.busy,
+        clearAction: "bulk-task-clear",
+        actionsHtml: `<button type="button" class="btn btn-small btn-danger" data-action="bulk-task-delete" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Delete</button>`,
+      })
+    : `<button type="button" class="btn btn-primary" data-action="new-task" ${host.state.busy || host.state.taskCalendars.length === 0 ? "disabled" : ""}>Add task</button>`;
+  const bulkFields = hasSelection
+    ? `<div class="task-bulk-fields" role="group" aria-label="Edit selected tasks">
+        <div class="bulk-group">
+          <label class="bulk-field">Status
+            <select id="bulk-task-status" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>
+              <option value="">—</option>
+              <option value="NEEDS-ACTION">To do</option>
+              <option value="IN-PROCESS">In progress</option>
+              <option value="COMPLETED">Done</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </label>
+          ${bulkApplyBtn("bulk-task-status", "Apply status")}
+        </div>
+        <div class="bulk-group bulk-group-due">
+          ${host.renderPortalDateTimeField({
+            field: "bulk-due",
+            name: "bulkDue",
+            label: "Due",
+            value: host.state.bulkDueValue,
+            dateOnly: false,
+            disabled: host.state.busy || nChecked === 0,
+            allowClear: true,
+          })}
+          ${bulkApplyBtn("bulk-task-due", "Apply due")}
+          <button type="button" class="btn btn-small btn-ghost" data-action="bulk-task-clear-due" ${host.state.busy || nChecked === 0 ? "disabled" : ""} title="Clear due date">Clear due</button>
+        </div>
+        <div class="bulk-group">
+          <label class="bulk-field bulk-field-pct">%
+            <input type="number" id="bulk-task-percent" min="0" max="100" placeholder="0–100" ${host.state.busy || nChecked === 0 ? "disabled" : ""} />
+          </label>
+          ${bulkApplyBtn("bulk-task-percent", "Apply %")}
+        </div>
+      </div>`
+    : "";
 
   const t = host.state.editingTask;
   const calOpts = host.state.taskCalendars
@@ -206,9 +204,9 @@ export function renderTasksTab(host: TasksHost): string {
       ${infoTitle("Tasks", "tasks")}
       <div class="contact-toolbar" style="margin-top:0.75rem">
         <input type="search" data-action="task-search" placeholder="Search tasks…" value="${esc(host.state.taskSearch)}" aria-label="Search tasks" ${host.state.busy ? "disabled" : ""} />
-        <button type="button" class="btn btn-primary" data-action="new-task" ${host.state.busy || host.state.taskCalendars.length === 0 ? "disabled" : ""}>Add task</button>
+        ${toolbarActions}
       </div>
-      ${bulkBar}
+      ${bulkFields}
       ${
         host.state.taskCalendars.length === 0
           ? `<p class="muted small" style="margin-top:0.75rem">No writable calendars with tasks (VTODO) enabled. Create a calendar under <strong>Calendar</strong> (system Tasks setting must be on).</p>`
@@ -220,7 +218,9 @@ export function renderTasksTab(host: TasksHost): string {
             <tr>
               <th class="col-task-check">
                 <input type="checkbox" data-action="task-select-all" aria-label="Select all writable tasks"
-                  ${allWritableChecked ? "checked" : ""} ${writableKeys.length === 0 || host.state.busy ? "disabled" : ""} />
+                  ${allWritableChecked ? "checked" : ""}
+                  ${someChecked ? "data-indeterminate=1" : ""}
+                  ${writableKeys.length === 0 || host.state.busy ? "disabled" : ""} />
               </th>
               ${sortHeader("Title", "summary", host.state.taskSort, host.state.taskOrder, "task", "col-task-title")}
               ${sortHeader("Status", "status", host.state.taskSort, host.state.taskOrder, "task", "col-task-status")}

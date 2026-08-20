@@ -30,7 +30,7 @@
  * Full BAIKAL_VERSION appends +<sha> when a build SHA is available
  * (e.g. 2.1.0+fef872a — no "git." prefix).
  */
-define('BAIKAL_VERSION_BASE', '2.3.1');
+define('BAIKAL_VERSION_BASE', '2.3.2');
 
 // Optional image build stamp written by Dockerfile (Core/BuildInfo.php).
 if (is_readable(__DIR__ . '/BuildInfo.php')) {

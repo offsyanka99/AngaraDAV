@@ -277,6 +277,8 @@ export type AppState = {
   creatingTask: boolean;
   creatingNote: boolean;
   checkedTaskKeys: string[];
+  checkedNoteKeys: string[];
+  checkedContactUris: string[];
   filesStatus: FilesStatus | null;
   filesPath: string;
   filesEntries: FileEntry[];
@@ -450,6 +452,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     creatingTask: false,
     creatingNote: false,
     checkedTaskKeys: [],
+    checkedNoteKeys: [],
+    checkedContactUris: [],
     filesStatus: null,
     filesPath: "",
     filesEntries: [],

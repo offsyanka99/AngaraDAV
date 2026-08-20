@@ -5,6 +5,8 @@ import type { ContactsHost } from "./host";
 export async function loadContacts(host: ContactsHost, abId: number) {
   const res = await api.contacts(abId, host.state.contactSearch);
   host.state.contacts = res.contacts;
+  const uris = new Set(res.contacts.map((c) => c.uri));
+  host.state.checkedContactUris = host.state.checkedContactUris.filter((u) => uris.has(u));
   if (
     host.state.selectedContactUri !== null &&
     !host.state.contacts.some((c) => c.uri === host.state.selectedContactUri)

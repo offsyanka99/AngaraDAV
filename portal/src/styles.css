@@ -1259,6 +1259,48 @@ body.layout-calendars main.container {
   max-width: 22rem;
 }
 
+.selection-toolbar,
+.files-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.contact-toolbar .selection-toolbar {
+  flex: 1 1 16rem;
+  justify-content: flex-end;
+}
+
+.selection-count,
+.files-selection-count {
+  margin-right: 0.15rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.selection-count-extra {
+  margin-left: 0.3rem;
+}
+
+.contact-col-check {
+  width: 2.25rem;
+  text-align: left;
+  vertical-align: middle;
+  padding-left: 0.65rem;
+}
+
+.contact-col-check input {
+  cursor: pointer;
+  margin: 0;
+  display: block;
+}
+
+.contacts-table tbody tr.contact-table-row.is-checked {
+  background: rgba(59, 130, 246, 0.1);
+}
+
 /* Contacts tab: pin chrome; only ab-list + contact table scroll */
 body.layout-contacts {
   overflow: hidden;
@@ -1528,7 +1570,7 @@ body.layout-tasks .items-list-card {
 
 body.layout-tasks .items-list-card > .section-title-row,
 body.layout-tasks .items-list-card > .contact-toolbar,
-body.layout-tasks .items-list-card > .bulk-bar,
+body.layout-tasks .items-list-card > .task-bulk-fields,
 body.layout-tasks .items-list-card > .muted {
   flex-shrink: 0;
 }
@@ -1663,6 +1705,54 @@ body.layout-tasks .items-edit-panel > .card {
   margin-left: 0.15em;
 }
 
+.task-bulk-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.65rem 1rem;
+  margin-top: 0.55rem;
+  padding: 0.55rem 0.15rem 0.15rem;
+  border-top: 1px solid var(--border);
+}
+
+.task-bulk-fields .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  box-sizing: border-box;
+  padding-top: 0;
+  padding-bottom: 0;
+  white-space: nowrap;
+}
+
+.task-bulk-fields .bulk-apply-btn {
+  width: 2rem;
+  min-width: 2rem;
+  padding-left: 0;
+  padding-right: 0;
+  flex-shrink: 0;
+  color: var(--ok);
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.task-bulk-fields .bulk-apply-btn:hover:not(:disabled) {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.65);
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.task-bulk-fields .bulk-apply-btn:disabled {
+  opacity: 0.45;
+}
+
+.task-bulk-fields .bulk-apply-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
 .bulk-group {
   display: flex;
   flex-wrap: wrap;
@@ -1685,7 +1775,8 @@ body.layout-tasks .items-edit-panel > .card {
 
 .bulk-field select,
 .bulk-field input,
-.bulk-bar .btn {
+.bulk-bar .btn,
+.selection-toolbar .btn {
   height: 2rem;
   box-sizing: border-box;
 }
@@ -1730,7 +1821,8 @@ body.layout-tasks .items-edit-panel > .card {
   color: var(--muted);
 }
 
-.bulk-bar .btn {
+.bulk-bar .btn,
+.selection-toolbar .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1740,7 +1832,8 @@ body.layout-tasks .items-edit-panel > .card {
 }
 
 /* Icon-only Apply buttons (status / due / %) — success green, same as flash-success */
-.bulk-bar .bulk-apply-btn {
+.bulk-bar .bulk-apply-btn,
+.selection-toolbar .bulk-apply-btn {
   width: 2rem;
   min-width: 2rem;
   padding-left: 0;
@@ -1751,18 +1844,21 @@ body.layout-tasks .items-edit-panel > .card {
   background: rgba(34, 197, 94, 0.12);
 }
 
-.bulk-bar .bulk-apply-btn:hover:not(:disabled) {
+.bulk-bar .bulk-apply-btn:hover:not(:disabled),
+.selection-toolbar .bulk-apply-btn:hover:not(:disabled) {
   color: #bbf7d0;
   border-color: rgba(34, 197, 94, 0.65);
   background: rgba(34, 197, 94, 0.2);
 }
 
-.bulk-bar .bulk-apply-btn:disabled {
+.bulk-bar .bulk-apply-btn:disabled,
+.selection-toolbar .bulk-apply-btn:disabled {
   color: var(--ok);
   opacity: 0.45;
 }
 
-.bulk-bar .bulk-apply-icon {
+.bulk-bar .bulk-apply-icon,
+.selection-toolbar .bulk-apply-icon {
   display: block;
   flex-shrink: 0;
 }

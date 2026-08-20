@@ -5,6 +5,52 @@ import type { ContactsHost } from "./host";
 import { contactBodyFromForm } from "./form";
 import { loadContacts } from "./loaders";
 
+export async function runBulkContactAction(host: ContactsHost, op: "copy" | "delete"): Promise<void> {
+  if (host.state.selectedAbId === null) return;
+  const uris = [...host.state.checkedContactUris];
+  if (uris.length === 0) {
+    host.setFlash("error", "No contacts selected");
+    host.render();
+    return;
+  }
+  host.state.busy = true;
+  host.clearFlash();
+  host.render();
+  try {
+    const res = await api.bulkContacts(host.state.selectedAbId, { op, uris });
+    const selected = new Set(uris);
+    if (op === "delete") {
+      host.state.checkedContactUris = [];
+      if (host.state.selectedContactUri && selected.has(host.state.selectedContactUri)) {
+        host.state.selectedContactUri = null;
+        host.state.editingContact = null;
+        host.state.creatingContact = false;
+        host.state.contactModalOpen = false;
+      }
+    }
+    await loadContacts(host, host.state.selectedAbId);
+    await host.loadHome();
+    if (res.failed > 0) {
+      host.setFlash(
+        "error",
+        `${op === "copy" ? "Copied" : "Deleted"} ${res.ok}, failed ${res.failed}${res.errors[0] ? `: ${res.errors[0]}` : ""}`,
+      );
+    } else {
+      host.setFlash(
+        "success",
+        op === "copy"
+          ? `Copied ${res.ok} contact${res.ok === 1 ? "" : "s"}`
+          : `Deleted ${res.ok} contact${res.ok === 1 ? "" : "s"}`,
+      );
+    }
+  } catch (e) {
+    host.setFlash("error", e instanceof Error ? e.message : "Bulk action failed");
+  } finally {
+    host.state.busy = false;
+    host.render();
+  }
+}
+
 export async function onSaveContact(host: ContactsHost, form: HTMLFormElement) {
   if (host.state.selectedAbId === null) return;
   const body = contactBodyFromForm(host, form);

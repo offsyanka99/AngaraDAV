@@ -123,4 +123,25 @@ export const contactsApi = {
   contactPhotoUrl: (abId: number, uri: string): string =>
     `/api/addressbooks/${abId}/contacts/${encUri(uri)}/photo`,
 
+  bulkContacts: (
+    abId: number,
+    body: { op: "copy" | "delete"; uris: string[] },
+  ) =>
+    request<{ ok: number; failed: number; errors: string[] }>(
+      `/addressbooks/${abId}/contacts/bulk`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  exportContacts: async (
+    abId: number,
+    uris: string[],
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const data = await request<{ vcf: string; filename: string; count: number }>(
+      `/addressbooks/${abId}/contacts/export`,
+      { method: "POST", body: JSON.stringify({ uris }) },
+    );
+    const blob = new Blob([data.vcf], { type: "text/vcard;charset=utf-8" });
+    return { blob, filename: data.filename || "contacts.vcf" };
+  },
+
 };

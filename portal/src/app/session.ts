@@ -179,6 +179,8 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.creatingTask = false;
   state.creatingNote = false;
   state.checkedTaskKeys = [];
+  state.checkedNoteKeys = [];
+  state.checkedContactUris = [];
   state.filesStatus = null;
   state.filesPath = "";
   state.filesEntries = [];

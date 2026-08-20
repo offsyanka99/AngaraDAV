@@ -9,6 +9,8 @@ import { closeAboutModal, openAboutModal } from "./about";
 import { closeConfirmDelete } from "./confirmDelete";
 import type { AppOrchestrator } from "./orchestrator";
 import { parseTabId } from "./routing";
+import * as contacts from "./contacts";
+import * as notes from "./notes";
 import { applyTheme, parseTheme } from "./theme";
 import { closeUserSettings } from "./userSettings";
 /**
@@ -139,6 +141,16 @@ export async function handleShellAction(
 
     if (scope === "bulk-task") {
       await o.runBulkTaskAction("bulk-task-delete");
+      return true;
+    }
+
+    if (scope === "bulk-note") {
+      await notes.runBulkNoteAction(o.notesHost, "delete");
+      return true;
+    }
+
+    if (scope === "bulk-contact") {
+      await contacts.runBulkContactAction(o.contactsHost, "delete");
       return true;
     }
 
