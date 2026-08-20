@@ -10,10 +10,12 @@
 
 ME=$(basename "$0")
 
-if [ -n "${BAIKAL_SKIP_CHOWN+x}" ]; then
-  echo "$ME: info: BAIKAL_SKIP_CHOWN is set — skipping chown"
-  exit 0
-fi
+case "${BAIKAL_SKIP_CHOWN:-}" in
+  1|true|TRUE|yes|YES|on|ON)
+    echo "$ME: info: BAIKAL_SKIP_CHOWN=${BAIKAL_SKIP_CHOWN} — skipping chown"
+    exit 0
+    ;;
+esac
 
 # App files from the image are already owned by nginx. Keep ownership repair
 # bounded: a recursive chown through large WebDAV homes can delay every start.

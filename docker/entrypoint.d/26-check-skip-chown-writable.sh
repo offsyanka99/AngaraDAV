@@ -6,9 +6,11 @@ set -e
 
 ME=$(basename "$0")
 
-if [ -z "${BAIKAL_SKIP_CHOWN+x}" ]; then
-  exit 0
-fi
+# Only 1/true/yes/on skip chown. Unset, empty, 0, false, no → chown as usual.
+case "${BAIKAL_SKIP_CHOWN:-}" in
+  1|true|TRUE|yes|YES|on|ON) ;;
+  *) exit 0 ;;
+esac
 
 NGINX_USER=nginx
 if ! id -u "$NGINX_USER" >/dev/null 2>&1; then

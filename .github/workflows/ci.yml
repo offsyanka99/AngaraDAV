@@ -15,11 +15,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-versions: ['8.2', '8.3', '8.4', '8.5', '8.6']
+        php-versions: ['8.4', '8.5', '8.6']
         cs-fixer: [ true ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup PHP and Install Composer Dependencies
         uses: ./.github/actions/build
         with:
@@ -36,6 +36,18 @@ jobs:
         run: php tests/php/FileHomeStorageTest.php
       - name: Portal FileService unit test
         run: php tests/php/FileServiceTest.php
+      - name: Portal file download rate-limit unit test
+        run: php tests/php/FileDownloadRateLimiterTest.php
+      - name: Portal same-origin unit test
+        run: php tests/php/SameOriginTest.php
+      - name: Admin security review unit test
+        run: php tests/php/AdminSecurityReviewTest.php
+      - name: Nginx CSP headers unit test
+        run: php tests/php/NginxCspHeadersTest.php
+      - name: Health endpoint unit test
+        run: php tests/php/HealthEndpointTest.php
+      - name: Local Docker DX unit test
+        run: php tests/php/LocalDockerDxTest.php
       - name: DAV exception logging unit test
         run: php tests/php/ServerExceptionLoggingTest.php
       - name: CalDAV read-only discovery unit test
@@ -52,10 +64,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-versions: ['8.2', '8.3', '8.4', '8.5', '8.6']
+        php-versions: ['8.4', '8.5', '8.6']
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_DB: baikal_test
           POSTGRES_USER: baikal
@@ -69,25 +81,14 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup PHP and Install Composer Dependencies
         uses: ./.github/actions/build
         with:
           php-version: ${{ matrix.php-versions }}
-      - name: Start PHP server
-        run: php -S 0.0.0.0:8000 -t . > php_server.log 2>&1 &
-      - name: Setup Python
-        run: |
-          pip install mechanicalsoup psycopg2 --break-system-packages
-      - name: Run tests
-        env:
-          BAIKAL_BASE_URL: http://localhost:8000/html/
-        run: python run_tests.py
       - name: WebDAV file-home database drivers
         env:
           BAIKAL_TEST_PGSQL_DSN: pgsql:host=127.0.0.1;port=5432;dbname=baikal_test
           BAIKAL_TEST_PGSQL_USER: baikal
           BAIKAL_TEST_PGSQL_PASSWORD: baikal
         run: php tests/php/FileSchemaDriverTest.php
-      - name: Print server logs
-        run: cat php_server.log

@@ -32,6 +32,11 @@
 # If those files only exist inside the container, TrueNAS did not apply the
 # host path mounts — fix the Custom App storage section and re-deploy.
 # Check: curl -sS http://NAS-IP:31088/health.php | jq .
+#   configWritable, specificWritable, configMount.bindLikely should be true
+#   persistenceWarning should be null
+#   filesStorageReady: true when Files is enabled and the storage path is usable;
+#     null when Files is off; false (status "degraded") if the mount is missing.
+#   HTTP 200 still means liveness; "degraded" is a config/mount problem, not down.
 #
 # Installer: when the setup wizard asks for a database backend, choose
 # PostgreSQL and use:
@@ -50,7 +55,7 @@
 #
 # Portal Administration (Admin-role DAV users): user menu → Administration.
 #   Grant: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
-#   Default if unset: DAV user "admin". Parallel with classic /admin/ (last write wins).
+#   Default if unset: DAV user "admin". Classic /admin/ only redirects to /portal/.
 #   Database credential writes: portal Administration → Database (type CONFIRM).
 #   See docs/DEPLOYMENT.md → Portal Administration
 #

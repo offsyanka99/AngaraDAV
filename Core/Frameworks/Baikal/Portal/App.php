@@ -34,6 +34,7 @@ class App {
     private ContactImportService $contactImport;
     private CalendarItemService $items;
     private FileService $files;
+    private FileDownloadRateLimiter $fileDownloadLimiter;
     private HttpIO $http;
     private CalendarRoutes $calendarRoutes;
     private ContactRoutes $contactRoutes;
@@ -78,6 +79,9 @@ class App {
         $this->contactImport = new ContactImportService($contactStore, $vcard);
         $this->items = new CalendarItemService($pdo);
         $this->files = new FileService($pdo, $config);
+        $this->fileDownloadLimiter = new FileDownloadRateLimiter(
+            $this->portalSpecificDir() . '/portal_file_download_rate.json'
+        );
         $this->calendarRoutes = new CalendarRoutes(
             $this->calendars,
             $this->events,
@@ -310,6 +314,7 @@ class App {
                 $filePath = isset($_GET['path']) ? (string) $_GET['path'] : '';
                 $inline = isset($_GET['inline']) && (string) $_GET['inline'] !== '' && (string) $_GET['inline'] !== '0';
                 $meta = $this->files->openDownload($username, $filePath);
+                $this->fileDownloadLimiter->assertAllowed($username);
                 $contentType = $inline
                     ? FileService::contentTypeForInline($meta['name'], $meta['contentType'])
                     : $meta['contentType'];

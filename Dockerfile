@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: install PHP dependencies from composer.lock (reproducible)
 # ---------------------------------------------------------------------------
-FROM composer:2 AS builder
+FROM composer:2.10.2 AS builder
 
 # `patch` is required by scripts/apply-vendor-patches.sh (post-install + explicit run)
 RUN apk add --no-cache patch
@@ -24,13 +24,8 @@ COPY scripts/push-worker.php scripts/files-maintenance.php ./scripts/
 # Git may materialize symlinks as one-line text files on Windows. Normalize the
 # tracked web/resource links so local Docker builds match Linux CI builds.
 # Formal admin UI is gone: html/admin/*.php are portal redirects (keep as files).
-RUN ln -sfn ../../Frameworks/Baikal/Resources Core/Resources/Web/Baikal \
-    && if [ -d Core/Frameworks/TwitterBootstrap ]; then \
-         ln -sfn ../../Frameworks/TwitterBootstrap Core/Resources/Web/TwitterBootstrap; \
-       fi \
-    && ln -sfn ../Core/Frameworks/Baikal/WWWRoot/index.php html/index.php \
-    && ln -sfn ../../Core/Resources/Web html/res/core \
-    && mkdir -p html/admin/install Core/Frameworks/BaikalAdmin/WWWRoot/install \
+RUN ln -sfn ../../Core/Resources/Web html/res/core \
+    && mkdir -p html/admin/install \
     && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/index.php html/admin/index.php \
     && cp -f Core/Frameworks/BaikalAdmin/WWWRoot/install/index.php html/admin/install/index.php
 
@@ -50,7 +45,7 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 # Stage 2: TypeScript user portal SPA → /html/portal
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS portal
+FROM node:24-alpine AS portal
 
 WORKDIR /build/portal
 COPY portal/package.json portal/package-lock.json* ./
@@ -62,11 +57,13 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 3: nginx + PHP-FPM runtime
 # ---------------------------------------------------------------------------
-FROM nginx:1
+FROM nginx:1.31.3-trixie
 
 # Injected by CI (github.sha). Local builds: docker build --build-arg GIT_SHA=$(git rev-parse HEAD)
 ARG GIT_SHA=unknown
 ARG BUILD_TIME=unknown
+ARG PHP_VERSION=8.5
+ENV PHP_VERSION=${PHP_VERSION}
 
 RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg \
     && apt-get update \
@@ -76,25 +73,25 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
     && apt-get remove -y lsb-release \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-         php8.2-cli \
-         php8.2-curl \
-         php8.2-fpm \
-         php8.2-gd \
-         php8.2-gmp \
-         php8.2-mbstring \
-         php8.2-pgsql \
-         php8.2-sqlite3 \
-         php8.2-xml \
+         php${PHP_VERSION}-cli \
+         php${PHP_VERSION}-curl \
+         php${PHP_VERSION}-fpm \
+         php${PHP_VERSION}-gd \
+         php${PHP_VERSION}-gmp \
+         php${PHP_VERSION}-mbstring \
+         php${PHP_VERSION}-pgsql \
+         php${PHP_VERSION}-sqlite3 \
+         php${PHP_VERSION}-xml \
          sqlite3 \
          msmtp \
          msmtp-mta \
          curl \
     && rm -rf /var/lib/apt/lists/* \
-    && sed -i 's/www-data/nginx/g' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's|^listen = .*|listen = /var/run/php-fpm.sock|' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's/^;listen.owner = .*/listen.owner = nginx/' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's/^;listen.group = .*/listen.group = nginx/' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's/;clear_env = no/clear_env = no/' /etc/php/8.2/fpm/pool.d/www.conf \
+    && sed -i 's/www-data/nginx/g' /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
+    && sed -i 's|^listen = .*|listen = /var/run/php-fpm.sock|' /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
+    && sed -i 's/^;listen.owner = .*/listen.owner = nginx/' /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
+    && sed -i 's/^;listen.group = .*/listen.group = nginx/' /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
+    && sed -i 's/;clear_env = no/clear_env = no/' /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
     # Portal multipart + DAV uploads: PHP default upload_max_filesize is 2M and
     # rejects larger files before FileService runs (UI shows app max ~1G).
     && printf '%s\n' \
@@ -102,9 +99,9 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
          'upload_max_filesize = 1G' \
          'post_max_size = 1G' \
          'max_file_uploads = 50' \
-         > /etc/php/8.2/fpm/conf.d/99-angaradav-uploads.ini \
-    && cp /etc/php/8.2/fpm/conf.d/99-angaradav-uploads.ini \
-         /etc/php/8.2/cli/conf.d/99-angaradav-uploads.ini
+         > /etc/php/${PHP_VERSION}/fpm/conf.d/99-angaradav-uploads.ini \
+    && cp /etc/php/${PHP_VERSION}/fpm/conf.d/99-angaradav-uploads.ini \
+         /etc/php/${PHP_VERSION}/cli/conf.d/99-angaradav-uploads.ini
 
 COPY --from=builder --chown=nginx:nginx /src /var/www/baikal
 COPY --from=portal --chown=nginx:nginx /build/html/portal /var/www/baikal/html/portal
@@ -134,6 +131,7 @@ RUN mkdir -p /var/www/baikal/config \
     && chown -R nginx:nginx /var/www/baikal
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx-security-headers.inc /etc/nginx/security-headers.inc
 COPY docker/entrypoint.d/ /docker-entrypoint.d/
 RUN chmod +x /docker-entrypoint.d/*.sh
 

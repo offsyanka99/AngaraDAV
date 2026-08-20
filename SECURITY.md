@@ -17,7 +17,8 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 - Terminate **TLS** in front of the container (do not expose plain HTTP to the internet).
 - Keep `Specific/INSTALL_DISABLED` in place after install, or set `BAIKAL_LOCK_INSTALL=1`.
 - Restrict who has the portal **Admin role** (`PORTAL_ADMIN_USERS` / `portal_admin_users`); use a strong password for DAV admin and install. Day-to-day admin is `/portal/` Administration; install is `/portal/install/`.
-- Portal DAV-user sessions respect `session_max_age_minutes` (idle timeout) and login rate limits. On expiry the SPA clears calendars/contacts from memory and shows the Sign in screen with a timeout message (not a stale dashboard).
+- Portal DAV-user sessions respect `session_max_age_minutes` (idle timeout) and login rate limits. On expiry the SPA clears calendars/contacts from memory and shows the Sign in screen with a timeout message (not a stale dashboard). Portal file **download/view** (`GET /api/files/download`) uses the same per-IP+user ceiling as login.
+- Portal CSP allows `frame-src 'self' blob:` (PDF preview). Recreate the container from a rebuilt image after nginx CSP changes.
 - Keep portal debug logging off in production (`PORTAL_LOG_LEVEL` / `portal_log_level` default `off`). Enable only temporarily when debugging.
 - Keep WebDAV-Push debug logging off in production (`PUSH_LOG_LEVEL` / `push_log_level` default `off`). Push logs are sanitized, mode `0600`, and rotated, but still contain operational metadata.
 - When WebDAV-Push is enabled, configure the narrowest practical `push_allowed_hosts` list. Endpoints are restricted to public HTTPS port 443 and pinned to validated DNS results, but an allowlist further reduces outbound-request exposure.

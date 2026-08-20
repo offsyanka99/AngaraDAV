@@ -1,0 +1,4 @@
+# Local workstation stack (`docker compose up --build -d --force-recreate`).
+# Same file Compose uses via `make local-up` (docs/local.compose.yaml).
+include:
+  - path: docs/local.compose.yaml

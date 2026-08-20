@@ -2,6 +2,10 @@
 
 namespace Baikal\Core\Plugins\Push;
 
+use Psr\Http\Client\ClientInterface;
+use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpClient\Psr18Client;
+
 /**
  * Delivers WebDAV-Push notifications over the Web Push transport (RFC 8030),
  * with VAPID (RFC 8292) authentication and aes128gcm payload encryption
@@ -89,21 +93,17 @@ class Notifier {
         }
 
         try {
-            $webPush = new \Minishlink\WebPush\WebPush([
-                'VAPID' => [
-                    'subject'    => $this->subject,
-                    'publicKey'  => $this->vapidKeys['publicKey'],
-                    'privateKey' => $this->vapidKeys['privateKey'],
+            $webPush = new \Minishlink\WebPush\WebPush(
+                [
+                    'VAPID' => [
+                        'subject'    => $this->subject,
+                        'publicKey'  => $this->vapidKeys['publicKey'],
+                        'privateKey' => $this->vapidKeys['privateKey'],
+                    ],
                 ],
-            ], [], 10, [
-                'connect_timeout' => 5,
-                'timeout'         => 10,
-                'allow_redirects' => false,
-                'proxy'           => '',
-                'curl'            => [CURLOPT_RESOLVE => array_values($curlResolve)],
-            ]);
-            // Cap timeouts so a slow push service can't stall the shutdown worker.
-            $webPush->setDefaultOptions(['TTL' => 3600, 'urgency' => $urgency, 'topic' => $topicHeader]);
+                ['TTL' => 3600, 'urgency' => $urgency, 'topic' => $topicHeader],
+                $this->psr18Client(array_values($curlResolve))
+            );
         } catch (\Throwable $e) {
             $this->logger->error('web push init failed', ['error' => $e->getMessage()]);
 
@@ -165,6 +165,29 @@ class Notifier {
         }
 
         return ['invalid' => array_values(array_unique($invalid)), 'retry' => $retry];
+    }
+
+    /**
+     * PSR-18 client with DNS pin (CURLOPT_RESOLVE) so delivery cannot follow a
+     * re-resolved host after SubscriptionValidator has locked the IP.
+     *
+     * @param list<string> $curlResolve host:port:address entries
+     */
+    private function psr18Client(array $curlResolve): ClientInterface {
+        $http = HttpClient::create([
+            'timeout'       => 10,
+            'max_duration'  => 10,
+            'max_redirects' => 0,
+            'extra'         => [
+                'curl' => [
+                    CURLOPT_CONNECTTIMEOUT => 5,
+                    CURLOPT_PROXY          => '',
+                    CURLOPT_RESOLVE        => $curlResolve,
+                ],
+            ],
+        ]);
+
+        return new Psr18Client($http);
     }
 
     /**

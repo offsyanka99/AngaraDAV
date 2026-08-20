@@ -29,6 +29,9 @@
 # Check: curl -sS http://NAS-IP:31088/health.php | jq .
 #   configWritable, specificWritable, configMount.bindLikely should be true
 #   persistenceWarning should be null
+#   filesStorageReady: true when Files is enabled and the storage path is usable;
+#     null when Files is off; false (status "degraded") if the mount is missing.
+#   HTTP 200 still means liveness; "degraded" is a config/mount problem, not down.
 #
 # After deploy:
 # 1. Open http://NAS-IP:31088  → complete installer (admin password; SQLite OK)
@@ -39,12 +42,13 @@
 # 5. Health / Info:      /health.php · /info.php
 #
 # Portal (user-friendly):
-#   1. Create DAV users under /admin/ (or later: portal Administration → Users)
-#   2. user1 opens /portal/ , signs in with DAV password (not classic admin password)
+#   1. Create DAV users under portal Administration → Users (or /portal/install/)
+#   2. user1 opens /portal/ and signs in with DAV username and password
 #   3. Calendar / Contacts / Tasks / Notes / Files as usual
 #   4. Portal Administration (Admin-role DAV users only): user menu → Administration
 #      Grant Admin: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
-#      Default if unset: DAV user named "admin". Parallel with classic /admin/ (last write wins).
+#      Default if unset: DAV user named "admin".
+#      Classic /admin/ only redirects to /portal/ (no separate Formal UI).
 #      See docs/DEPLOYMENT.md → Portal Administration
 #
 # Bug fixes in 0.11.1-fork.4 (summary): shared calendars selectable; import progress

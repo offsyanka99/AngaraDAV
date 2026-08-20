@@ -17,13 +17,12 @@
     "homepage": "https://github.com/offsyanka99/AngaraDAV",
     "license": "GPL-3.0-only",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "sabre/dav": "~4.7.0",
-        "twig/twig": "~3.27.1",
-        "symfony/yaml": "~7.4.8",
-        "symfony/string": "^7.2",
-        "minishlink/web-push": "^9.0",
-        "guzzlehttp/guzzle": "^7.9",
+        "symfony/yaml": "^8.1",
+        "minishlink/web-push": "^11.0",
+        "symfony/http-client": "^8.1",
+        "nyholm/psr7": "^1.8",
         "ext-curl": "*",
         "ext-dom": "*",
         "ext-mbstring": "*",
@@ -35,14 +34,18 @@
         "ext-gmp": "Faster VAPID/Web Push (RFC 8291/8292) elliptic-curve math for WebDAV-Push"
     },
     "require-dev": {
-        "friendsofphp/php-cs-fixer": "3.89.2",
-        "phpstan/phpstan": "2.1.53",
-        "phpstan/phpstan-deprecation-rules": "2.0.4",
-        "sebastian/diff": "^6.0"
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-deprecation-rules": "^2.0"
     },
     "replace": {
         "jeromeschneider/baikal": "self.version",
         "sabre/baikal": "self.version"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     },
     "autoload": {
         "psr-0": {

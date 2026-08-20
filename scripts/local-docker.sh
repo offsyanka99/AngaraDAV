@@ -41,6 +41,25 @@ plain_up() {
     "$IMAGE"
 }
 
+wait_ready() {
+  echo "Waiting for http://127.0.0.1:31088/health.php …"
+  i=0
+  while [ "$i" -lt 60 ]; do
+    if python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:31088/health.php', timeout=2).read()" >/dev/null 2>&1 \
+      || curl -fsS "http://127.0.0.1:31088/health.php" >/dev/null 2>&1; then
+      echo "Health OK: http://127.0.0.1:31088/health.php"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  echo "scripts/local-docker.sh: warning: health.php not ready after 60s" >&2
+  echo "  Image $IMAGE / container $NAME. Recreate (not restart) after nginx.conf changes:" >&2
+  echo "  docker compose -f docs/local.compose.yaml up -d --build --force-recreate" >&2
+  docker logs "$NAME" 2>/dev/null | tail -n 30 >&2 || true
+  return 0
+}
+
 plain_down() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
 }
@@ -60,17 +79,19 @@ case "$cmd" in
     ;;
   up)
     need_dirs
-    if compose up --build -d; then
+    if compose up --build -d --force-recreate; then
       :
     else
       echo "scripts/local-docker.sh: Compose not installed; using docker build/run" >&2
       echo "  optional: sudo apt install docker-compose-v2" >&2
       echo "  (container name $NAME, image $IMAGE — not 'angaradav')" >&2
+      echo "  nginx.conf is in the image: recreate the container after image rebuilds." >&2
       plain_up
     fi
     echo "Portal:  http://127.0.0.1:31088/portal/"
     echo "Install: http://127.0.0.1:31088/portal/install/"
-    echo "Container $NAME (image $IMAGE)."
+    echo "Container $NAME (image $IMAGE). docker rm angaradav will not remove this."
+    wait_ready
     ;;
   down)
     if ! compose down; then

@@ -10,7 +10,8 @@ help:
 	@echo "  make dist         Zip source tree to build/angaradav-$(VERSION).zip"
 	@echo "  make portal       Typecheck + test + Vite build (portal/)"
 	@echo "  make php-test     Run tests/php/*.php"
-	@echo "  make local-up     Build and start angaradav-local on :31088"
+	@echo "  make local-build  Build image angaradav:local (no start)"
+	@echo "  make local-up     Recreate angaradav-local on :31088 (force-recreate)"
 	@echo "  make local-down   Stop the local container"
 	@echo "  make local-logs   Follow local container logs"
 	@echo "  make clean        Remove install artifacts in config/ + Specific/db"
@@ -25,7 +26,7 @@ dist: vendor/autoload.php
 		$(BUILD_FILES) \
 		--exclude="*.swp" \
 		$(BUILD_DIR)
-	composer config platform.php 8.2 -d $(BUILD_DIR)
+	composer config platform.php 8.4 -d $(BUILD_DIR)
 	composer install --no-interaction --no-dev -d $(BUILD_DIR)
 	rm $(BUILD_DIR)/composer.*
 	cd build && zip -r angaradav-$(VERSION).zip angaradav/
@@ -35,6 +36,14 @@ build-assets: vendor/autoload.php
 	cat vendor/sabre/dav/examples/sql/sqlite.*.sql > Core/Resources/Db/SQLite/db.sql
 
 portal:
+	@if [ -d portal/node_modules ]; then \
+	  owner=$$(stat -c %u portal/node_modules 2>/dev/null || echo ""); \
+	  if [ "$$owner" = "0" ]; then \
+	    echo "make portal: portal/node_modules is owned by root (Vite EACCES on .vite-temp)."; \
+	    echo "  sudo chown -R $$(id -u):$$(id -g) portal/node_modules"; \
+	    exit 1; \
+	  fi; \
+	fi
 	cd portal && npm test && npm run build
 
 php-test: vendor/autoload.php
@@ -58,9 +67,6 @@ local-logs:
 
 vendor/autoload.php: composer.lock
 	composer install --no-interaction
-
-composer.lock: composer.json
-	composer update --no-interaction
 
 clean:
 	# Wipe local install data (not .local-run Docker binds)

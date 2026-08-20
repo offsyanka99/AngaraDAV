@@ -116,10 +116,11 @@ Set log level in `baikal.yaml` or env (env wins):
 
 ```bash
 # API + AngaraDAV must already be running (e.g. docker on :31088)
-#   docker compose -f docs/local.compose.yaml up --build
+#   make local-up   # or: docker compose -f docs/local.compose.yaml up --build -d --force-recreate
 cd portal
 npm install
-npm run dev     # Vite on :5173, proxies /api → :8080 (change vite.config if using 31088)
+npm run dev     # Vite on :5173, proxies /api → :31088 (`make local-up`)
+# ANGARADAV_API=http://127.0.0.1:8080 npm run dev   # if the API is on 8080
 npm run build   # emits to ../html/portal/
 ```
 

@@ -58,19 +58,30 @@ docker run -d --name angaradav -p 8080:80 \
 
 Open **http://127.0.0.1:8080/portal/install/**, then sign in at `/portal/` with the DAV user created there.
 
-### Run from this repository
+### Run from this repository (local Docker)
 
 ```bash
 make local-up
 ```
 
-Open **http://127.0.0.1:31088/portal/install/**
+Then **http://127.0.0.1:31088/portal/install/**. Data lives in gitignored `.local-run/` (created if missing).
 
-Container name is `angaradav-local`; image tag is `angaradav:local`. Ubuntu `docker.io` has no Compose plugin — `make local-up` uses `docker build`/`docker run` in that case (`sudo apt install docker-compose-v2` if you want `docker compose` itself).
+| Piece | Value | Note |
+|-------|--------|------|
+| Image tag | `angaradav:local` | Independent of the container name |
+| Container | `angaradav-local` | `docker rm angaradav` does **not** remove it |
+| Port | `31088` | Release `docker run` examples often use `8080` |
+| Compose | `docs/local.compose.yaml` (also `compose.yaml` include) | `make local-up` force-recreates so a new `nginx.conf` is picked up |
+
+Ubuntu `docker.io` has no Compose plugin — `make local-up` falls back to `docker build`/`docker run` (`sudo apt install docker-compose-v2` if you want Compose). Leave `BAIKAL_SKIP_CHOWN` unset locally so the entrypoint can chown bind dirs Docker created as **root**. If you set `BAIKAL_SKIP_CHOWN=1` without `chown -R 101:101 .local-run`, the container **exits** (PHP cannot write `baikal.yaml`). Empty/`0`/`false` does **not** skip chown.
+
+`docker compose restart` does **not** apply a rebuilt image or `nginx.conf` — use `make local-up` (or `up -d --build --force-recreate`).
+
+Portal Vite (`npm run dev` in `portal/`) proxies `/api` to `:31088`. For a container on `8080`: `ANGARADAV_API=http://127.0.0.1:8080 npm run dev`. Keep `portal/node_modules` owned by your user (`make portal` fails if it is root-owned).
 
 Put **HTTPS** in front for anything beyond a laptop. Do not expose port 80 to the internet.
 
-**TrueNAS SCALE:** [docs/truenas-scale.compose.yaml](docs/truenas-scale.compose.yaml) (SQLite) or [postgres variant](docs/truenas-scale-postgres.compose.yaml). After host `chown -R 101:101` on the datasets, set `BAIKAL_SKIP_CHOWN=1`. Recreate the container to pick up a new image (`nginx.conf` is not applied by a process restart).
+**TrueNAS SCALE:** [docs/truenas-scale.compose.yaml](docs/truenas-scale.compose.yaml) (SQLite) or [postgres variant](docs/truenas-scale-postgres.compose.yaml). After host `chown -R 101:101` on the datasets, set `BAIKAL_SKIP_CHOWN=1`. Recreate the Custom App / container to pick up a new image (`nginx.conf` is not applied by a process restart).
 
 ---
 
@@ -98,7 +109,7 @@ make php-test      # tests/php/*.php
 
 Portal SPA: `portal/` (Vite). PHP API: `Core/Frameworks/Baikal/Portal/`. Keep `portal/node_modules` owned by your user (root-owned trees break Vite with EACCES on `.vite-temp`).
 
-More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/local.compose.yaml)
+More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/local.compose.yaml) · [upgrade path](docs/upgrade-path.md) · [Admin / YAML plan](docs/admin-settings-yaml.md)
 
 ---
 
