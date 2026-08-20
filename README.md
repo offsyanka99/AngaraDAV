@@ -31,16 +31,12 @@ Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for And
 ## Screenshots
 
 | | |
-|---|---|
 | **Calendar** | **Contacts** |
 | ![Calendar](docs/images/portal-calendar.png) | ![Contacts](docs/images/portal-contacts.png) |
-| *placeholder — `docs/images/portal-calendar.png`* | *placeholder — `docs/images/portal-contacts.png`* |
 | **Tasks** | **Notes** |
 | ![Tasks](docs/images/portal-tasks.png) | ![Notes](docs/images/portal-notes.png) |
-| *placeholder — `docs/images/portal-tasks.png`* | *placeholder — `docs/images/portal-notes.png`* |
 | **Files** | **Administration** |
 | ![Files](docs/images/portal-files.png) | ![Administration](docs/images/portal-admin.png) |
-| *placeholder — `docs/images/portal-files.png`* | *placeholder — `docs/images/portal-admin.png`* |
 
 ---
 
