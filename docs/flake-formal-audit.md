@@ -54,16 +54,10 @@ The Formal HTML form stack is deleted. Installer and portal admin write YAML/SQL
 
 ---
 
-## Dead / unused (safe to ignore until a shrink PR)
+## Dead / unused
 
-| Tree | Role |
-|------|------|
-| `Flake\Controller\*` (`Page`, `HtmlBlock`, `Rpc`, `Cli`) | MVC page renderer; no remaining HTML page uses it |
-| `Flake\Core\Template`, `View`, `Route`, `Util\Router*` | Same |
-| `Flake\Util\Frameworks` + LessPHP phpstan ignores | `Page.php` Less compile; unused |
-| `Core/Frameworks/TwitterBootstrap/` | Linked from leftover `Baikal\Resources\Templates\Page\index.html` |
-| `Baikal\Controller\*`, `Baikal\View\*`, `Baikal\WWWRoot\index.php` | Duplicate/old site chrome; live root is `html/index.php` (redirect) |
-PHPStan (`phpstan.neon`) still ignores `Flake\Core\Exception` (missing) and `Frameworks\LessPHP\Delegate` on `Flake\Controller\Page.php`. Those ignores go away only if that unused `Page` path is deleted.
+Flake MVC, Twitter Bootstrap, leftover `Baikal\Controller`/`View`/`WWWRoot`, and Baikal HTML templates are **deleted** (this branch). Remaining Flake is bootstrap + Database + ORM (`Model`, `Collection`, `Requester`, `Tools`).
+PHPStan LessPHP / `Flake\Core\Exception` ignores for `Page.php` / `Frameworks.php` were removed with that unused path.
 
 Composer autoload still maps `Flake\` to `Core/Frameworks/`.
 
@@ -71,8 +65,8 @@ Composer autoload still maps `Flake\` to `Core/Frameworks/`.
 
 ## How to shrink (not done here)
 
-1. **Formal:** **done** (this branch).
-2. **Flake MVC (M):** delete unused Controller/Template/Router/TwitterBootstrap/Baikal Controller+View+WWWRoot. Keep `Framework::bootstrap`, Database, Model, Collection, Tools.
+1. **Formal:** **done**.
+2. **Flake MVC:** **done** (Page/Router/templates/Twitter Bootstrap/`Baikal\Controller`/`View`).
 3. **Flake bootstrap + ORM (L–XL):** introduce a small `Baikal\Core\Bootstrap` that sets paths + PDO from YAML; rewrite `Baikal\Model\Config\*` and `User::destroy()` to PDO (portal already does most user CRUD that way). Then Flake can go.
 
 Do not change Digest `auth_realm` or `/var/www/baikal` as part of a Flake shrink.

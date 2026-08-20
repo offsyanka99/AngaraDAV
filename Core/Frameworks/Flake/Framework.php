@@ -193,9 +193,6 @@ class Framework extends \Flake\Core\Framework {
         # Include Flake Framework config
         require_once FLAKE_PATH_ROOT . "config.php";
 
-        # Determine Router class
-        $GLOBALS["ROUTER"] = \Flake\Util\Tools::router();
-
         if (!\Flake\Util\Tools::isCliPhp()) {
             ini_set("html_errors", true);
             // Admin session lifetime / secure cookie flags (no-op if Auth class unavailable)
@@ -212,8 +209,6 @@ class Framework extends \Flake\Core\Framework {
 
         setlocale(LC_ALL, FLAKE_LOCALE);
         date_default_timezone_set(FLAKE_TIMEZONE);
-
-        $GLOBALS["TEMPLATESTACK"] = [];
 
         $aUrlInfo = parse_url(PROJECT_URI);
         define("FLAKE_DOMAIN", $_SERVER["HTTP_HOST"]);

@@ -603,10 +603,6 @@ TEST;
 
     ###########
 
-    static function router() {
-        return "\Flake\Util\Router\QuestionMarkRewrite";
-    }
-
     static function arrayIsAssoc($aArray) {
         if (!is_array($aArray)) {
             throw new \Exception("\Flake\Util\Tools::arrayIsAssoc(): parameter has to be an array.");
