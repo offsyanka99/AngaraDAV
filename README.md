@@ -17,7 +17,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.0`, `sha-…`) · linux/
 |----------------------------|-------------|
 | **Calendar** — month / week / agenda, search, share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
 | **Contacts** — address books, search, photos, import/export `.vcf` | CardDAV (`/dav.php/`, `/card.php/`) |
-| **Tasks** — VTODO, subtasks, bulk edit | CalDAV |
+| **Tasks** — VTODO, subtasks, bulk edit, column filters | CalDAV |
 | **Notes** — VJOURNAL with rich text | CalDAV |
 | **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename | WebDAV `/dav.php/files/{username}/` |
 | **Administration** — users, system settings, database (Admin-role DAV users) | `/portal/install/` for setup |

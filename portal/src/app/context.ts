@@ -34,6 +34,7 @@ import type { ConfirmDeleteState } from "./confirmDelete";
 import type { FilesPreviewKind } from "./files/previewKind";
 import type { FilesSort, FilesTypeFilter } from "./files/listing";
 import type { AdminPageId, Flash, TabId } from "./types";
+import { DEFAULT_TASK_FILTERS, type TaskColumnFilters } from "./tasks/listing";
 import { readStoredUserSettings, type UserSettings } from "./userSettings";
 
 export type { FilesPreviewKind };
@@ -194,6 +195,7 @@ export type AppState = {
   userMenuDocClick: ((ev: MouseEvent) => void) | null;
   userSettings: UserSettings;
   userSettingsOpen: boolean;
+  userSettingsError: string | null;
   calendars: Calendar[];
   directory: DirectoryUser[];
   holidayCountries: HolidayCountry[];
@@ -264,6 +266,7 @@ export type AppState = {
   notes: NoteItem[];
   taskCalendars: ItemCalendarOption[];
   noteCalendars: ItemCalendarOption[];
+  taskFilters: TaskColumnFilters;
   taskSearch: string;
   noteSearch: string;
   taskSort: string;
@@ -374,6 +377,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     userMenuDocClick: null,
     userSettings: readStoredUserSettings(),
     userSettingsOpen: false,
+    userSettingsError: null,
     calendars: [],
     directory: [],
     holidayCountries: [],
@@ -439,6 +443,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     notes: [],
     taskCalendars: [],
     noteCalendars: [],
+    taskFilters: { ...DEFAULT_TASK_FILTERS },
     taskSearch: "",
     noteSearch: "",
     taskSort: "due",

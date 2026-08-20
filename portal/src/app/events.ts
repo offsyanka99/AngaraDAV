@@ -185,13 +185,14 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
     case "user-settings": {
       const next = readUserSettingsFromForm(form);
       if ("error" in next) {
-        o.setFlash("error", next.error);
+        o.state.userSettingsError = next.error;
         o.render();
         return;
       }
       persistUserSettings(next, o.state.user?.username ?? null);
       o.state.userSettings = next;
       o.state.userSettingsOpen = false;
+      o.state.userSettingsError = null;
       applyTheme(next.theme);
       o.clearFlash();
       o.render();
@@ -236,6 +237,12 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     return;
   }
   if (action === "files-type-filter") {
+    log.debug("portalEvents.change", { action });
+    void onAction(o, ev);
+    return;
+  }
+  if (action === "task-filter") {
+    ev.stopPropagation();
     log.debug("portalEvents.change", { action });
     void onAction(o, ev);
     return;

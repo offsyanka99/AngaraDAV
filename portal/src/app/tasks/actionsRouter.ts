@@ -3,6 +3,7 @@
  * Owns: sort-task, select/check/bulk, new/subtask/cancel/delete.
  */
 import type { AppOrchestrator } from "../orchestrator";
+import { filterTasks } from "./listing";
 
 /**
  * Handle task actions. Returns true if the action was recognized
@@ -70,9 +71,24 @@ export async function handleTasksAction(
     return true;
   }
 
+  if (action === "task-filter") {
+    if (ev.type !== "change") return true;
+    const col = t.dataset.col ?? "";
+    const value = t instanceof HTMLSelectElement ? t.value : "";
+    if (col === "status" || col === "due" || col === "calendar" || col === "percent") {
+      state.taskFilters = { ...state.taskFilters, [col]: value };
+      const listed = filterTasks(state.tasks, state.taskFilters);
+      const visible = new Set(listed.map((x) => o.itemKey(x.instanceId, x.uri)));
+      state.checkedTaskKeys = state.checkedTaskKeys.filter((k) => visible.has(k));
+    }
+    render();
+    return true;
+  }
+
   if (action === "task-select-all") {
     ev.preventDefault();
-    const writable = state.tasks.filter((x) => x.canWrite && !x.readOnly);
+    const listed = filterTasks(state.tasks, state.taskFilters);
+    const writable = listed.filter((x) => x.canWrite && !x.readOnly);
     const allOn =
       writable.length > 0 &&
       writable.every((x) => state.checkedTaskKeys.includes(o.itemKey(x.instanceId, x.uri)));

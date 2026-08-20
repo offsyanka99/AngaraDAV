@@ -157,6 +157,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.deleteAbConfirmId = null;
   state.eventModalOpen = false;
   state.userSettingsOpen = false;
+  state.userSettingsError = null;
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];
@@ -176,6 +177,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.selectedNoteKey = null;
   state.editingTask = null;
   state.editingNote = null;
+  state.taskFilters = { status: "open", due: "", calendar: "", percent: "" };
   state.creatingTask = false;
   state.creatingNote = false;
   state.checkedTaskKeys = [];

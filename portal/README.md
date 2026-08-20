@@ -7,7 +7,9 @@ TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 
 User tabs follow Admin **DAV services** (CalDAV → Calendar, CardDAV → Contacts,
 Tasks/Notes/Files toggles). Contacts, Tasks, and Notes lists support **↑/↓/Enter**
-keyboard navigation.
+keyboard navigation. Tasks have per-column filters (Status, Due, Calendar, %);
+Status defaults to Open (completed tasks hidden). User settings validation
+errors stay in the settings modal.
 
 ## Module layout
 

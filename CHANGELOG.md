@@ -15,6 +15,10 @@
 - Portal file download/view rate-limited the same way as login.
 - `/health.php` documents `filesStorageReady` / `configWritable` for TrueNAS.
 
+### Portal
+- **User settings:** invalid day start/end (end same as or before start) shows the error **inside the modal**, not as a main-page flash.
+- **Tasks:** column filters (Status, Due, Calendar, %) instead of a Show Done checkbox. Status defaults to **Open** (hides Done). Title is search-only.
+
 ### Operator DX
 - `make local-up` force-recreates `angaradav-local` on **:31088**, waits on `/health.php`.
 - `BAIKAL_SKIP_CHOWN` only skips on `1`/`true`/`yes`; otherwise uid 101 must be able to write or the container exits.

@@ -1,7 +1,7 @@
 /**
  * Per-user portal settings (theme, calendar day range, week numbers).
  */
-import { renderModal } from "../ui.ts";
+import { renderFlash, renderModal } from "../ui.ts";
 import type { AppState } from "./context";
 import { applyTheme, parseTheme, persistTheme, readStoredTheme, type ThemeId } from "./theme.ts";
 
@@ -97,7 +97,11 @@ export function userSettingsModalHtml(state: AppState): string {
   if (!state.userSettingsOpen || !state.user) return "";
   const s = state.userSettings;
   const theme = parseTheme(document.documentElement.getAttribute("data-theme")) ?? s.theme;
+  const err = state.userSettingsError
+    ? renderFlash("error", state.userSettingsError, { role: "alert", className: "user-settings-error" })
+    : "";
   const body = `
+    ${err}
     <div class="stack user-settings-form">
       <fieldset class="user-settings-fieldset">
         <legend>Theme</legend>
@@ -160,5 +164,6 @@ export function readUserSettingsFromForm(form: HTMLFormElement): UserSettings | 
 
 export function closeUserSettings(state: AppState): void {
   state.userSettingsOpen = false;
+  state.userSettingsError = null;
   applyTheme(state.userSettings.theme);
 }

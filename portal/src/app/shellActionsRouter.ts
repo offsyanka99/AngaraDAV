@@ -237,6 +237,7 @@ export async function handleShellAction(
   if (action === "user-settings-open") {
     state.userMenuOpen = false;
     state.userSettingsOpen = true;
+    state.userSettingsError = null;
     render();
     return true;
   }

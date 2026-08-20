@@ -6,11 +6,24 @@ import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
 import { renderSelectionToolbar } from "../selectionToolbar";
 import type { TasksHost } from "./host";
+import { filterTasks, normalizeTaskFilters } from "./listing";
 import {
   parentTaskOptions,
   tasksInTreeOrder,
   writableCheckedTasks,
 } from "./tree";
+
+function taskFilterSelect(
+  col: "status" | "due" | "calendar" | "percent",
+  value: string,
+  options: [string, string][],
+  busy: boolean,
+): string {
+  const opts = options
+    .map(([v, label]) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(label)}</option>`)
+    .join("");
+  return `<select class="task-col-filter" data-action="task-filter" data-col="${col}" aria-label="Filter by ${col}" ${busy ? "disabled" : ""}>${opts}</select>`;
+}
 
 export function renderTasksTab(host: TasksHost): string {
   const statusLabel = (s: string) => {
@@ -22,8 +35,10 @@ export function renderTasksTab(host: TasksHost): string {
     };
     return m[s] || s;
   };
-  const tree = tasksInTreeOrder(host, host.state.tasks);
-  const writableKeys = host.state.tasks
+  const filters = normalizeTaskFilters(host.state.taskFilters);
+  const listed = filterTasks(host.state.tasks, filters);
+  const tree = tasksInTreeOrder(host, listed);
+  const writableKeys = listed
     .filter((t) => t.canWrite && !t.readOnly)
     .map((t) => itemKey(t.instanceId, t.uri));
   const allWritableChecked =
@@ -33,9 +48,13 @@ export function renderTasksTab(host: TasksHost): string {
   const nChecked = checkedWritable.length;
 
   const rows =
-    host.state.tasks.length === 0
+    listed.length === 0
       ? `<tr class="contacts-empty-row"><td colspan="6" class="muted">${
-          host.state.taskSearch ? "No tasks match your search." : "No tasks yet. Add one below."
+          host.state.taskSearch
+            ? "No tasks match your search."
+            : host.state.tasks.length > 0
+              ? "No tasks match these column filters."
+              : "No tasks yet. Add one below."
         }</td></tr>`
       : tree
           .map(({ task: t, depth }) => {
@@ -227,6 +246,42 @@ export function renderTasksTab(host: TasksHost): string {
               ${sortHeader("Due", "due", host.state.taskSort, host.state.taskOrder, "task", "col-task-due")}
               ${sortHeader("Calendar", "calendar", host.state.taskSort, host.state.taskOrder, "task", "col-task-cal")}
               ${sortHeader("%", "percent", host.state.taskSort, host.state.taskOrder, "task", "col-task-pct")}
+            </tr>
+            <tr class="task-filter-row">
+              <th class="col-task-check"></th>
+              <th class="col-task-title"></th>
+              <th class="col-task-status">${taskFilterSelect("status", filters.status, [
+                ["open", "Open"],
+                ["", "All"],
+                ["NEEDS-ACTION", "To do"],
+                ["IN-PROCESS", "In progress"],
+                ["COMPLETED", "Done"],
+                ["CANCELLED", "Cancelled"],
+              ], host.state.busy)}</th>
+              <th class="col-task-due">${taskFilterSelect("due", filters.due, [
+                ["", "All"],
+                ["overdue", "Overdue"],
+                ["today", "Today"],
+                ["upcoming", "Upcoming"],
+                ["none", "No date"],
+              ], host.state.busy)}</th>
+              <th class="col-task-cal">${taskFilterSelect(
+                "calendar",
+                filters.calendar,
+                [
+                  ["", "All"],
+                  ...[...new Set(host.state.tasks.map((t) => t.calendarName).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b))
+                    .map((name) => [name, name] as [string, string]),
+                ],
+                host.state.busy,
+              )}</th>
+              <th class="col-task-pct">${taskFilterSelect("percent", filters.percent, [
+                ["", "All"],
+                ["0", "0%"],
+                ["partial", "1–99%"],
+                ["100", "100%"],
+              ], host.state.busy)}</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>

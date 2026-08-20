@@ -80,7 +80,8 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
     state.filesPreview !== null ||
     state.filesUploadConflict !== null ||
     state.filesUploadProgress !== null ||
-    state.confirmDelete !== null
+    state.confirmDelete !== null ||
+    state.userSettingsOpen
   );
   const flashHtml = flashOnMain ? renderFlashBanner(state) : "";
 
