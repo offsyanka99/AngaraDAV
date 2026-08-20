@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.0 — 2026-08-20
+
+### Platform
+- Removed Formal forms, Flake MVC, and live Flake bootstrap/ORM. DAV, portal, and install boot through `Baikal\Core\Bootstrap` and PDO.
+- PHP **8.5** in the Docker image; Composer `php` **`^8.4`**; CI **8.4 / 8.5 / 8.6** (8.6 CI-only until GA).
+- Symfony YAML and HttpClient **8.1**.
+- Portal: Node **24**, Vite **8.2**, TypeScript **6**.
+- WebDAV-Push: **minishlink/web-push 11** over Symfony HttpClient PSR-18 (Guzzle removed).
+- Images pinned: `composer:2.10.2`, `nginx:1.31.3-trixie`; CI Postgres **18**; GitHub Actions majors updated.
+
+### Security
+- Portal CSP applied on HTML/asset locations (`frame-src 'self' blob:` for PDF preview). Recreate the container after image rebuilds.
+- Portal file download/view rate-limited the same way as login.
+- `/health.php` documents `filesStorageReady` / `configWritable` for TrueNAS.
+
+### Operator DX
+- `make local-up` force-recreates `angaradav-local` on **:31088**, waits on `/health.php`.
+- `BAIKAL_SKIP_CHOWN` only skips on `1`/`true`/`yes`; otherwise uid 101 must be able to write or the container exits.
+- Vite `/api` proxy defaults to `:31088`; `make portal` refuses a root-owned `portal/node_modules`.
+
+### Docs
+- [Upgrade path](docs/upgrade-path.md) (Wave 7 PSR-4 / PHPStan 2 still optional).
+- [Admin-only settings / slim YAML](docs/admin-settings-yaml.md) (plan, not implemented).
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
 ## 2.3.3 — 2026-08-20
 
 ### Notes / CalDAV
