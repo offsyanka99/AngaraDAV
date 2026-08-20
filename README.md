@@ -30,8 +30,6 @@ Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for And
 
 ## Screenshots
 
-Drop PNG/JPEG files on these paths when you have them. GitHub will show the images automatically.
-
 | | |
 |---|---|
 | **Calendar** | **Contacts** |
