@@ -75,13 +75,13 @@ class AdminPassword {
             ini_set('session.gc_maxlifetime', (string) $maxAge);
             ini_set('session.cookie_httponly', '1');
             ini_set('session.use_strict_mode', '1');
-            if (\Flake\Util\Tools::getCurrentProtocol() === 'https') {
+            if (Bootstrap::currentProtocol() === 'https') {
                 ini_set('session.cookie_secure', '1');
             }
             session_set_cookie_params([
                 'lifetime' => 0,
                 'path'     => '/',
-                'secure'   => \Flake\Util\Tools::getCurrentProtocol() === 'https',
+                'secure'   => Bootstrap::currentProtocol() === 'https',
                 'httponly' => true,
                 'samesite' => 'Lax',
             ]);

@@ -48,10 +48,8 @@ if (!file_exists(PROJECT_PATH_ROOT . 'vendor/')) {
 
 require PROJECT_PATH_ROOT . 'vendor/autoload.php';
 
-# Bootstrapping Flake
-\Flake\Framework::bootstrap();
-
-# Bootstrapping Baïkal
+# Bootstrapping AngaraDAV
+\Baikal\Core\Bootstrap::bootstrap();
 \Baikal\Framework::bootstrap();
 
 try {
@@ -69,7 +67,7 @@ $server = new \Baikal\Core\Server(
     false,
     $config['system']["dav_auth_type"],
     $config['system']["auth_realm"],
-    $GLOBALS['DB']->getPDO(),
+    \Baikal\Core\Bootstrap::pdo(),
     PROJECT_BASEURI . 'cal.php/'
 );
 $server->start();

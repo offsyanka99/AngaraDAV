@@ -265,7 +265,7 @@ class App {
     }
 
     /**
-     * Bootstrap Flake/Baikal and return App. PROJECT_PATH_ROOT must already be defined.
+     * Bootstrap AngaraDAV and return App. PROJECT_PATH_ROOT must already be defined.
      */
     public static function bootstrap(): self {
         Auth::startSession();
@@ -274,7 +274,7 @@ class App {
             throw new ApiException('PROJECT_PATH_ROOT not defined', 500);
         }
 
-        \Flake\Framework::bootstrap();
+        \Baikal\Core\Bootstrap::bootstrap();
         \Baikal\Framework::bootstrap();
 
         $configPath = PROJECT_PATH_CONFIG . 'baikal.yaml';
@@ -286,11 +286,11 @@ class App {
             throw new ApiException('Invalid AngaraDAV configuration', 503);
         }
 
-        if (!isset($GLOBALS['DB']) || !is_object($GLOBALS['DB'])) {
+        if (!\Baikal\Core\Bootstrap::isDbInitialized()) {
             throw new ApiException('Database is not available', 503);
         }
 
-        return new self($GLOBALS['DB']->getPDO(), $config);
+        return new self(\Baikal\Core\Bootstrap::pdo(), $config);
     }
 
     public function handle(string $method, string $path): void {

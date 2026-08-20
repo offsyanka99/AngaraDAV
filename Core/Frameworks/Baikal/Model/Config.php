@@ -29,12 +29,11 @@ namespace Baikal\Model;
 
 use Symfony\Component\Yaml\Yaml;
 
-abstract class Config extends \Flake\Core\Model\NoDb {
+abstract class Config {
     protected $sConfigFileSection = "";
     protected $aData = [];
 
     function __construct($sConfigFileSection) {
-        # Note: no call to parent::__construct() to avoid erasing $this->aData
         $this->sConfigFileSection = $sConfigFileSection;
 
         try {
@@ -58,12 +57,22 @@ abstract class Config extends \Flake\Core\Model\NoDb {
         }
     }
 
-    protected function getConfigAsString() {
-        if (file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-            return Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml")[$this->sConfigFileSection];
-        } else {
-            return $this->aData;
+    function get($sPropName) {
+        if (array_key_exists($sPropName, $this->aData)) {
+            return $this->aData[$sPropName];
         }
+
+        throw new \Exception(get_class($this) . '->get(): property ' . htmlspecialchars((string) $sPropName) . ' does not exist');
+    }
+
+    function set($sPropName, $sPropValue) {
+        if (array_key_exists($sPropName, $this->aData)) {
+            $this->aData[$sPropName] = $sPropValue;
+
+            return $this;
+        }
+
+        throw new \Exception(get_class($this) . '->set(): property ' . htmlspecialchars((string) $sPropName) . ' does not exist');
     }
 
     function writable() {
@@ -74,22 +83,6 @@ abstract class Config extends \Flake\Core\Model\NoDb {
 
         // First install: file does not exist yet; directory must be writable.
         return @is_dir(PROJECT_PATH_CONFIG) && @is_writable(PROJECT_PATH_CONFIG);
-    }
-
-    static function icon() {
-        return "icon-cog";
-    }
-
-    static function mediumicon() {
-        return "glyph-cogwheel";
-    }
-
-    static function bigicon() {
-        return "glyph2x-cogwheel";
-    }
-
-    function floating() {
-        return false;
     }
 
     /**
@@ -156,8 +149,5 @@ abstract class Config extends \Flake\Core\Model\NoDb {
         }
         $config[$this->sConfigFileSection] = $this->aData;
         self::writeConfigFile($config);
-    }
-
-    function destroy() {
     }
 }

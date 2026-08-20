@@ -20,13 +20,13 @@ $_SERVER['DOCUMENT_ROOT'] = $_SERVER['DOCUMENT_ROOT'] ?? $root;
 
 require $root . 'vendor/autoload.php';
 
-\Flake\Framework::bootstrap();
+\Baikal\Core\Bootstrap::bootstrap();
 \Baikal\Framework::bootstrap();
 
 $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
 $fileConfig = new FileStorageConfig($config);
 $fileConfig->prepareStorage();
-$pdo = $GLOBALS['DB']->getPDO();
+$pdo = \Baikal\Core\Bootstrap::pdo();
 if (!SchemaManager::exists($pdo)) {
     exit(0);
 }

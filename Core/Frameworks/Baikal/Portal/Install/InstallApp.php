@@ -34,13 +34,10 @@ class InstallApp {
             define('PROJECT_CONTEXT_BASEURI', '/');
         }
 
-        // Portal session cookie for install CSRF (must start before Flake)
+        // Portal session cookie for install CSRF (must start before bootstrap)
         Auth::startSession();
 
-        \Flake\Framework::bootstrap();
-        if (!defined('BAIKALADMIN_PATH_ROOT')) {
-            define('BAIKALADMIN_PATH_ROOT', PROJECT_PATH_ROOT . 'Core/Frameworks/BaikalAdmin/');
-        }
+        \Baikal\Core\Bootstrap::bootstrap();
         \Baikal\Framework::bootstrap();
 
         return new self();

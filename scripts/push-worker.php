@@ -20,7 +20,7 @@ define('PROJECT_PATH_ROOT', $root);
 
 require $root . 'vendor/autoload.php';
 
-\Flake\Framework::bootstrap();
+\Baikal\Core\Bootstrap::bootstrap();
 \Baikal\Framework::bootstrap();
 
 $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
@@ -36,7 +36,7 @@ if ($lockHandle === false || !@chmod($lockPath, 0600) || !@flock($lockHandle, LO
     $logger->warn('push worker not started: another worker holds the lock or lock creation failed');
     exit(0);
 }
-$pdo = $GLOBALS['DB']->getPDO();
+$pdo = \Baikal\Core\Bootstrap::pdo();
 try {
     SchemaManager::ensure($pdo);
 } catch (Throwable $e) {

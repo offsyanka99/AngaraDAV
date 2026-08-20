@@ -2,15 +2,18 @@
 
 namespace Baikal\Portal\Admin;
 
+use Baikal\Core\Files\FileStorageConfig;
+use Baikal\Core\Files\HomeRepository;
+use Baikal\Core\Files\SchemaManager;
 use Baikal\Portal\AdminAuth;
 use Baikal\Portal\ApiException;
 
 /**
  * Admin access to DAV users (read + write).
  *
- * Never returns digesta1 / password fields. Create mirrors Baikal\Model\User
- * (principal + default calendar + default address book). Delete prefers the
- * model destroy() path when Flake DB is available so file-home quarantine runs.
+ * Never returns digesta1 / password fields. Create mirrors the former
+ * Baikal\Model\User persist path (principal + default calendar + address book).
+ * Delete is PDO-only and includes file-home quarantine plus DAV path cleanup.
  */
 class AdminUserService {
     /** Max DAV user password changes per IP per window. */
@@ -323,8 +326,8 @@ class AdminUserService {
     /**
      * Delete a user and cascaded resources.
      *
-     * Requires body/query confirm=true|1. Prefers Baikal\Model\User::destroy()
-     * when Flake DB is initialized so file-home quarantine and full cleanup run.
+     * Requires body/query confirm=true|1. File-home quarantine runs before the
+     * SQL cascade so a principal cannot be reused against the old storage id.
      *
      * @return array{ok: true, username: string}
      */
@@ -349,37 +352,39 @@ class AdminUserService {
         }
         $userId = $this->userIdForUsername($username);
 
-        // Prefer model destroy for full lifecycle (file quarantine, groupmembers, …)
-        if (
-            $userId > 0
-            && isset($GLOBALS['DB'])
-            && is_object($GLOBALS['DB'])
-            && class_exists(\Baikal\Model\User::class)
-        ) {
-            try {
-                $model = new \Baikal\Model\User($userId);
-                $model->destroy();
-
-                return ['ok' => true, 'username' => $username];
-            } catch (\Throwable $e) {
-                // If already gone, treat as success; otherwise fall through to PDO path
-                if (!$this->usernameExists($username)) {
-                    return ['ok' => true, 'username' => $username];
-                }
-                // Continue with PDO cascade below
-            }
-        }
-
+        $this->quarantineFileHome($userId, $username);
         $this->deleteUserViaPdo($username, $userId);
 
         return ['ok' => true, 'username' => $username];
     }
 
+    private function quarantineFileHome(int $userId, string $username): void {
+        if ($userId <= 0) {
+            return;
+        }
+        $principal = 'principals/' . $username;
+        try {
+            if (!SchemaManager::exists($this->pdo)) {
+                return;
+            }
+            $fileConfig = new FileStorageConfig($this->config);
+            $fileConfig->prepareStorage();
+            $homeRepository = new HomeRepository($this->pdo, $fileConfig);
+            $homeRepository->quarantineUser($userId, $principal);
+        } catch (\Throwable $e) {
+            HomeRepository::revokeUserAccess($this->pdo, $userId);
+            error_log('WebDAV file home access was revoked, but physical quarantine failed');
+        }
+    }
+
     /**
-     * PDO cascade when Model is unavailable (unit tests / degraded env).
+     * SQL cascade for calendars, address books, principals, and DAV metadata.
      */
     private function deleteUserViaPdo(string $username, int $userId): void {
         $principal = 'principals/' . $username;
+        $calendarPath = 'calendars/' . $username;
+        $addressBookPath = 'addressbooks/' . $username;
+        $filePath = 'files/' . $username;
 
         try {
             $this->pdo->beginTransaction();
@@ -421,6 +426,27 @@ class AdminUserService {
             $this->tryExec('DELETE FROM schedulingobjects WHERE principaluri = ?', [$principal]);
             $this->tryExec('DELETE FROM calendarsubscriptions WHERE principaluri = ?', [$principal]);
 
+            $this->deleteDavPathPrefix('propertystorage', 'path', $calendarPath);
+            $this->deleteDavPathPrefix('propertystorage', 'path', $addressBookPath);
+            $this->deleteDavPathPrefix('propertystorage', 'path', $filePath);
+            $this->deleteDavPathPrefix('propertystorage', 'path', $principal);
+            $this->deleteDavPathPrefix('locks', 'uri', $filePath);
+
+            $principalId = 0;
+            try {
+                $pid = $this->pdo->prepare('SELECT id FROM principals WHERE uri = ?');
+                $pid->execute([$principal]);
+                $principalId = (int) $pid->fetchColumn();
+            } catch (\Throwable $e) {
+                $principalId = 0;
+            }
+            if ($principalId > 0) {
+                $this->tryExec(
+                    'DELETE FROM groupmembers WHERE principal_id = ? OR member_id = ?',
+                    [$principalId, $principalId]
+                );
+            }
+
             $this->pdo->prepare('DELETE FROM principals WHERE uri = ?')->execute([$principal]);
             $this->pdo->prepare('DELETE FROM users WHERE username = ?')->execute([$username]);
 
@@ -439,6 +465,14 @@ class AdminUserService {
             }
             throw new ApiException('Unable to delete user', 500);
         }
+    }
+
+    private function deleteDavPathPrefix(string $table, string $column, string $prefix): void {
+        $like = str_replace(['=', '%', '_'], ['==', '=%', '=_'], $prefix) . '/%';
+        $this->tryExec(
+            'DELETE FROM ' . $table . ' WHERE ' . $column . ' = ? OR ' . $column . " LIKE ? ESCAPE '='",
+            [$prefix, $like]
+        );
     }
 
     /**

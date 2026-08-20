@@ -28,8 +28,8 @@
 namespace Baikal\Core;
 
 class Tools {
-    static function &db() {
-        return $GLOBALS["pdo"];
+    static function db(): \PDO {
+        return Bootstrap::pdo();
     }
 
     static function assertEnvironmentIsOk() {
@@ -72,14 +72,13 @@ class Tools {
     }
 
     static function assertBaikalIsOk() {
-        # DB connection has not been asserted earlier by Flake, to give us a chance to trigger the install tool
-        # We assert it right now
-        if (!\Flake\Framework::isDBInitialized() && (!defined("BAIKAL_CONTEXT_INSTALL") || BAIKAL_CONTEXT_INSTALL === false)) {
+        # DB connection is optional during install; assert it for normal operation.
+        if (!Bootstrap::isDbInitialized() && (!defined("BAIKAL_CONTEXT_INSTALL") || BAIKAL_CONTEXT_INSTALL === false)) {
             throw new \Exception("<strong>Fatal error</strong>: no connection to a database is available.");
         }
 
         # Asserting that the database is structurally complete
-        #if(($aMissingTables = self::isDBStructurallyComplete($GLOBALS["DB"])) !== TRUE) {
+        #if(($aMissingTables = self::isDBStructurallyComplete(Bootstrap::pdo())) !== TRUE) {
         #	throw new \Exception("<strong>Fatal error</strong>: Database is not structurally complete; missing tables are: <strong>" . implode("</strong>, <strong>", $aMissingTables) . "</strong>");
         #}
 
@@ -188,9 +187,37 @@ class Tools {
         return false;
     }
 
-    static function isDBStructurallyComplete(\Flake\Core\Database $oDB) {
+    /**
+     * @return list<string>
+     */
+    static function listTables(\PDO $pdo): array {
+        $driver = (string) $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $pdo->query("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'");
+        } else {
+            $stmt = $pdo->query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            );
+        }
+        $tables = [];
+        if ($stmt === false) {
+            return $tables;
+        }
+        while (($row = $stmt->fetch(\PDO::FETCH_NUM)) !== false) {
+            $tables[] = (string) $row[0];
+        }
+
+        return $tables;
+    }
+
+    /**
+     * @param \PDO $pdo
+     *
+     * @return true|list<string>
+     */
+    static function isDBStructurallyComplete(\PDO $pdo) {
         $aRequiredTables = self::getRequiredTablesList();
-        $aPresentTables = $oDB->tables();
+        $aPresentTables = self::listTables($pdo);
 
         $aIntersect = array_intersect($aRequiredTables, $aPresentTables);
         if (count($aIntersect) !== count($aRequiredTables)) {

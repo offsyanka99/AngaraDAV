@@ -69,7 +69,7 @@ class SchemaUpgrade {
 
         $this->assertConfigWritable();
 
-        $pdo = $GLOBALS['DB']->getPDO();
+        $pdo = \Baikal\Core\Bootstrap::pdo();
         if (version_compare($sVersionFrom, '0.3.0', '<')) {
             // Upgrading from sabre/dav 1.8 schema to 3.1 schema.
 

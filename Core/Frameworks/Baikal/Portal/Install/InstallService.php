@@ -504,7 +504,7 @@ class InstallService {
         }
 
         // Ensure DB is available for schema migrations
-        if (!isset($GLOBALS['DB']) || !is_object($GLOBALS['DB'])) {
+        if (!\Baikal\Core\Bootstrap::isDbInitialized()) {
             throw new ApiException('Database is not available for upgrade', 503);
         }
 
@@ -656,12 +656,14 @@ class InstallService {
         }
 
         try {
-            $oDb = new \Flake\Core\Database\Sqlite($file);
+            $pdo = new \PDO('sqlite:' . $file, null, null, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            ]);
         } catch (\Throwable $e) {
             throw new ApiException('SQLite connection failed: ' . $e->getMessage(), 400);
         }
 
-        $this->ensureSchema($oDb, 'SQLite');
+        $this->ensureSchema($pdo, 'SQLite');
 
         $model = new \Baikal\Model\Config\Database();
         $model->set('backend', 'sqlite');
@@ -685,12 +687,17 @@ class InstallService {
         }
 
         try {
-            $oDb = new \Flake\Core\Database\Pgsql($host, $dbname, $username, $password);
+            $pdo = new \PDO(
+                'pgsql:host=' . $host . ';dbname=' . $dbname,
+                $username,
+                $password,
+                [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+            );
         } catch (\Throwable $e) {
             throw new ApiException('PostgreSQL connection failed: ' . $e->getMessage(), 400);
         }
 
-        $this->ensureSchema($oDb, 'PgSQL');
+        $this->ensureSchema($pdo, 'PgSQL');
 
         $model = new \Baikal\Model\Config\Database();
         $model->set('backend', 'pgsql');
@@ -705,10 +712,10 @@ class InstallService {
     }
 
     /**
-     * @param \Flake\Core\Database $oDb
+     * @param \PDO $pdo
      */
-    private function ensureSchema($oDb, string $kind): void {
-        $missing = \Baikal\Core\Tools::isDBStructurallyComplete($oDb);
+    private function ensureSchema(\PDO $pdo, string $kind): void {
+        $missing = \Baikal\Core\Tools::isDBStructurallyComplete($pdo);
         if ($missing === true) {
             return;
         }
@@ -733,13 +740,13 @@ class InstallService {
         }
 
         if ($kind === 'PgSQL') {
-            $oDb->getPDO()->exec($sql);
+            $pdo->exec($sql);
         } else {
             foreach (explode(';', $sql) as $query) {
                 if (!trim($query)) {
                     continue;
                 }
-                $oDb->query($query);
+                $pdo->exec($query);
             }
         }
     }

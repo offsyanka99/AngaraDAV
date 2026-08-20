@@ -29,7 +29,7 @@ namespace Baikal;
 
 use Symfony\Component\Yaml\Yaml;
 
-class Framework extends \Flake\Core\Framework {
+class Framework {
     /**
      * Install/upgrade gate. Browser/DAV contexts redirect to the portal installer.
      * Portal JSON API throws ApiException (503) so the SPA can show a message instead of following HTML 302.

@@ -45,6 +45,11 @@ function fresh_pdo(): PDO {
     )');
     $pdo->exec('CREATE TABLE cards (id INTEGER PRIMARY KEY, addressbookid INTEGER, uri TEXT)');
     $pdo->exec('CREATE TABLE addressbookchanges (id INTEGER PRIMARY KEY, uri TEXT, synctoken INTEGER, addressbookid INTEGER, operation INTEGER)');
+    $pdo->exec('CREATE TABLE groupmembers (id INTEGER PRIMARY KEY, principal_id INTEGER, member_id INTEGER)');
+    $pdo->exec('CREATE TABLE propertystorage (id INTEGER PRIMARY KEY, path TEXT, name TEXT)');
+    $pdo->exec('CREATE TABLE locks (id INTEGER PRIMARY KEY, uri TEXT)');
+    $pdo->exec('CREATE TABLE schedulingobjects (id INTEGER PRIMARY KEY, principaluri TEXT)');
+    $pdo->exec('CREATE TABLE calendarsubscriptions (id INTEGER PRIMARY KEY, principaluri TEXT)');
 
     return $pdo;
 }
@@ -211,12 +216,24 @@ try {
     assert_true($e->getStatus() === 400, 'delete without confirm → 400');
 }
 
+$carolPid = (int) $pdo2->query("SELECT id FROM principals WHERE uri='principals/carol'")->fetchColumn();
+$pdo2->exec("INSERT INTO groupmembers (principal_id, member_id) VALUES ($carolPid, $carolPid)");
+$pdo2->exec("INSERT INTO propertystorage (path, name) VALUES ('calendars/carol', 'n'), ('calendars/carol/default', 'n2'), ('addressbooks/carol', 'ab')");
+$pdo2->exec("INSERT INTO locks (uri) VALUES ('files/carol'), ('files/carol/doc.txt')");
+$pdo2->exec("INSERT INTO schedulingobjects (principaluri) VALUES ('principals/carol')");
+$pdo2->exec("INSERT INTO calendarsubscriptions (principaluri) VALUES ('principals/carol')");
+
 $del = $svc2->deleteUser('carol', true);
 assert_true($del['ok'] === true && $del['username'] === 'carol', 'delete ok');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM users WHERE username='carol'")->fetchColumn() === 0, 'user row gone');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM principals WHERE uri='principals/carol'")->fetchColumn() === 0, 'principal gone');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM calendarinstances WHERE principaluri='principals/carol'")->fetchColumn() === 0, 'calendars gone');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM addressbooks WHERE principaluri='principals/carol'")->fetchColumn() === 0, 'addressbooks gone');
+assert_true((int) $pdo2->query('SELECT COUNT(*) FROM groupmembers')->fetchColumn() === 0, 'groupmembers gone');
+assert_true((int) $pdo2->query("SELECT COUNT(*) FROM propertystorage WHERE path = 'calendars/carol' OR path LIKE 'calendars/carol/%'")->fetchColumn() === 0, 'calendar props gone');
+assert_true((int) $pdo2->query("SELECT COUNT(*) FROM locks WHERE uri = 'files/carol' OR uri LIKE 'files/carol/%'")->fetchColumn() === 0, 'file locks gone');
+assert_true((int) $pdo2->query("SELECT COUNT(*) FROM schedulingobjects WHERE principaluri='principals/carol'")->fetchColumn() === 0, 'schedulingobjects gone');
+assert_true((int) $pdo2->query("SELECT COUNT(*) FROM calendarsubscriptions WHERE principaluri='principals/carol'")->fetchColumn() === 0, 'calendarsubscriptions gone');
 
 try {
     $svc2->deleteUser('carol', true);

@@ -55,7 +55,7 @@ class Auth {
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
-        // Harden session handling (admin already does this in Flake; portal may run first)
+        // Harden session handling (Bootstrap also does this; portal may run first)
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
         ini_set('session.cookie_httponly', '1');

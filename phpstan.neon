@@ -8,9 +8,6 @@ parameters:
     - html/res/core/BaikalAdmin/GlyphiconsPro/generate-sprite.php (?)
   ignoreErrors:
     -
-      message: '#Access to undefined constant Flake\\Core\\Model::LABELFIELD.#'
-      path: Core/Frameworks/Flake/Core/Model.php
-    -
       identifier: unset.possiblyHookedProperty
 
 includes:
