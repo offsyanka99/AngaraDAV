@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.3 — 2026-08-20
+
+### Notes / CalDAV
+- **jtx Board rich-text interop:** portal HTML notes store Markdown in `DESCRIPTION` (what jtx Board renders) and keep HTML in `X-ALT-DESC;FMTTYPE=text/html`. Notes that only have Markdown in `DESCRIPTION` (jtx → DAVx⁵) are converted to HTML in the portal editor. Plain text is left unchanged. Re-save existing rich notes in the portal once so `DESCRIPTION` is rewritten.
+
 ## 2.3.2 — 2026-08-20
 
 ### Portal

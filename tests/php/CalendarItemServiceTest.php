@@ -11,6 +11,8 @@ $root = dirname(__DIR__, 2);
 require $root . '/vendor/autoload.php';
 
 use Baikal\Portal\CalendarItemService;
+use Sabre\CalDAV\Backend\PDO as CaldavBackend;
+use Sabre\VObject\Reader;
 
 $failures = 0;
 function assert_true(bool $cond, string $msg): void {
@@ -148,9 +150,32 @@ $htmlNote = $svc->createItem('alice', CalendarItemService::KIND_NOTE, [
 ]);
 assert_true(str_contains((string) $htmlNote['description'], '<strong>team</strong>'), 'html note round-trip');
 assert_true(!str_contains((string) $htmlNote['description'], '<script>'), 'html note strips script');
+$icsRow = $pdo->query('SELECT calendardata FROM calendarobjects WHERE uri = ' . $pdo->quote($htmlNote['uri']))->fetch(PDO::FETCH_ASSOC);
+assert_true(is_array($icsRow) && isset($icsRow['calendardata']), 'rich note stored as calendar object');
+$vcal = Reader::read((string) $icsRow['calendardata'], Reader::OPTION_FORGIVING);
+$journal = $vcal->VJOURNAL;
+$desc = isset($journal->DESCRIPTION) ? (string) $journal->DESCRIPTION : '';
+$alt = '';
+foreach ($journal->select('X-ALT-DESC') as $prop) {
+    if (strtolower((string) ($prop['FMTTYPE'] ?? '')) === 'text/html') {
+        $alt = (string) $prop;
+        break;
+    }
+}
+assert_true(str_contains($desc, '**team**'), 'DESCRIPTION is markdown for jtx Board');
+assert_true(!str_contains($desc, '<strong>'), 'DESCRIPTION is not raw HTML');
+assert_true(str_contains($alt, '<strong>team</strong>'), 'X-ALT-DESC keeps HTML for the portal');
+$vcal->destroy();
 $found = $svc->listItems('alice', CalendarItemService::KIND_NOTE, 'team', 'summary', 'asc');
 assert_true(count($found) >= 1, 'plain-text search matches html note');
 $svc->deleteItem('alice', CalendarItemService::KIND_NOTE, 10, $htmlNote['uri']);
+
+$jtxIcs = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//jtx Board//EN\r\nBEGIN:VJOURNAL\r\nUID:jtx-md-1\r\nDTSTAMP:20260101T000000Z\r\nSUMMARY:From jtx\r\nDESCRIPTION:Hello **team**\r\nEND:VJOURNAL\r\nEND:VCALENDAR\r\n";
+$dav = new CaldavBackend($pdo);
+$dav->createCalendarObject([1, 10], 'jtx-md-1.ics', $jtxIcs);
+$fromJtx = $svc->getItem('alice', CalendarItemService::KIND_NOTE, 10, 'jtx-md-1.ics');
+assert_true(str_contains((string) $fromJtx['description'], '<strong>team</strong>'), 'jtx markdown DESCRIPTION becomes portal HTML');
+$svc->deleteItem('alice', CalendarItemService::KIND_NOTE, 10, 'jtx-md-1.ics');
 $notes = $svc->listItems('alice', CalendarItemService::KIND_NOTE, '', 'summary', 'asc');
 assert_true(count($notes) === 1, 'list one note');
 

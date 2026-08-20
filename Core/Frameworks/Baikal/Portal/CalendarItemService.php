@@ -881,10 +881,8 @@ class CalendarItemService {
     }
 
     /**
-     * @param array<string, mixed> $fields
-     */
-    /**
-     * Store HTML notes as X-ALT-DESC (text/html) plus a plain DESCRIPTION fallback.
+     * Store HTML notes as X-ALT-DESC (text/html) plus Markdown in DESCRIPTION
+     * so jtx Board can render the same formatting (it ignores X-ALT-DESC).
      *
      * @param mixed $comp
      */
@@ -894,55 +892,44 @@ class CalendarItemService {
         if ($description === '') {
             return;
         }
-        $html = $this->sanitizeNoteHtml($description);
-        $plain = $this->htmlToPlain($html);
-        $isHtml = $this->looksLikeHtml($html);
-        if ($isHtml) {
-            $comp->DESCRIPTION = $plain !== '' ? $plain : ' ';
+        $html = NoteDescriptionFormat::sanitize($description);
+        if (NoteDescriptionFormat::looksLikeHtml($html)) {
+            $markdown = NoteDescriptionFormat::htmlToMarkdown($html);
+            $comp->DESCRIPTION = $markdown !== '' ? $markdown : ' ';
             $comp->add('X-ALT-DESC', $html, ['FMTTYPE' => 'text/html']);
-        } else {
-            $comp->DESCRIPTION = $html;
+
+            return;
         }
+        if (NoteDescriptionFormat::looksLikeMarkdown($html)) {
+            $comp->DESCRIPTION = $html;
+            $fromMd = NoteDescriptionFormat::markdownToHtml($html);
+            if ($fromMd !== '') {
+                $comp->add('X-ALT-DESC', $fromMd, ['FMTTYPE' => 'text/html']);
+            }
+
+            return;
+        }
+        $comp->DESCRIPTION = $html;
     }
 
     /**
+     * Prefer HTML X-ALT-DESC (portal / Outlook-style). If a client only stored
+     * Markdown in DESCRIPTION (jtx Board), convert it for the portal editor.
+     *
      * @param mixed $comp
      */
     private function readDescription($comp): string {
+        $altHtml = '';
         foreach ($comp->select('X-ALT-DESC') as $alt) {
             $fmt = strtolower((string) ($alt['FMTTYPE'] ?? ''));
             if ($fmt === 'text/html') {
-                return $this->utf8((string) $alt);
+                $altHtml = $this->utf8((string) $alt);
+                break;
             }
         }
+        $description = $this->utf8(isset($comp->DESCRIPTION) ? (string) $comp->DESCRIPTION : '');
 
-        return $this->utf8(isset($comp->DESCRIPTION) ? (string) $comp->DESCRIPTION : '');
-    }
-
-    private function looksLikeHtml(string $s): bool {
-        return (bool) preg_match('/<[a-z][\s\S]*>/i', $s);
-    }
-
-    private function htmlToPlain(string $html): string {
-        $withBreaks = preg_replace('#</(p|div|h2|h3|li|blockquote)>#i', "\n", $html) ?? $html;
-        $withBreaks = preg_replace('#<br\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
-        $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $text = preg_replace("/[ \t]+/", ' ', $text) ?? $text;
-        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
-
-        return trim($text);
-    }
-
-    private function sanitizeNoteHtml(string $html): string {
-        if (!$this->looksLikeHtml($html)) {
-            return $html;
-        }
-        $html = preg_replace('#<script[\s\S]*?</script>#i', '', $html) ?? $html;
-        $html = preg_replace('#<style[\s\S]*?</style>#i', '', $html) ?? $html;
-        $html = preg_replace('/\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
-        $html = preg_replace('#</?(?:iframe|object|embed|link|meta|form)[^>]*>#i', '', $html) ?? $html;
-
-        return $html;
+        return NoteDescriptionFormat::toPortalHtml($altHtml, $description);
     }
 
     private function applyJournalFields($journal, array $fields, bool $isCreate): void {
@@ -1004,7 +991,7 @@ class CalendarItemService {
     private function matchesQuery(array $item, string $q): bool {
         $hay = mb_strtolower(implode(' ', [
             (string) ($item['summary'] ?? ''),
-            $this->htmlToPlain((string) ($item['description'] ?? '')),
+            NoteDescriptionFormat::htmlToPlain((string) ($item['description'] ?? '')),
             (string) ($item['calendarName'] ?? ''),
             (string) ($item['status'] ?? ''),
         ]));
