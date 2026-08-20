@@ -30,6 +30,7 @@ Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for And
 
 ## Screenshots
 
+| | |
 |---|---|
 | **Calendar** | **Contacts** |
 | ![Calendar](docs/images/portal-calendar.png) | ![Contacts](docs/images/portal-contacts.png) |
