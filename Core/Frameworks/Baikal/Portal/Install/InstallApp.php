@@ -42,9 +42,6 @@ class InstallApp {
             define('BAIKALADMIN_PATH_ROOT', PROJECT_PATH_ROOT . 'Core/Frameworks/BaikalAdmin/');
         }
         \Baikal\Framework::bootstrap();
-        if (class_exists('\\Formal\\Framework')) {
-            \Formal\Framework::bootstrap();
-        }
 
         return new self();
     }

@@ -43,49 +43,6 @@ class Database extends \Baikal\Model\Config {
         parent::__construct("database");
     }
 
-    function formMorphologyForThisModelInstance() {
-        $oMorpho = new \Formal\Form\Morphology();
-
-        $oMorpho->add(new \Formal\Element\Listbox([
-            "prop"       => "backend",
-            "label"      => "Database Backend",
-            "validation" => "required",
-            "options"    => ['sqlite', 'pgsql'],
-            "refreshonchange" => true,
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"       => "sqlite_file",
-            "label"      => "SQLite file path",
-            "validation" => "required",
-            "inputclass" => "input-xxlarge",
-            "help"       => "The absolute server path to the SQLite file",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop" => "pgsql_host",
-            "label" => "PostgreSQL host",
-            "help" => "Host ip or name, including ':portnumber' if port is not the default one",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop" => "pgsql_dbname",
-            "label" => "PostgreSQL database name",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop" => "pgsql_username",
-            "label" => "PostgreSQL username",
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Password([
-            "prop" => "pgsql_password",
-            "label" => "PostgreSQL password",
-        ]));
-
-        return $oMorpho;
-    }
-
     function label() {
         return "AngaraDAV Database Settings";
     }

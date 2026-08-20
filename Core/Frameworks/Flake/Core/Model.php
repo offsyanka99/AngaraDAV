@@ -92,18 +92,6 @@ abstract class Model extends \Flake\Core\FLObject {
         return true;
     }
 
-    function formForThisModelInstance($options = []) {
-        $sClass = get_class($this);
-        $oForm = new \Formal\Form($sClass, $options);
-        $oForm->setModelInstance($this);
-
-        return $oForm;
-    }
-
-    function formMorphologyForThisModelInstance() {
-        throw new \Exception(get_class($this) . ": No form morphology provided for Model.");
-    }
-
     abstract function persist();
 
     abstract function destroy();

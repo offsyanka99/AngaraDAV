@@ -48,8 +48,7 @@
         "psr-0": {
             "BaikalAdmin": "Core/Frameworks/",
             "Baikal": "Core/Frameworks/",
-            "Flake": "Core/Frameworks/",
-            "Formal": "Core/Frameworks/"
+            "Flake": "Core/Frameworks/"
         }
     },
     "support": {

@@ -65,46 +65,6 @@ class AddressBook extends \Flake\Core\Model\Db {
         return $oBaseRequester;
     }
 
-    function formMorphologyForThisModelInstance() {
-        $oMorpho = new \Formal\Form\Morphology();
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"       => "uri",
-            "label"      => "Address Book token ID",
-            "validation" => "required,tokenid",
-            "popover"    => [
-                "title"   => "Address Book token ID",
-                "content" => "The unique identifier for this address book.",
-            ],
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"       => "displayname",
-            "label"      => "Display name",
-            "validation" => "required",
-            "popover"    => [
-                "title"   => "Display name",
-                "content" => "This is the name that will be displayed in your CardDAV client.",
-            ],
-        ]));
-
-        $oMorpho->add(new \Formal\Element\Text([
-            "prop"  => "description",
-            "label" => "Description",
-        ]));
-
-        if ($this->floating()) {
-            $oMorpho->element("uri")->setOption(
-                "help",
-                "Allowed characters are digits, lowercase letters and the dash symbol '-'."
-            );
-        } else {
-            $oMorpho->element("uri")->setOption("readonly", true);
-        }
-
-        return $oMorpho;
-    }
-
     function destroy() {
         $oContacts = $this->getContactsBaseRequester()->execute();
         foreach ($oContacts as $contact) {
