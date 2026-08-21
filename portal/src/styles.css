@@ -374,13 +374,36 @@ a:hover {
 }
 
 .note-editor-body h2 {
-  margin: 0 0 0.5rem;
+  margin: 0.35rem 0 0.45rem;
   font-size: 1.15rem;
+}
+
+.note-editor-body h3 {
+  margin: 0.3rem 0 0.4rem;
+  font-size: 1.02rem;
+}
+
+.note-editor-body blockquote {
+  margin: 0.4rem 0;
+  padding: 0.15rem 0.75rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.note-editor-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.75rem 0;
 }
 
 .note-editor-body ul,
 .note-editor-body ol {
   margin: 0.35rem 0 0.65rem 1.25rem;
+}
+
+.note-editor-body li input[type="checkbox"] {
+  margin-right: 0.4rem;
+  vertical-align: middle;
 }
 
 .page-header-admin {

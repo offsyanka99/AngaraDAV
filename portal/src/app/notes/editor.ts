@@ -15,7 +15,11 @@ export function renderNoteEditor(html: string, readOnly: boolean): string {
         <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="underline" title="Underline"><span style="text-decoration:underline">U</span></button>
         <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
         <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
-        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="formatBlock" data-value="h2" title="Heading">H</button>
+        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="formatBlock" data-value="h2" title="Heading 2">H2</button>
+        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="formatBlock" data-value="h3" title="Heading 3">H3</button>
+        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="formatBlock" data-value="blockquote" title="Blockquote">“</button>
+        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="insertHorizontalRule" title="Horizontal line">―</button>
+        <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="insertCheckbox" title="Checkbox">☐</button>
         <button type="button" class="note-fmt-btn" data-action="note-fmt" data-cmd="createLink" title="Link">Link</button>
       </div>`;
   return `<div class="note-editor">
@@ -53,6 +57,10 @@ export function applyNoteFormat(cmd: string, value?: string): void {
     document.execCommand("createLink", false, href);
   } else if (cmd === "formatBlock") {
     document.execCommand("formatBlock", false, value || "h2");
+  } else if (cmd === "insertHorizontalRule") {
+    document.execCommand("insertHorizontalRule", false);
+  } else if (cmd === "insertCheckbox") {
+    document.execCommand("insertHTML", false, '<ul><li><input type="checkbox"> </li></ul>');
   } else {
     document.execCommand(cmd, false, value);
   }

@@ -18,6 +18,7 @@
 ### Portal
 - **User settings:** invalid day start/end (end same as or before start) shows the error **inside the modal**, not as a main-page flash.
 - **Tasks:** column filters (Status, Due, Calendar, %) instead of a Show Done checkbox. Status defaults to **Open** (hides Done). Title is search-only.
+- **Notes:** jtx Board Markdown interop for **H2/H3**, **blockquote**, **horizontal rule** (`---`), and **checkboxes** (`- [ ]` / `- [x]`) in the rich editor (stored as Markdown in `DESCRIPTION`).
 
 ### Operator DX
 - `make local-up` force-recreates `angaradav-local` on **:31088**, waits on `/health.php`.

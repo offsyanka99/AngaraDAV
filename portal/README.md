@@ -8,8 +8,9 @@ TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 User tabs follow Admin **DAV services** (CalDAV → Calendar, CardDAV → Contacts,
 Tasks/Notes/Files toggles). Contacts, Tasks, and Notes lists support **↑/↓/Enter**
 keyboard navigation. Tasks have per-column filters (Status, Due, Calendar, %);
-Status defaults to Open (completed tasks hidden). User settings validation
-errors stay in the settings modal.
+Status defaults to Open (completed tasks hidden). Notes rich text matches jtx
+Board Markdown (H2/H3, blockquote, `- [ ]` checkboxes, `---`). User settings
+validation errors stay in the settings modal.
 
 ## Module layout
 
@@ -58,7 +59,7 @@ hosts — they do not import `app.ts`.
 | **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month grid; create/edit/delete VEVENT (RRULE); holidays/read-only; large `.ics` import progress modal |
 | **Contacts** | Address books (create/rename/delete with confirm), contact table/search, per-contact CRUD, multi email/phone, photos, birthday/special dates, Unicode custom fields, book + single-contact `.vcf` export; large `.vcf` import progress modal |
 | **Tasks** | CalDAV `VTODO` list (sortable), subtasks via `RELATED-TO;RELTYPE=PARENT`, multi-select bulk status/due/%, create/edit/delete on writable calendars |
-| **Notes** | CalDAV `VJOURNAL` list (sortable), create/edit/delete on writable calendars |
+| **Notes** | CalDAV `VJOURNAL` list (sortable), rich editor (H2/H3, blockquote, checkbox, horizontal line, lists/links) with jtx Board Markdown in `DESCRIPTION` |
 | **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete; upload progress dialog; folder item count; quota bar; same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/` |
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database**. Installer: `/portal/install/`. |
 

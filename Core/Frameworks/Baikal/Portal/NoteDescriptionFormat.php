@@ -14,7 +14,7 @@ final class NoteDescriptionFormat {
     /** @var list<string> */
     private const ALLOWED_TAGS = [
         'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li',
-        'h2', 'h3', 'a', 'blockquote', 'div', 'span',
+        'h2', 'h3', 'a', 'blockquote', 'div', 'span', 'hr', 'input',
     ];
 
     public static function looksLikeHtml(string $s): bool {
@@ -33,6 +33,15 @@ final class NoteDescriptionFormat {
             return true;
         }
         if (preg_match('/^\s{0,3}#{1,3}\s+\S/m', $s) === 1) {
+            return true;
+        }
+        if (preg_match('/^\s{0,3}>\s?\S/m', $s) === 1) {
+            return true;
+        }
+        if (preg_match('/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/m', $s) === 1) {
+            return true;
+        }
+        if (preg_match('/^\s{0,3}[-*+]\s+\[[ xX]\](\s|$)/m', $s) === 1) {
             return true;
         }
         if (preg_match('/^\s{0,3}[-+]\s+\S/m', $s) === 1) {
@@ -59,6 +68,7 @@ final class NoteDescriptionFormat {
 
     public static function htmlToPlain(string $html): string {
         $withBreaks = preg_replace('#</(p|div|h2|h3|li|blockquote)>#i', "\n", $html) ?? $html;
+        $withBreaks = preg_replace('#<hr\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
         $withBreaks = preg_replace('#<br\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
         $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $text = preg_replace("/[ \t]+/", ' ', $text) ?? $text;
@@ -133,6 +143,25 @@ final class NoteDescriptionFormat {
                 $tag = $level === 1 || $level === 2 ? 'h2' : 'h3';
                 $html[] = '<' . $tag . '>' . self::inlineMarkdown(trim($m[2])) . '</' . $tag . '>';
                 ++$i;
+                continue;
+            }
+            if (preg_match('/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/', $line) === 1) {
+                $flushPara();
+                $html[] = '<hr>';
+                ++$i;
+                continue;
+            }
+            if (preg_match('/^\s*[-+*]\s+\[([ xX])\]\s*(.*)$/', $line, $m) === 1) {
+                $flushPara();
+                $items = [];
+                while ($i < $n && preg_match('/^\s*[-+*]\s+\[([ xX])\]\s*(.*)$/', $lines[$i], $m2) === 1) {
+                    $checked = strtolower($m2[1]) === 'x' ? ' checked' : '';
+                    $items[] = '<li><input type="checkbox"' . $checked . '>'
+                        . ($m2[2] !== '' ? ' ' . self::inlineMarkdown($m2[2]) : '')
+                        . '</li>';
+                    ++$i;
+                }
+                $html[] = '<ul>' . implode('', $items) . '</ul>';
                 continue;
             }
             if (preg_match('/^>\s?(.*)$/', $line, $m) === 1) {
@@ -225,6 +254,10 @@ final class NoteDescriptionFormat {
         foreach ($children as $child) {
             if ($child instanceof \DOMElement) {
                 $tag = strtolower($child->tagName);
+                if ($tag === 'input' && strtolower($child->getAttribute('type')) !== 'checkbox') {
+                    $node->removeChild($child);
+                    continue;
+                }
                 if (!in_array($tag, self::ALLOWED_TAGS, true)) {
                     while ($child->firstChild) {
                         $node->insertBefore($child->firstChild, $child);
@@ -246,6 +279,12 @@ final class NoteDescriptionFormat {
             $href = trim($el->getAttribute('href'));
             if ($href !== '' && preg_match('/^(https?:|mailto:|#)/i', $href) === 1) {
                 $keep['href'] = $href;
+            }
+        }
+        if ($tag === 'input') {
+            $keep['type'] = 'checkbox';
+            if ($el->hasAttribute('checked') || $el->getAttribute('checked') !== '') {
+                $keep['checked'] = 'checked';
             }
         }
         $names = [];
@@ -288,6 +327,12 @@ final class NoteDescriptionFormat {
         if ($tag === 'br') {
             return "\n";
         }
+        if ($tag === 'hr') {
+            return "\n\n---\n\n";
+        }
+        if ($tag === 'input') {
+            return '';
+        }
         if ($tag === 'ul' || $tag === 'ol') {
             return "\n\n" . self::listToMarkdown($node, $tag === 'ol') . "\n\n";
         }
@@ -326,11 +371,28 @@ final class NoteDescriptionFormat {
             }
             $text = trim(self::childrenToMarkdown($child));
             $text = preg_replace("/\n+/", "\n  ", $text) ?? $text;
-            $lines[] = $ordered ? ($i . '. ' . $text) : ('- ' . $text);
+            $task = self::listItemCheckboxState($child);
+            if ($task !== null && !$ordered) {
+                $lines[] = '- [' . $task . '] ' . $text;
+            } else {
+                $lines[] = $ordered ? ($i . '. ' . $text) : ('- ' . $text);
+            }
             ++$i;
         }
 
         return implode("\n", $lines);
+    }
+
+    /** @return 'x'|' '|null */
+    private static function listItemCheckboxState(\DOMElement $li): ?string {
+        foreach ($li->childNodes as $child) {
+            if ($child instanceof \DOMElement && strtolower($child->tagName) === 'input'
+                && strtolower($child->getAttribute('type')) === 'checkbox') {
+                return $child->hasAttribute('checked') ? 'x' : ' ';
+            }
+        }
+
+        return null;
     }
 
     private static function linkToMarkdown(\DOMElement $a, string $text): string {

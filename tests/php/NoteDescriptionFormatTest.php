@@ -60,6 +60,31 @@ assert_true($plain === 'Discussed roadmap', 'plain description unchanged');
 $h2 = NoteDescriptionFormat::htmlToMarkdown('<h2>Agenda</h2><p>Talk</p>');
 assert_true(str_contains($h2, '## Agenda'), 'h2 to markdown heading');
 
+$h3md = NoteDescriptionFormat::htmlToMarkdown('<h3>Detail</h3>');
+assert_true(str_contains($h3md, '### Detail'), 'h3 to markdown heading');
+$h3html = NoteDescriptionFormat::markdownToHtml('### Detail');
+assert_true(str_contains($h3html, '<h3>Detail</h3>'), 'markdown ### to h3');
+
+$qmd = NoteDescriptionFormat::htmlToMarkdown('<blockquote>Quoted</blockquote>');
+assert_true(str_contains($qmd, '> Quoted'), 'blockquote to markdown');
+$qhtml = NoteDescriptionFormat::markdownToHtml("> Quoted");
+assert_true(str_contains($qhtml, '<blockquote>'), 'markdown quote to blockquote');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown("> Quoted line"), 'blockquote is markdown');
+
+$hrmd = NoteDescriptionFormat::htmlToMarkdown('<p>A</p><hr><p>B</p>');
+assert_true(str_contains($hrmd, '---'), 'hr to markdown thematic break');
+$hrhtml = NoteDescriptionFormat::markdownToHtml("A\n\n---\n\nB");
+assert_true(str_contains($hrhtml, '<hr>'), 'markdown --- to hr');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown("---"), 'hr is markdown');
+
+$taskMd = NoteDescriptionFormat::markdownToHtml("- [ ] milk\n- [x] bread");
+assert_true(str_contains($taskMd, 'type="checkbox"'), 'task list becomes checkboxes');
+assert_true(substr_count($taskMd, 'checked') === 1, 'checked task keeps checked');
+$taskBack = NoteDescriptionFormat::htmlToMarkdown($taskMd);
+assert_true(str_contains($taskBack, '- [ ] milk'), 'checkbox back to unchecked markdown');
+assert_true(str_contains($taskBack, '- [x] bread'), 'checkbox back to checked markdown');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown('- [ ] buy milk'), 'task list is markdown');
+
 if ($failures > 0) {
     fwrite(STDERR, "\n$failures failure(s)\n");
     exit(1);
