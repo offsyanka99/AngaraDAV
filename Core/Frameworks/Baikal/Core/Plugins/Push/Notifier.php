@@ -73,7 +73,7 @@ class Notifier {
         }
 
         $validated = [];
-        $curlResolve = [];
+        $resolve = [];
         foreach ($subscriptions as $sub) {
             $endpoint = (string) $sub['push_resource'];
             $pin = $this->validator->connectionPin($endpoint);
@@ -84,8 +84,7 @@ class Notifier {
                 ]);
                 continue;
             }
-            $address = str_contains($pin['address'], ':') ? '[' . $pin['address'] . ']' : $pin['address'];
-            $curlResolve[$pin['host']] = $pin['host'] . ':443:' . $address;
+            $resolve[$pin['host']] = $pin['address'];
             $validated[] = $sub;
         }
         if ($validated === []) {
@@ -102,7 +101,7 @@ class Notifier {
                     ],
                 ],
                 ['TTL' => 3600, 'urgency' => $urgency, 'topic' => $topicHeader],
-                $this->psr18Client(array_values($curlResolve))
+                $this->psr18Client($resolve)
             );
         } catch (\Throwable $e) {
             $this->logger->error('web push init failed', ['error' => $e->getMessage()]);
@@ -168,26 +167,34 @@ class Notifier {
     }
 
     /**
-     * PSR-18 client with DNS pin (CURLOPT_RESOLVE) so delivery cannot follow a
+     * Symfony HttpClient defaults for Web Push (no Guzzle extra.curl).
+     *
+     * `proxy` => '' disables env HTTP(S)_PROXY so delivery cannot be steered
+     * after SubscriptionValidator pinned a public IP. `resolve` is host => IP.
+     *
+     * @param array<string, string> $hostToIp
+     *
+     * @return array<string, mixed>
+     */
+    public static function httpClientOptions(array $hostToIp): array {
+        return [
+            'timeout'               => 10,
+            'max_duration'          => 10,
+            'max_connect_duration'  => 5,
+            'max_redirects'         => 0,
+            'proxy'                 => '',
+            'resolve'               => $hostToIp,
+        ];
+    }
+
+    /**
+     * PSR-18 client with DNS pin (`resolve`) so delivery cannot follow a
      * re-resolved host after SubscriptionValidator has locked the IP.
      *
-     * @param list<string> $curlResolve host:port:address entries
+     * @param array<string, string> $hostToIp
      */
-    private function psr18Client(array $curlResolve): ClientInterface {
-        $http = HttpClient::create([
-            'timeout'       => 10,
-            'max_duration'  => 10,
-            'max_redirects' => 0,
-            'extra'         => [
-                'curl' => [
-                    CURLOPT_CONNECTTIMEOUT => 5,
-                    CURLOPT_PROXY          => '',
-                    CURLOPT_RESOLVE        => $curlResolve,
-                ],
-            ],
-        ]);
-
-        return new Psr18Client($http);
+    private function psr18Client(array $hostToIp): ClientInterface {
+        return new Psr18Client(HttpClient::create(self::httpClientOptions($hostToIp)));
     }
 
     /**

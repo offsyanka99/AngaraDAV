@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.2 — 2026-08-26
+
+### WebDAV-Push
+- Symfony HttpClient 8 rejects Guzzle `extra.curl` `CURLOPT_*`. Push delivery now uses `max_connect_duration`, empty `proxy` (ignore env proxies), and `resolve` for the DNS pin. Fixes `Cannot set "CURLOPT_CONNECTTIMEOUT" with "extra.curl"`.
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
 ## 2.4.1 — 2026-08-26
 
 ### Portal

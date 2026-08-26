@@ -384,6 +384,26 @@ assert_true(
     'send with no subscriptions returns a successful empty result'
 );
 
+$opts = Notifier::httpClientOptions(['fcm.googleapis.com' => '8.8.8.8']);
+assert_true(($opts['max_connect_duration'] ?? null) == 5, 'connect timeout is max_connect_duration');
+assert_true(($opts['proxy'] ?? null) === '', 'empty proxy disables env HTTP(S)_PROXY');
+assert_true(($opts['resolve']['fcm.googleapis.com'] ?? '') === '8.8.8.8', 'DNS pin is host => IP');
+assert_true(!isset($opts['extra']['curl']), 'no Guzzle extra.curl CURLOPT map');
+if (class_exists(\Symfony\Component\HttpClient\HttpClient::class)) {
+    try {
+        $client = \Symfony\Component\HttpClient\HttpClient::create($opts);
+        $client->request('GET', 'https://fcm.googleapis.com/', ['timeout' => 0.01, 'max_duration' => 0.01]);
+        assert_true(true, 'HttpClient accepts push options without extra.curl');
+    } catch (\Symfony\Component\HttpClient\Exception\InvalidArgumentException $e) {
+        assert_true(false, 'HttpClient rejects push options: ' . $e->getMessage());
+    } catch (\Throwable $e) {
+        assert_true(
+            !str_contains($e->getMessage(), 'extra.curl'),
+            'HttpClient transport error is not extra.curl: ' . $e->getMessage()
+        );
+    }
+}
+
 // --- Shared calendar fan-out: expand + enqueue for owner + sharee paths ---
 $pdo->exec(
     'CREATE TABLE IF NOT EXISTS calendarinstances (

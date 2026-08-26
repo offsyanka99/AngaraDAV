@@ -8,7 +8,7 @@ export const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 export const CAL_SELECTION_STORAGE_KEY = "angaradav-portal-cal-selection";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-export const APP_VERSION_FALLBACK = "2.4.1";
+export const APP_VERSION_FALLBACK = "2.4.2";
 
 export function splitAppVersion(full: string): { version: string; build: string } {
   const v = (full || APP_VERSION_FALLBACK).trim();

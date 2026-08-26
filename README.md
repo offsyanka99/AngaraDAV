@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.4.1 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
+**Version:** 2.4.2 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.1`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.2`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 

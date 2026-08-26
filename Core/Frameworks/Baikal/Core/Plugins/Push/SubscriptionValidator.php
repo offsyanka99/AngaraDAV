@@ -76,9 +76,10 @@ class SubscriptionValidator {
     }
 
     /**
-     * Resolve and revalidate immediately before connecting, then return a cURL
+     * Resolve and revalidate immediately before connecting, then return a
      * host/IP pin. The caller keeps the original hostname for TLS SNI and
-     * certificate verification, while CURLOPT_RESOLVE prevents DNS rebinding.
+     * certificate verification, while Symfony HttpClient `resolve` prevents
+     * DNS rebinding.
      *
      * @return array{host: string, address: string}|null
      */
@@ -103,7 +104,7 @@ class SubscriptionValidator {
         // Prefer IPv4: many hosts have broken/absent outbound IPv6 routing, and
         // a lexical string sort would otherwise pick an IPv6 literal first
         // (e.g. "2001:..." < "216.239...") with no Happy-Eyeballs fallback once
-        // CURLOPT_RESOLVE pins the connection to it.
+        // the HttpClient `resolve` pin locks the connection to it.
         $v4 = array_values(array_filter($addresses, static function ($a) {
             return filter_var($a, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
         }));
