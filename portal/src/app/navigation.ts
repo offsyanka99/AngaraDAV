@@ -76,6 +76,16 @@ export async function activateTab(
   if (tab !== "contacts") {
     state.deleteAbConfirmId = null;
   }
+  if (tab !== "notes") {
+    state.noteModalOpen = false;
+    state.creatingNote = false;
+    state.editingNote = null;
+  }
+  if (tab !== "tasks") {
+    state.taskModalOpen = false;
+    state.creatingTask = false;
+    state.editingTask = null;
+  }
   if (opts.clearFlash !== false) clearFlash();
   state.busy = true;
   render();

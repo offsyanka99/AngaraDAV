@@ -180,6 +180,8 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.taskFilters = { status: "open", due: "", calendar: "", percent: "" };
   state.creatingTask = false;
   state.creatingNote = false;
+  state.taskModalOpen = false;
+  state.noteModalOpen = false;
   state.checkedTaskKeys = [];
   state.checkedNoteKeys = [];
   state.checkedContactUris = [];

@@ -1,13 +1,89 @@
 /** Notes tab UI (Phase 7). */
-import { esc } from "../../ui";
+import { esc, renderModal } from "../../ui";
 import { toLocalInputValue } from "../datetime";
+import { renderFlashBanner } from "../flash";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
-import { renderSelectionToolbar } from "../selectionToolbar";
+import { renderListToolbar } from "../selectionToolbar";
 import { renderNoteEditor } from "./editor";
 import { notePlainText } from "./html";
 import type { NotesHost } from "./host";
+
+function renderNoteModal(host: NotesHost): string {
+  if (!host.state.noteModalOpen || !host.state.editingNote) return "";
+  const n = host.state.editingNote;
+  const creating = host.state.creatingNote;
+  const readOnly = !!(n.readOnly && !creating);
+  const canWrite = creating || n.canWrite;
+  const calOpts = host.state.noteCalendars
+    .map(
+      (c) =>
+        `<option value="${c.id}" ${n.instanceId === c.id ? "selected" : ""}>${esc(c.displayname)}</option>`,
+    )
+    .join("");
+  const footer = [
+    ...(!creating && n.canWrite
+      ? [
+          {
+            label: "Delete",
+            action: "delete-note",
+            variant: "danger" as const,
+            disabled: host.state.busy,
+          },
+        ]
+      : []),
+    { label: creating ? "Cancel" : "Close", action: "cancel-note", variant: "ghost" as const },
+    ...(canWrite
+      ? [
+          {
+            label: creating ? "Create note" : "Save note",
+            type: "submit" as const,
+            variant: "primary" as const,
+            disabled: host.state.busy,
+          },
+        ]
+      : []),
+  ];
+  return renderModal({
+    id: "note-edit-modal",
+    title: creating ? "New note" : "Edit note",
+    titleId: "note-modal-title",
+    closeAction: "cancel-note",
+    size: "wide",
+    cardClassName: "note-edit-modal-card",
+    form: true,
+    formAttrs: 'data-form="note"',
+    body: `${renderFlashBanner(host.state)}
+            ${
+              creating
+                ? `<label>Calendar
+                    <select name="instanceId" required ${host.state.noteCalendars.length === 0 ? "disabled" : ""}>
+                      <option value="">${host.state.noteCalendars.length ? "Select calendar…" : "No writable calendars"}</option>
+                      ${calOpts}
+                    </select>
+                  </label>`
+                : `<p class="muted small">Calendar: <strong>${esc(n.calendarName)}</strong>${n.readOnly ? " · read-only" : ""}</p>`
+            }
+            <label>Title
+              <input type="text" name="summary" required maxlength="500" value="${esc(n.summary)}" ${readOnly ? "readonly" : ""} />
+            </label>
+            ${host.renderPortalDateTimeField({
+              field: "dtstart",
+              name: "dtstart",
+              label: "Date",
+              value: toLocalInputValue(n.dtstart),
+              dateOnly: false,
+              disabled: readOnly,
+              allowClear: true,
+            })}
+            <div class="field">
+              <span>Body</span>
+              ${renderNoteEditor(n.description, readOnly)}
+            </div>`,
+    footer,
+  });
+}
 
 export function renderNotesTab(host: NotesHost): string {
   const writableKeys = host.state.notes
@@ -18,23 +94,32 @@ export function renderNotesTab(host: NotesHost): string {
     writableKeys.length > 0 && writableKeys.every((k) => host.state.checkedNoteKeys.includes(k));
   const someChecked = host.state.checkedNoteKeys.length > 0 && !allWritableChecked;
   const skipped = host.state.checkedNoteKeys.length - nChecked;
-  const toolbarActions =
-    host.state.checkedNoteKeys.length > 0
-      ? renderSelectionToolbar({
-          count: nChecked,
-          extra: skipped > 0 ? `(${skipped} read-only skipped)` : undefined,
-          busy: host.state.busy,
-          clearAction: "note-clear-selection",
-          actionsHtml: `
+  const toolbar = renderListToolbar({
+    searchAction: "note-search",
+    searchPlaceholder: "Search notes…",
+    searchValue: host.state.noteSearch,
+    searchAria: "Search notes",
+    busy: host.state.busy,
+    addAction: "new-note",
+    addLabel: "Add note",
+    addDisabled: host.state.noteCalendars.length === 0,
+    selection:
+      host.state.checkedNoteKeys.length > 0
+        ? {
+            count: nChecked,
+            extra: skipped > 0 ? `(${skipped} read-only skipped)` : undefined,
+            clearAction: "note-clear-selection",
+            actionsHtml: `
             <button type="button" class="btn btn-ghost btn-small" data-action="note-bulk-copy" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Copy</button>
             <button type="button" class="btn btn-small btn-danger" data-action="note-bulk-delete" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Delete</button>`,
-        })
-      : `<button type="button" class="btn btn-primary" data-action="new-note" ${host.state.busy || host.state.noteCalendars.length === 0 ? "disabled" : ""}>Add note</button>`;
+          }
+        : null,
+  });
 
   const rows =
     host.state.notes.length === 0
       ? `<tr class="contacts-empty-row"><td colspan="4" class="muted">${
-          host.state.noteSearch ? "No notes match your search." : "No notes yet. Add one below."
+          host.state.noteSearch ? "No notes match your search." : "No notes yet. Use Add note."
         }</td></tr>`
       : host.state.notes
           .map((n) => {
@@ -59,74 +144,18 @@ export function renderNotesTab(host: NotesHost): string {
           })
           .join("");
 
-  const n = host.state.editingNote;
-  const calOpts = host.state.noteCalendars
-    .map(
-      (c) =>
-        `<option value="${c.id}" ${n && n.instanceId === c.id ? "selected" : ""}>${esc(c.displayname)}</option>`,
-    )
-    .join("");
-  const form =
-    n
-      ? `<div class="card">
-          ${infoTitle(host.state.creatingNote ? "New note" : "Edit note", "notes")}
-          <form class="stack" data-form="note" style="margin-top:1rem">
-            ${
-              host.state.creatingNote
-                ? `<label>Calendar
-                    <select name="instanceId" required ${host.state.noteCalendars.length === 0 ? "disabled" : ""}>
-                      <option value="">${host.state.noteCalendars.length ? "Select calendar…" : "No writable calendars"}</option>
-                      ${calOpts}
-                    </select>
-                  </label>`
-                : `<p class="muted small">Calendar: <strong>${esc(n.calendarName)}</strong>${n.readOnly ? " · read-only" : ""}</p>`
-            }
-            <label>Title
-              <input type="text" name="summary" required maxlength="500" value="${esc(n.summary)}" ${n.readOnly && !host.state.creatingNote ? "readonly" : ""} />
-            </label>
-            ${host.renderPortalDateTimeField({
-              field: "dtstart",
-              name: "dtstart",
-              label: "Date",
-              value: toLocalInputValue(n.dtstart),
-              dateOnly: false,
-              disabled: !!(n.readOnly && !host.state.creatingNote),
-              allowClear: true,
-            })}
-            <label>Body
-              ${renderNoteEditor(n.description, !!(n.readOnly && !host.state.creatingNote))}
-            </label>
-            <div class="form-actions-row">
-              ${
-                host.state.creatingNote || n.canWrite
-                  ? `<button type="submit" class="btn btn-primary" ${host.state.busy ? "disabled" : ""}>${host.state.creatingNote ? "Create note" : "Save note"}</button>`
-                  : ""
-              }
-              ${
-                !host.state.creatingNote && n.canWrite
-                  ? `<button type="button" class="btn btn-danger" data-action="delete-note" ${host.state.busy ? "disabled" : ""}>Delete</button>`
-                  : host.state.creatingNote
-                    ? `<button type="button" class="btn btn-ghost" data-action="cancel-note">Cancel</button>`
-                    : ""
-              }
-            </div>
-          </form>
-        </div>`
-      : `<div class="card"><p class="muted">Select a note or click <strong>Add note</strong>.</p></div>`;
-
   return `<div class="portal-grid portal-grid-items">
     <section class="card contacts-main-card items-list-card">
-      ${infoTitle("Notes", "notes")}
-      <div class="contact-toolbar" style="margin-top:0.75rem">
-        <input type="search" data-action="note-search" placeholder="Search notes…" value="${esc(host.state.noteSearch)}" aria-label="Search notes" ${host.state.busy ? "disabled" : ""} />
-        ${toolbarActions}
+      <div class="files-head">
+        ${infoTitle("Notes", "notes", "h1")}
       </div>
+      ${toolbar}
       ${
         host.state.noteCalendars.length === 0
           ? `<p class="muted small" style="margin-top:0.75rem">No writable calendars with notes (VJOURNAL) enabled. Enable Notes in Admin settings and ensure calendars include VJOURNAL.</p>`
           : ""
       }
-      <div class="contacts-table-wrap items-table-wrap" style="margin-top:0.75rem">
+      <div class="contacts-table-wrap contacts-table-wrap-tall items-table-wrap">
         <table class="contacts-table">
           <thead>
             <tr>
@@ -134,7 +163,7 @@ export function renderNotesTab(host: NotesHost): string {
                 <input type="checkbox" data-action="note-select-all" aria-label="Select all writable notes"
                   ${allWritableChecked ? "checked" : ""}
                   ${someChecked ? "data-indeterminate=1" : ""}
-                  ${writableKeys.length === 0 || host.state.busy ? "disabled" : ""} />
+                  ${host.state.notes.length === 0 || host.state.busy ? "disabled" : ""} />
               </th>
               ${sortHeader("Title", "summary", host.state.noteSort, host.state.noteOrder, "note", "col-note-title")}
               ${sortHeader("Date", "dtstart", host.state.noteSort, host.state.noteOrder, "note", "col-note-date")}
@@ -144,11 +173,8 @@ export function renderNotesTab(host: NotesHost): string {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      <p class="muted small contacts-main-hint">Select a note to edit, or use <strong>Add note</strong>.</p>
     </section>
-    <section class="stack items-edit-panel">
-      ${form}
-    </section>
+    ${renderNoteModal(host)}
   </div>`;
 }
-
-/** Full re-render replaces DOM and would reset scroll; capture/restore so list clicks stay put. */

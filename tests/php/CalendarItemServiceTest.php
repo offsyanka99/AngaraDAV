@@ -142,6 +142,7 @@ $note = $svc->createItem('alice', CalendarItemService::KIND_NOTE, [
     'description' => 'Discussed roadmap',
 ]);
 assert_true($note['summary'] === 'Meeting notes', 'create note');
+assert_true($note['dtstart'] === null, 'create note without date leaves dtstart empty');
 
 $htmlNote = $svc->createItem('alice', CalendarItemService::KIND_NOTE, [
     'instanceId'  => 10,

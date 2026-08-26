@@ -14,7 +14,8 @@ final class NoteDescriptionFormat {
     /** @var list<string> */
     private const ALLOWED_TAGS = [
         'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li',
-        'h2', 'h3', 'a', 'blockquote', 'div', 'span', 'hr', 'input',
+        'h1', 'h2', 'h3', 'a', 'blockquote', 'div', 'span', 'hr', 'input',
+        'del', 's', 'strike', 'code',
     ];
 
     public static function looksLikeHtml(string $s): bool {
@@ -30,6 +31,12 @@ final class NoteDescriptionFormat {
             return false;
         }
         if (preg_match('/\*\*[^*\n]+\*\*|__[^_\n]+__/', $s) === 1) {
+            return true;
+        }
+        if (preg_match('/~~[^~\n]+~~/', $s) === 1) {
+            return true;
+        }
+        if (preg_match('/`[^`]+`/', $s) === 1) {
             return true;
         }
         if (preg_match('/^\s{0,3}#{1,3}\s+\S/m', $s) === 1) {
@@ -67,7 +74,7 @@ final class NoteDescriptionFormat {
     }
 
     public static function htmlToPlain(string $html): string {
-        $withBreaks = preg_replace('#</(p|div|h2|h3|li|blockquote)>#i', "\n", $html) ?? $html;
+        $withBreaks = preg_replace('#</(p|div|h1|h2|h3|li|blockquote)>#i', "\n", $html) ?? $html;
         $withBreaks = preg_replace('#<hr\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
         $withBreaks = preg_replace('#<br\s*/?>#i', "\n", $withBreaks) ?? $withBreaks;
         $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -140,7 +147,7 @@ final class NoteDescriptionFormat {
             if (preg_match('/^(#{1,3})\s+(.*)$/', $line, $m) === 1) {
                 $flushPara();
                 $level = strlen($m[1]);
-                $tag = $level === 1 || $level === 2 ? 'h2' : 'h3';
+                $tag = $level === 1 ? 'h1' : ($level === 2 ? 'h2' : 'h3');
                 $html[] = '<' . $tag . '>' . self::inlineMarkdown(trim($m[2])) . '</' . $tag . '>';
                 ++$i;
                 continue;
@@ -330,6 +337,11 @@ final class NoteDescriptionFormat {
         if ($tag === 'hr') {
             return "\n\n---\n\n";
         }
+        if ($tag === 'code') {
+            $text = trim($node->textContent ?? '');
+
+            return $text === '' ? '' : '`' . str_replace('`', '', $text) . '`';
+        }
         if ($tag === 'input') {
             return '';
         }
@@ -342,7 +354,9 @@ final class NoteDescriptionFormat {
         return match ($tag) {
             'strong', 'b' => $trim === '' ? '' : '**' . $trim . '**',
             'em', 'i' => $trim === '' ? '' : '*' . $trim . '*',
+            'del', 's', 'strike' => $trim === '' ? '' : '~~' . $trim . '~~',
             'u' => $inner,
+            'h1' => "\n\n# " . $trim . "\n\n",
             'h2' => "\n\n## " . $trim . "\n\n",
             'h3' => "\n\n### " . $trim . "\n\n",
             'p', 'div' => "\n\n" . $trim . "\n\n",
@@ -435,6 +449,8 @@ final class NoteDescriptionFormat {
             },
             $s
         ) ?? $s;
+        $s = preg_replace('/`([^`]+)`/', '<code>$1</code>', $s) ?? $s;
+        $s = preg_replace('/~~([^~\n]+)~~/', '<del>$1</del>', $s) ?? $s;
         $s = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $s) ?? $s;
         $s = preg_replace('/__(.+?)__/s', '<strong>$1</strong>', $s) ?? $s;
         $s = preg_replace('/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/s', '<em>$1</em>', $s) ?? $s;

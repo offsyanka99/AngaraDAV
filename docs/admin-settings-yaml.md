@@ -28,7 +28,7 @@ DAV and PHP need these before anyone logs in:
 
 ```yaml
 system:
-  configured_version: "2.4.0"     # upgrade gate
+  configured_version: "2.4.1"     # upgrade gate
   admin_passwordhash: "$2y$…"     # installer + Reset-to-Default
   auth_realm: BaikalDAV           # Digest A1 contract — read-only in Admin
 database:

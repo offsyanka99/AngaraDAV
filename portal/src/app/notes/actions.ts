@@ -55,6 +55,7 @@ export async function runBulkNoteAction(host: NotesHost, op: "copy" | "delete"):
         host.state.selectedNoteKey = null;
         host.state.editingNote = null;
         host.state.creatingNote = false;
+        host.state.noteModalOpen = false;
       }
     }
     await loadNotes(host);
@@ -88,6 +89,9 @@ export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
   const description = sanitizeNoteHtml(String(fd.get("description") ?? "").trim());
   const dtLocal = String(fd.get("dtstart") ?? "").trim();
   const dtstart = dtLocal ? new Date(dtLocal).toISOString() : null;
+  if (host.state.editingNote) {
+    host.state.editingNote = { ...host.state.editingNote, summary, description, dtstart };
+  }
   host.state.busy = true;
   host.clearFlash();
   host.render();
@@ -105,7 +109,8 @@ export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
       });
       host.state.creatingNote = false;
       host.state.selectedNoteKey = itemKey(res.note.instanceId, res.note.uri);
-      host.state.editingNote = res.note;
+      host.state.editingNote = null;
+      host.state.noteModalOpen = false;
       host.setFlash("success", entityFlash("Note", res.note.summary || summary, "created"));
     } else if (host.state.editingNote) {
       const res = await api.updateNote(host.state.editingNote.instanceId, host.state.editingNote.uri, {
@@ -113,7 +118,8 @@ export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
         description,
         dtstart,
       });
-      host.state.editingNote = res.note;
+      host.state.editingNote = null;
+      host.state.noteModalOpen = false;
       host.state.selectedNoteKey = itemKey(res.note.instanceId, res.note.uri);
       host.setFlash("success", entityFlash("Note", res.note.summary || summary, "saved"));
     }

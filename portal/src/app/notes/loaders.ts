@@ -14,6 +14,9 @@ export async function loadNotes(host: NotesHost) {
     !host.state.notes.some((n) => `${n.instanceId}|${n.uri}` === host.state.selectedNoteKey)
   ) {
     host.state.selectedNoteKey = null;
-    if (!host.state.creatingNote) host.state.editingNote = null;
+    if (!host.state.creatingNote) {
+      host.state.editingNote = null;
+      host.state.noteModalOpen = false;
+    }
   }
 }

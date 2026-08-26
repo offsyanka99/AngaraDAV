@@ -279,6 +279,8 @@ export type AppState = {
   editingNote: NoteItem | null;
   creatingTask: boolean;
   creatingNote: boolean;
+  taskModalOpen: boolean;
+  noteModalOpen: boolean;
   checkedTaskKeys: string[];
   checkedNoteKeys: string[];
   checkedContactUris: string[];
@@ -456,6 +458,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     editingNote: null,
     creatingTask: false,
     creatingNote: false,
+    taskModalOpen: false,
+    noteModalOpen: false,
     checkedTaskKeys: [],
     checkedNoteKeys: [],
     checkedContactUris: [],

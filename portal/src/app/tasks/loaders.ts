@@ -14,6 +14,9 @@ export async function loadTasks(host: TasksHost) {
     !host.state.tasks.some((t) => `${t.instanceId}|${t.uri}` === host.state.selectedTaskKey)
   ) {
     host.state.selectedTaskKey = null;
-    if (!host.state.creatingTask) host.state.editingTask = null;
+    if (!host.state.creatingTask) {
+      host.state.editingTask = null;
+      host.state.taskModalOpen = false;
+    }
   }
 }

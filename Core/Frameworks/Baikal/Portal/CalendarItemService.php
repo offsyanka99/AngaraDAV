@@ -942,11 +942,7 @@ class CalendarItemService {
                 } catch (\Throwable $e) {
                     throw new ApiException('Invalid note date', 400);
                 }
-            } elseif ($isCreate) {
-                $journal->DTSTART = new \DateTime('now', new \DateTimeZone('UTC'));
             }
-        } elseif ($isCreate && !isset($journal->DTSTART)) {
-            $journal->DTSTART = new \DateTime('now', new \DateTimeZone('UTC'));
         }
     }
 

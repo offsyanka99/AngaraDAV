@@ -114,6 +114,8 @@ export function renderHome(o: AppOrchestrator): void {
       state.deleteAbConfirmId !== null ||
       state.eventModalOpen ||
       state.contactModalOpen ||
+      state.noteModalOpen ||
+      state.taskModalOpen ||
       state.abModalOpen ||
       state.importProgress !== null ||
       state.filesUploadProgress !== null ||

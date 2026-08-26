@@ -72,6 +72,8 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
     state.deleteAbConfirmId !== null ||
     state.eventModalOpen ||
     state.contactModalOpen ||
+    state.noteModalOpen ||
+    state.taskModalOpen ||
     state.abModalOpen ||
     state.filesRenamePath !== null ||
     state.filesDeletePaths !== null ||

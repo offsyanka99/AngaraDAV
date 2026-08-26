@@ -84,6 +84,7 @@ function focusOpenModal(root: HTMLElement): void {
 function restoreListKeyboardFocus(o: AppOrchestrator): void {
   const { state, root } = o;
   if (!state.listKeyboardFocus) return;
+  if (state.contactModalOpen || state.noteModalOpen || state.taskModalOpen) return;
   if (state.activeTab !== "contacts" && state.activeTab !== "tasks" && state.activeTab !== "notes") {
     return;
   }

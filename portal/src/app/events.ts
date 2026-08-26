@@ -523,7 +523,9 @@ function onRootKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   }
 
   const tab = o.state.activeTab;
-  const onListTab = tab === "contacts" || tab === "tasks" || tab === "notes";
+  const modalOpen =
+    o.state.contactModalOpen || o.state.noteModalOpen || o.state.taskModalOpen || o.state.eventModalOpen;
+  const onListTab = !modalOpen && (tab === "contacts" || tab === "tasks" || tab === "notes");
   const inSearch =
     target instanceof HTMLInputElement &&
     (target.dataset.action === "contact-search" ||
@@ -858,6 +860,20 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     state.photoPreview = null;
     state.photoBase64Pending = null;
     state.removePhotoPending = false;
+    render();
+    return;
+  }
+  if (state.noteModalOpen) {
+    state.noteModalOpen = false;
+    state.creatingNote = false;
+    state.editingNote = null;
+    render();
+    return;
+  }
+  if (state.taskModalOpen) {
+    state.taskModalOpen = false;
+    state.creatingTask = false;
+    state.editingTask = null;
     render();
     return;
   }

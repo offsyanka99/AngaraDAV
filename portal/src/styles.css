@@ -333,6 +333,7 @@ a:hover {
   border-radius: 10px;
   background: var(--surface-2);
   overflow: hidden;
+  font-weight: 400;
 }
 
 .note-editor-toolbar {
@@ -359,28 +360,53 @@ a:hover {
   background: var(--surface-2);
 }
 
+.note-fmt-btn.is-active {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
 .note-editor-body {
   min-height: 10rem;
   max-height: 28rem;
   overflow: auto;
   padding: 0.75rem 0.9rem;
   font: inherit;
+  font-weight: 400;
   line-height: 1.5;
   outline: none;
+}
+
+.note-editor-body p,
+.note-editor-body div,
+.note-editor-body li {
+  font-weight: 400;
+}
+
+.note-editor-body strong,
+.note-editor-body b {
+  font-weight: 700;
 }
 
 .note-editor-body:focus {
   background: var(--surface);
 }
 
+.note-editor-body h1 {
+  margin: 0.4rem 0 0.5rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
 .note-editor-body h2 {
   margin: 0.35rem 0 0.45rem;
-  font-size: 1.15rem;
+  font-size: 1.22rem;
+  font-weight: 700;
 }
 
 .note-editor-body h3 {
   margin: 0.3rem 0 0.4rem;
-  font-size: 1.02rem;
+  font-size: 1.08rem;
+  font-weight: 650;
 }
 
 .note-editor-body blockquote {
@@ -398,12 +424,33 @@ a:hover {
 
 .note-editor-body ul,
 .note-editor-body ol {
-  margin: 0.35rem 0 0.65rem 1.25rem;
+  margin: 0.25rem 0 0.4rem 0;
+  padding-left: 1.1rem;
+}
+
+.note-editor-body ul:has(> li > input[type="checkbox"]) {
+  list-style: none;
+  padding-left: 0.15rem;
 }
 
 .note-editor-body li input[type="checkbox"] {
-  margin-right: 0.4rem;
+  margin-right: 0.35rem;
   vertical-align: middle;
+}
+
+.note-editor-body del,
+.note-editor-body s,
+.note-editor-body strike {
+  text-decoration: line-through;
+}
+
+.note-editor-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .page-header-admin {
@@ -622,7 +669,8 @@ body.layout-auth .flash {
   gap: 0.35rem;
 }
 
-label {
+label,
+.field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1499,6 +1547,18 @@ body.layout-contacts main.container {
   font-size: 0.92rem;
 }
 
+.contacts-table thead tr:first-child th {
+  z-index: 3;
+}
+
+.contacts-table thead tr.task-filter-row th {
+  top: 2.6rem;
+  z-index: 2;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
 .contacts-table thead th {
   position: sticky;
   top: 0;
@@ -1529,16 +1589,13 @@ body.layout-contacts main.container {
   color: var(--link);
 }
 
-/* Tasks / Notes: list + edit side by side */
-.portal-grid-items {
-  /* list a bit wider than form */
-  grid-template-columns: minmax(280px, 1.15fr) minmax(260px, 0.95fr);
-}
-
-@media (max-width: 900px) {
-  .portal-grid-items {
-    grid-template-columns: 1fr;
-  }
+/* Tasks / Notes: full-width list (create/edit is a modal, same idea as Files). */
+.portal-grid.portal-grid-items {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .items-table-wrap {
@@ -1549,29 +1606,6 @@ body.layout-contacts main.container {
 
 .items-list-card {
   min-width: 0;
-}
-
-.items-edit-panel {
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  /* No outer gap so the form card top matches the list card top */
-  gap: 0;
-  overflow: hidden;
-}
-
-.items-edit-panel > .card {
-  margin: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 100%;
-  overflow: auto;
-  /* Stay top-aligned with the list (was sticky top: 4.5rem — sat too low) */
-  position: relative;
-  top: auto;
 }
 
 /* Tasks & Notes tabs: pin chrome; left list fills down to the fixed footer */
@@ -1611,8 +1645,11 @@ body.layout-tasks .items-list-card {
 }
 
 body.layout-tasks .items-list-card > .section-title-row,
+body.layout-tasks .items-list-card > .files-head,
+body.layout-tasks .items-list-card > .files-toolbar,
 body.layout-tasks .items-list-card > .contact-toolbar,
 body.layout-tasks .items-list-card > .task-bulk-fields,
+body.layout-tasks .items-list-card > .contacts-main-hint,
 body.layout-tasks .items-list-card > .muted {
   flex-shrink: 0;
 }
@@ -1623,16 +1660,6 @@ body.layout-tasks .items-table-wrap {
   max-height: none;
   margin-top: 0.75rem;
   overflow: auto;
-}
-
-body.layout-tasks .items-edit-panel {
-  max-height: 100%;
-  min-height: 0;
-  height: 100%;
-}
-
-body.layout-tasks .items-edit-panel > .card {
-  height: 100%;
 }
 
 @media (max-width: 900px) {
@@ -1653,6 +1680,9 @@ body.layout-tasks .items-edit-panel > .card {
     overflow: visible;
   }
   body.layout-tasks .items-list-card {
+    max-height: none;
+  }
+  body.layout-tasks .items-table-wrap {
     max-height: min(55vh, 28rem);
   }
 }
@@ -3401,6 +3431,38 @@ body.cal-modal-open {
 /* Must follow .cal-modal-card — same specificity, later wins */
 .cal-modal-card.cal-modal-card-wide {
   width: min(800px, 100%);
+}
+
+.cal-modal-card.note-edit-modal-card {
+  height: min(92vh, 58rem);
+  max-height: calc(100vh - 2.25rem);
+}
+
+.note-edit-modal-card .cal-modal-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-edit-modal-card .field {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-edit-modal-card .note-editor {
+  flex: 1 1 auto;
+  min-height: 18rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.note-edit-modal-card .note-editor-toolbar {
+  flex-shrink: 0;
+}
+
+.note-edit-modal-card .note-editor-body {
+  flex: 1 1 auto;
+  min-height: 18rem;
+  max-height: none;
 }
 
 

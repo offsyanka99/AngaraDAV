@@ -77,6 +77,8 @@ export async function handleShellAction(
         await api.deleteTask(state.editingTask.instanceId, state.editingTask.uri);
         state.selectedTaskKey = null;
         state.editingTask = null;
+        state.creatingTask = false;
+        state.taskModalOpen = false;
         await o.loadTasks();
         setFlash("success", "Task deleted");
       } catch (e) {
@@ -100,6 +102,8 @@ export async function handleShellAction(
         await api.deleteNote(state.editingNote.instanceId, state.editingNote.uri);
         state.selectedNoteKey = null;
         state.editingNote = null;
+        state.creatingNote = false;
+        state.noteModalOpen = false;
         await o.loadNotes();
         setFlash("success", "Note deleted");
       } catch (e) {

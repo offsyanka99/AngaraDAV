@@ -57,6 +57,13 @@ assert_true(str_contains($fromAlt, '<strong>team</strong>'), 'X-ALT-DESC wins ov
 $plain = NoteDescriptionFormat::toPortalHtml('', 'Discussed roadmap');
 assert_true($plain === 'Discussed roadmap', 'plain description unchanged');
 
+$h1 = NoteDescriptionFormat::htmlToMarkdown('<h1>Title</h1><p>Talk</p>');
+assert_true(str_contains($h1, '# Title'), 'h1 to markdown heading');
+assert_true(!str_contains($h1, '## Title'), 'h1 is not h2 markdown');
+$h1html = NoteDescriptionFormat::markdownToHtml('# Title');
+assert_true(str_contains($h1html, '<h1>Title</h1>'), 'markdown # to h1');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown('# Title'), 'atx h1 is markdown');
+
 $h2 = NoteDescriptionFormat::htmlToMarkdown('<h2>Agenda</h2><p>Talk</p>');
 assert_true(str_contains($h2, '## Agenda'), 'h2 to markdown heading');
 
@@ -84,6 +91,20 @@ $taskBack = NoteDescriptionFormat::htmlToMarkdown($taskMd);
 assert_true(str_contains($taskBack, '- [ ] milk'), 'checkbox back to unchecked markdown');
 assert_true(str_contains($taskBack, '- [x] bread'), 'checkbox back to checked markdown');
 assert_true(NoteDescriptionFormat::looksLikeMarkdown('- [ ] buy milk'), 'task list is markdown');
+
+$strikeMd = NoteDescriptionFormat::htmlToMarkdown('<p>not <del>this</del></p>');
+assert_true(str_contains($strikeMd, '~~this~~'), 'del to strikethrough markdown');
+$strikeHtml = NoteDescriptionFormat::markdownToHtml('not ~~this~~');
+assert_true(str_contains($strikeHtml, '<del>this</del>'), '~~ to del');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown('not ~~this~~'), 'strikethrough is markdown');
+$sBack = NoteDescriptionFormat::htmlToMarkdown('<p><s>old</s></p>');
+assert_true(str_contains($sBack, '~~old~~'), 's tag to strikethrough markdown');
+
+$codeMd = NoteDescriptionFormat::htmlToMarkdown('<p>See <code>shell.ts</code></p>');
+assert_true(str_contains($codeMd, '`shell.ts`'), 'code to backticks');
+$codeHtml = NoteDescriptionFormat::markdownToHtml('See `shell.ts`');
+assert_true(str_contains($codeHtml, '<code>shell.ts</code>'), 'backticks to code');
+assert_true(NoteDescriptionFormat::looksLikeMarkdown('See `shell.ts`'), 'inline code is markdown');
 
 if ($failures > 0) {
     fwrite(STDERR, "\n$failures failure(s)\n");

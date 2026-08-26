@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.4.1 — 2026-08-26
+
+### Portal
+- **Notes and Tasks** create/edit moved into a wide modal. Lists are full width (same content width as Calendar/Contacts/Files). Title uses `h1`; multi-select chrome matches Files (*N selected*, Clear, actions).
+- **New note:** Date starts empty and stays empty on save if you do not pick one (no automatic “now”).
+- **Notes editor:** H1, strikethrough (`~~text~~`), and inline code (`` `shell.ts` ``), plus existing H2/H3, quote, lists, checkboxes, and links. Formatting round-trips through jtx Board Markdown in `DESCRIPTION`.
+- Toolbar styles **toggle off** on a second click. Body text is normal weight by default (not inherited label bold). Clicks in the body no longer activate Bold (editor is not wrapped in a `<label>`).
+- Heading/quote commands retag the current line (Chrome `formatBlock` workaround). Checklists omit extra bullets; list indent is tighter. Note modal Body field grows with a taller dialog.
+- **Select all** on Notes and Tasks follows the Files checkbox (read native `.checked`; do not `preventDefault` too late).
+
+### Docs
+- README / portal README describe modal lists and the extra note formats.
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
 ## 2.4.0 — 2026-08-20
 
 ### Platform

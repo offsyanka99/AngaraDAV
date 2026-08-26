@@ -3,7 +3,8 @@
  */
 const ALLOWED = new Set([
   "P", "BR", "STRONG", "B", "EM", "I", "U", "UL", "OL", "LI",
-  "H2", "H3", "A", "BLOCKQUOTE", "DIV", "SPAN", "HR", "INPUT",
+  "H1", "H2", "H3", "A", "BLOCKQUOTE", "DIV", "SPAN", "HR", "INPUT",
+  "DEL", "S", "STRIKE", "CODE",
 ]);
 
 export function noteLooksLikeHtml(s: string): boolean {
@@ -12,7 +13,7 @@ export function noteLooksLikeHtml(s: string): boolean {
 
 export function notePlainText(html: string): string {
   return html
-    .replace(/<\/(p|div|h2|h3|li|blockquote)>/gi, "\n")
+    .replace(/<\/(p|div|h1|h2|h3|li|blockquote)>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<hr\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")

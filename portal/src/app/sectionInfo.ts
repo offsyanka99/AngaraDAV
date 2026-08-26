@@ -80,7 +80,8 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     title: "Notes",
     paragraphs: [
       "Notes are CalDAV VJOURNAL items stored in your calendars. Compatible clients sync them over /dav.php/.",
-      "Click a column header to sort. Pick a writable calendar when creating a note.",
+      "Click a column header to sort. Add or edit a note in the dialog. The body supports headings (H1–H3), bold/italic/underline/strikethrough, lists, checkboxes, quotes, links, and inline code (like `shell.ts`).",
+      "Formatting is stored as Markdown in DESCRIPTION so jtx Board can render it.",
     ],
   },
   files: {

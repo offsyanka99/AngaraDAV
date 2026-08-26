@@ -46,30 +46,31 @@ export async function handleNotesAction(
   }
 
   if (action === "note-check") {
-    ev.preventDefault();
     ev.stopPropagation();
     const instanceId = Number(t.dataset.instance);
     const uri = t.dataset.uri ?? "";
     if (!Number.isFinite(instanceId) || !uri) return true;
     const key = o.itemKey(instanceId, uri);
     const note = state.notes.find((x) => o.itemKey(x.instanceId, x.uri) === key);
-    if (!note || !note.canWrite || note.readOnly) return true;
-    if (state.checkedNoteKeys.includes(key)) {
-      state.checkedNoteKeys = state.checkedNoteKeys.filter((k) => k !== key);
+    if (!note || note.readOnly || note.canWrite === false) return true;
+    const on = t instanceof HTMLInputElement ? t.checked : !state.checkedNoteKeys.includes(key);
+    if (on) {
+      if (!state.checkedNoteKeys.includes(key)) state.checkedNoteKeys = [...state.checkedNoteKeys, key];
     } else {
-      state.checkedNoteKeys = [...state.checkedNoteKeys, key];
+      state.checkedNoteKeys = state.checkedNoteKeys.filter((k) => k !== key);
     }
     render();
     return true;
   }
 
   if (action === "note-select-all") {
-    ev.preventDefault();
-    const writable = state.notes.filter((x) => x.canWrite && !x.readOnly);
-    const allOn =
-      writable.length > 0 &&
-      writable.every((x) => state.checkedNoteKeys.includes(o.itemKey(x.instanceId, x.uri)));
-    state.checkedNoteKeys = allOn ? [] : writable.map((x) => o.itemKey(x.instanceId, x.uri));
+    ev.stopPropagation();
+    const writable = state.notes.filter((x) => !x.readOnly && x.canWrite !== false);
+    const on =
+      t instanceof HTMLInputElement
+        ? t.checked
+        : writable.length > 0 && writable.length !== state.checkedNoteKeys.length;
+    state.checkedNoteKeys = on ? writable.map((x) => o.itemKey(x.instanceId, x.uri)) : [];
     render();
     return true;
   }
@@ -113,6 +114,7 @@ export async function handleNotesAction(
     state.creatingNote = false;
     state.selectedNoteKey = o.itemKey(instanceId, uri);
     state.editingNote = found ? { ...found } : null;
+    state.noteModalOpen = !!found;
     clearFlash();
     render();
     return true;
@@ -121,6 +123,7 @@ export async function handleNotesAction(
   if (action === "new-note") {
     state.creatingNote = true;
     state.selectedNoteKey = null;
+    state.noteModalOpen = true;
     state.editingNote = {
       uri: "",
       instanceId: state.noteCalendars[0]?.id ?? 0,
@@ -129,7 +132,7 @@ export async function handleNotesAction(
       calendarUri: "",
       summary: "",
       description: "",
-      dtstart: new Date().toISOString(),
+      dtstart: null,
       lastmodified: 0,
       readOnly: false,
       canWrite: true,
@@ -142,7 +145,7 @@ export async function handleNotesAction(
   if (action === "cancel-note") {
     state.creatingNote = false;
     state.editingNote = null;
-    state.selectedNoteKey = null;
+    state.noteModalOpen = false;
     render();
     return true;
   }

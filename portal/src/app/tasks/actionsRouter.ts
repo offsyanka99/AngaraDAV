@@ -48,24 +48,25 @@ export async function handleTasksAction(
     state.creatingTask = false;
     state.selectedTaskKey = o.itemKey(instanceId, uri);
     state.editingTask = found ? { ...found } : null;
+    state.taskModalOpen = !!found;
     clearFlash();
     render();
     return true;
   }
 
   if (action === "task-check") {
-    ev.preventDefault();
     ev.stopPropagation();
     const instanceId = Number(t.dataset.instance);
     const uri = t.dataset.uri ?? "";
     if (!Number.isFinite(instanceId) || !uri) return true;
     const key = o.itemKey(instanceId, uri);
     const task = state.tasks.find((x) => o.itemKey(x.instanceId, x.uri) === key);
-    if (!task || !task.canWrite || task.readOnly) return true;
-    if (state.checkedTaskKeys.includes(key)) {
-      state.checkedTaskKeys = state.checkedTaskKeys.filter((k) => k !== key);
+    if (!task || task.readOnly || task.canWrite === false) return true;
+    const on = t instanceof HTMLInputElement ? t.checked : !state.checkedTaskKeys.includes(key);
+    if (on) {
+      if (!state.checkedTaskKeys.includes(key)) state.checkedTaskKeys = [...state.checkedTaskKeys, key];
     } else {
-      state.checkedTaskKeys = [...state.checkedTaskKeys, key];
+      state.checkedTaskKeys = state.checkedTaskKeys.filter((k) => k !== key);
     }
     render();
     return true;
@@ -86,17 +87,11 @@ export async function handleTasksAction(
   }
 
   if (action === "task-select-all") {
-    ev.preventDefault();
+    ev.stopPropagation();
     const listed = filterTasks(state.tasks, state.taskFilters);
-    const writable = listed.filter((x) => x.canWrite && !x.readOnly);
-    const allOn =
-      writable.length > 0 &&
-      writable.every((x) => state.checkedTaskKeys.includes(o.itemKey(x.instanceId, x.uri)));
-    if (allOn) {
-      state.checkedTaskKeys = [];
-    } else {
-      state.checkedTaskKeys = writable.map((x) => o.itemKey(x.instanceId, x.uri));
-    }
+    const writable = listed.filter((x) => !x.readOnly && x.canWrite !== false);
+    const on = t instanceof HTMLInputElement ? t.checked : writable.length > 0 && writable.length !== state.checkedTaskKeys.length;
+    state.checkedTaskKeys = on ? writable.map((x) => o.itemKey(x.instanceId, x.uri)) : [];
     render();
     return true;
   }
@@ -141,6 +136,7 @@ export async function handleTasksAction(
   if (action === "new-task") {
     state.creatingTask = true;
     state.selectedTaskKey = null;
+    state.taskModalOpen = true;
     state.editingTask = {
       uri: "",
       instanceId: state.taskCalendars[0]?.id ?? 0,
@@ -171,6 +167,7 @@ export async function handleTasksAction(
     const parent = state.editingTask;
     state.creatingTask = true;
     state.selectedTaskKey = null;
+    state.taskModalOpen = true;
     state.editingTask = {
       uri: "",
       instanceId: parent.instanceId,
@@ -198,7 +195,7 @@ export async function handleTasksAction(
   if (action === "cancel-task") {
     state.creatingTask = false;
     state.editingTask = null;
-    state.selectedTaskKey = null;
+    state.taskModalOpen = false;
     render();
     return true;
   }

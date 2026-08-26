@@ -1,10 +1,11 @@
 /** Tasks tab UI (Phase 7). */
-import { esc } from "../../ui";
+import { esc, renderModal } from "../../ui";
 import { toLocalInputValue } from "../datetime";
+import { renderFlashBanner } from "../flash";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
-import { renderSelectionToolbar } from "../selectionToolbar";
+import { renderListToolbar } from "../selectionToolbar";
 import type { TasksHost } from "./host";
 import { filterTasks, normalizeTaskFilters } from "./listing";
 import {
@@ -54,7 +55,7 @@ export function renderTasksTab(host: TasksHost): string {
             ? "No tasks match your search."
             : host.state.tasks.length > 0
               ? "No tasks match these column filters."
-              : "No tasks yet. Add one below."
+              : "No tasks yet. Use Add task."
         }</td></tr>`
       : tree
           .map(({ task: t, depth }) => {
@@ -91,15 +92,24 @@ export function renderTasksTab(host: TasksHost): string {
       title="${esc(label)}" aria-label="${esc(label)}" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>${applyIcon}</button>`;
   const skipped = host.state.checkedTaskKeys.length - nChecked;
   const hasSelection = host.state.checkedTaskKeys.length > 0;
-  const toolbarActions = hasSelection
-    ? renderSelectionToolbar({
-        count: nChecked,
-        extra: skipped > 0 ? `(${skipped} read-only skipped)` : undefined,
-        busy: host.state.busy,
-        clearAction: "bulk-task-clear",
-        actionsHtml: `<button type="button" class="btn btn-small btn-danger" data-action="bulk-task-delete" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Delete</button>`,
-      })
-    : `<button type="button" class="btn btn-primary" data-action="new-task" ${host.state.busy || host.state.taskCalendars.length === 0 ? "disabled" : ""}>Add task</button>`;
+  const toolbar = renderListToolbar({
+    searchAction: "task-search",
+    searchPlaceholder: "Search tasks…",
+    searchValue: host.state.taskSearch,
+    searchAria: "Search tasks",
+    busy: host.state.busy,
+    addAction: "new-task",
+    addLabel: "Add task",
+    addDisabled: host.state.taskCalendars.length === 0,
+    selection: hasSelection
+      ? {
+          count: nChecked,
+          extra: skipped > 0 ? `(${skipped} read-only skipped)` : undefined,
+          clearAction: "bulk-task-clear",
+          actionsHtml: `<button type="button" class="btn btn-small btn-danger" data-action="bulk-task-delete" ${host.state.busy || nChecked === 0 ? "disabled" : ""}>Delete</button>`,
+        }
+      : null,
+  });
   const bulkFields = hasSelection
     ? `<div class="task-bulk-fields" role="group" aria-label="Edit selected tasks">
         <div class="bulk-group">
@@ -136,102 +146,21 @@ export function renderTasksTab(host: TasksHost): string {
       </div>`
     : "";
 
-  const t = host.state.editingTask;
-  const calOpts = host.state.taskCalendars
-    .map(
-      (c) =>
-        `<option value="${c.id}" ${t && t.instanceId === c.id ? "selected" : ""}>${esc(c.displayname)}</option>`,
-    )
-    .join("");
-  const form =
-    t
-      ? `<div class="card">
-          ${infoTitle(host.state.creatingTask ? (t.parentUid ? "New subtask" : "New task") : "Edit task", "tasks")}
-          <form class="stack" data-form="task" style="margin-top:1rem">
-            ${
-              host.state.creatingTask
-                ? `<label>Calendar
-                    <select name="instanceId" required ${host.state.taskCalendars.length === 0 ? "disabled" : ""}>
-                      <option value="">${host.state.taskCalendars.length ? "Select calendar…" : "No writable calendars"}</option>
-                      ${calOpts}
-                    </select>
-                  </label>`
-                : `<p class="muted small">Calendar: <strong>${esc(t.calendarName)}</strong>${t.readOnly ? " · read-only" : ""}</p>`
-            }
-            <label>Title
-              <input type="text" name="summary" required maxlength="500" value="${esc(t.summary)}" ${t.readOnly && !host.state.creatingTask ? "readonly" : ""} />
-            </label>
-            <label>Description
-              <textarea name="description" rows="4" maxlength="20000" ${t.readOnly && !host.state.creatingTask ? "readonly" : ""}>${esc(t.description)}</textarea>
-            </label>
-            <label>Parent task
-              <select name="parentUid" ${t.readOnly && !host.state.creatingTask ? "disabled" : ""}>
-                ${parentTaskOptions(host, t, host.state.creatingTask)}
-              </select>
-              <span class="muted small">Subtasks must use a parent on the same calendar (CalDAV RELATED-TO).</span>
-            </label>
-            <div class="form-grid form-grid-2">
-              <label>Status
-                <select name="status" ${t.readOnly && !host.state.creatingTask ? "disabled" : ""}>
-                  ${["NEEDS-ACTION", "IN-PROCESS", "COMPLETED", "CANCELLED"]
-                    .map(
-                      (s) =>
-                        `<option value="${s}" ${t.status === s ? "selected" : ""}>${esc(statusLabel(s))}</option>`,
-                    )
-                    .join("")}
-                </select>
-              </label>
-              ${host.renderPortalDateTimeField({
-                field: "due",
-                name: "due",
-                label: "Due",
-                value: toLocalInputValue(t.due),
-                dateOnly: false,
-                disabled: !!(t.readOnly && !host.state.creatingTask),
-                allowClear: true,
-              })}
-            </div>
-            <div class="form-grid form-grid-2">
-              <label>Priority (0–9)
-                <input type="number" name="priority" min="0" max="9" value="${esc(String(t.priority || 0))}" ${t.readOnly && !host.state.creatingTask ? "readonly" : ""} />
-              </label>
-              <label>% complete
-                <input type="number" name="percent" min="0" max="100" value="${esc(String(t.percent || 0))}" ${t.readOnly && !host.state.creatingTask ? "readonly" : ""} />
-              </label>
-            </div>
-            <div class="form-actions-row">
-              ${
-                host.state.creatingTask || t.canWrite
-                  ? `<button type="submit" class="btn btn-primary" ${host.state.busy ? "disabled" : ""}>${host.state.creatingTask ? "Create task" : "Save task"}</button>`
-                  : ""
-              }
-              ${
-                !host.state.creatingTask && t.canWrite
-                  ? `<button type="button" class="btn btn-ghost" data-action="new-subtask" ${host.state.busy ? "disabled" : ""}>Add subtask</button>
-                     <button type="button" class="btn btn-danger" data-action="delete-task" ${host.state.busy ? "disabled" : ""}>Delete</button>`
-                  : host.state.creatingTask
-                    ? `<button type="button" class="btn btn-ghost" data-action="cancel-task">Cancel</button>`
-                    : ""
-              }
-            </div>
-          </form>
-        </div>`
-      : `<div class="card"><p class="muted">Select a task or click <strong>Add task</strong>.</p></div>`;
+  const modal = renderTaskModal(host, statusLabel);
 
   return `<div class="portal-grid portal-grid-items">
     <section class="card contacts-main-card items-list-card">
-      ${infoTitle("Tasks", "tasks")}
-      <div class="contact-toolbar" style="margin-top:0.75rem">
-        <input type="search" data-action="task-search" placeholder="Search tasks…" value="${esc(host.state.taskSearch)}" aria-label="Search tasks" ${host.state.busy ? "disabled" : ""} />
-        ${toolbarActions}
+      <div class="files-head">
+        ${infoTitle("Tasks", "tasks", "h1")}
       </div>
+      ${toolbar}
       ${bulkFields}
       ${
         host.state.taskCalendars.length === 0
           ? `<p class="muted small" style="margin-top:0.75rem">No writable calendars with tasks (VTODO) enabled. Create a calendar under <strong>Calendar</strong> (system Tasks setting must be on).</p>`
           : ""
       }
-      <div class="contacts-table-wrap items-table-wrap" style="margin-top:0.75rem">
+      <div class="contacts-table-wrap contacts-table-wrap-tall items-table-wrap">
         <table class="contacts-table">
           <thead>
             <tr>
@@ -239,7 +168,7 @@ export function renderTasksTab(host: TasksHost): string {
                 <input type="checkbox" data-action="task-select-all" aria-label="Select all writable tasks"
                   ${allWritableChecked ? "checked" : ""}
                   ${someChecked ? "data-indeterminate=1" : ""}
-                  ${writableKeys.length === 0 || host.state.busy ? "disabled" : ""} />
+                  ${listed.length === 0 || host.state.busy ? "disabled" : ""} />
               </th>
               ${sortHeader("Title", "summary", host.state.taskSort, host.state.taskOrder, "task", "col-task-title")}
               ${sortHeader("Status", "status", host.state.taskSort, host.state.taskOrder, "task", "col-task-status")}
@@ -287,9 +216,117 @@ export function renderTasksTab(host: TasksHost): string {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      <p class="muted small contacts-main-hint">Select a task to edit, or use <strong>Add task</strong>.</p>
     </section>
-    <section class="stack items-edit-panel">
-      ${form}
-    </section>
+    ${modal}
   </div>`;
+}
+
+function renderTaskModal(
+  host: TasksHost,
+  statusLabel: (s: string) => string,
+): string {
+  if (!host.state.taskModalOpen || !host.state.editingTask) return "";
+  const t = host.state.editingTask;
+  const creating = host.state.creatingTask;
+  const readOnly = !!(t.readOnly && !creating);
+  const canWrite = creating || t.canWrite;
+  const calOpts = host.state.taskCalendars
+    .map(
+      (c) =>
+        `<option value="${c.id}" ${t.instanceId === c.id ? "selected" : ""}>${esc(c.displayname)}</option>`,
+    )
+    .join("");
+  const title = creating ? (t.parentUid ? "New subtask" : "New task") : "Edit task";
+  const footer = [
+    ...(!creating && t.canWrite
+      ? [
+          {
+            label: "Delete",
+            action: "delete-task",
+            variant: "danger" as const,
+            disabled: host.state.busy,
+          },
+          {
+            label: "Add subtask",
+            action: "new-subtask",
+            variant: "ghost" as const,
+            disabled: host.state.busy,
+          },
+        ]
+      : []),
+    { label: creating ? "Cancel" : "Close", action: "cancel-task", variant: "ghost" as const },
+    ...(canWrite
+      ? [
+          {
+            label: creating ? "Create task" : "Save task",
+            type: "submit" as const,
+            variant: "primary" as const,
+            disabled: host.state.busy,
+          },
+        ]
+      : []),
+  ];
+  return renderModal({
+    id: "task-edit-modal",
+    title,
+    titleId: "task-modal-title",
+    closeAction: "cancel-task",
+    size: "wide",
+    form: true,
+    formAttrs: 'data-form="task"',
+    body: `${renderFlashBanner(host.state)}
+            ${
+              creating
+                ? `<label>Calendar
+                    <select name="instanceId" required ${host.state.taskCalendars.length === 0 ? "disabled" : ""}>
+                      <option value="">${host.state.taskCalendars.length ? "Select calendar…" : "No writable calendars"}</option>
+                      ${calOpts}
+                    </select>
+                  </label>`
+                : `<p class="muted small">Calendar: <strong>${esc(t.calendarName)}</strong>${t.readOnly ? " · read-only" : ""}</p>`
+            }
+            <label>Title
+              <input type="text" name="summary" required maxlength="500" value="${esc(t.summary)}" ${readOnly ? "readonly" : ""} />
+            </label>
+            <label>Description
+              <textarea name="description" rows="4" maxlength="20000" ${readOnly ? "readonly" : ""}>${esc(t.description)}</textarea>
+            </label>
+            <label>Parent task
+              <select name="parentUid" ${readOnly ? "disabled" : ""}>
+                ${parentTaskOptions(host, t, creating)}
+              </select>
+              <span class="muted small">Subtasks must use a parent on the same calendar (CalDAV RELATED-TO).</span>
+            </label>
+            <div class="form-grid form-grid-2">
+              <label>Status
+                <select name="status" ${readOnly ? "disabled" : ""}>
+                  ${["NEEDS-ACTION", "IN-PROCESS", "COMPLETED", "CANCELLED"]
+                    .map(
+                      (s) =>
+                        `<option value="${s}" ${t.status === s ? "selected" : ""}>${esc(statusLabel(s))}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              ${host.renderPortalDateTimeField({
+                field: "due",
+                name: "due",
+                label: "Due",
+                value: toLocalInputValue(t.due),
+                dateOnly: false,
+                disabled: readOnly,
+                allowClear: true,
+              })}
+            </div>
+            <div class="form-grid form-grid-2">
+              <label>Priority (0–9)
+                <input type="number" name="priority" min="0" max="9" value="${esc(String(t.priority || 0))}" ${readOnly ? "readonly" : ""} />
+              </label>
+              <label>% complete
+                <input type="number" name="percent" min="0" max="100" value="${esc(String(t.percent || 0))}" ${readOnly ? "readonly" : ""} />
+              </label>
+            </div>`,
+    footer,
+  });
 }

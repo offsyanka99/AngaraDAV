@@ -59,6 +59,7 @@ export async function runBulkTaskAction(host: TasksHost, action:
         host.state.selectedTaskKey = null;
         host.state.editingTask = null;
         host.state.creatingTask = false;
+        host.state.taskModalOpen = false;
       }
       await loadTasks(host);
       if (res.failed > 0) {
@@ -173,6 +174,24 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
   const percent = Number(fd.get("percent") ?? 0);
   const parentRaw = String(fd.get("parentUid") ?? "").trim();
   const parentUid = parentRaw === "" ? null : parentRaw;
+  if (host.state.editingTask) {
+    const instanceRaw = fd.get("instanceId");
+    const instanceId =
+      instanceRaw !== null && String(instanceRaw) !== ""
+        ? Number(instanceRaw)
+        : host.state.editingTask.instanceId;
+    host.state.editingTask = {
+      ...host.state.editingTask,
+      instanceId: Number.isFinite(instanceId) && instanceId > 0 ? instanceId : host.state.editingTask.instanceId,
+      summary,
+      description,
+      status,
+      due,
+      priority,
+      percent,
+      parentUid,
+    };
+  }
   host.state.busy = true;
   host.clearFlash();
   host.render();
@@ -194,7 +213,8 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
       });
       host.state.creatingTask = false;
       host.state.selectedTaskKey = itemKey(res.task.instanceId, res.task.uri);
-      host.state.editingTask = res.task;
+      host.state.editingTask = null;
+      host.state.taskModalOpen = false;
       host.setFlash(
         "success",
         entityFlash(parentUid ? "Subtask" : "Task", res.task.summary || summary, "created"),
@@ -209,7 +229,8 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
         percent,
         parentUid,
       });
-      host.state.editingTask = res.task;
+      host.state.editingTask = null;
+      host.state.taskModalOpen = false;
       host.state.selectedTaskKey = itemKey(res.task.instanceId, res.task.uri);
       host.setFlash("success", entityFlash("Task", res.task.summary || summary, "saved"));
     }

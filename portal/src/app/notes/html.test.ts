@@ -10,5 +10,8 @@ describe("note html helpers", () => {
 
   it("strips tags for list preview", () => {
     assert.equal(notePlainText("<p>Hello <strong>team</strong></p>"), "Hello team");
+    const preview = notePlainText("<h1>Title</h1><p>See <code>shell.ts</code></p>");
+    assert.match(preview, /Title/);
+    assert.match(preview, /shell\.ts/);
   });
 });
