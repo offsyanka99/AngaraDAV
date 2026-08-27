@@ -3,10 +3,22 @@
  */
 import { api } from "../../api";
 import { log } from "../../log";
-import type { Calendar } from "../../api";
+import type { Calendar, CalendarEvent } from "../../api";
 import type { CalendarsHost } from "./host";
 import { eventsRangeForView } from "./eventsView";
 import { persistCalendarSelection } from "./selectionPersist";
+
+export function calendarEventsFingerprint(
+  events: Array<CalendarEvent & { instanceId?: number }>,
+): string {
+  return events
+    .map((e) =>
+      [e.instanceId ?? "", e.uri, e.start, e.end ?? "", e.summary ?? "", e.allDay ? "1" : "0"].join(
+        "\t",
+      ),
+    )
+    .join("\n");
+}
 
 export async function loadShares(host: CalendarsHost, id: number) {
   const res = await api.shares(id);
@@ -28,6 +40,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
   const ids = host.state.selectedIds.filter((id) => host.state.calendars.some((c) => c.id === id));
   if (ids.length === 0) {
     host.state.monthEvents = [];
+    host.state.calendarEventsReady = true;
     return;
   }
   const { from, to } = eventsRangeForView(host);
@@ -49,6 +62,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
       return (a.summary || "").localeCompare(b.summary || "");
     });
     host.state.monthEvents = merged;
+    host.state.calendarEventsReady = true;
     log.event("monthEvents.loaded", {
       calendarIds: ids,
       count: host.state.monthEvents.length,
@@ -57,6 +71,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
     });
   } catch (e) {
     host.state.monthEvents = [];
+    host.state.calendarEventsReady = true;
     log.warn(
       "loadMonthEvents failed",
       e instanceof Error ? e.message : e,

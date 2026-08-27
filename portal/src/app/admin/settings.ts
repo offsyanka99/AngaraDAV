@@ -100,6 +100,36 @@ export function renderAdminSettingsShell(host: AdminHost): string {
               .join("")}
           </select>
         </label>
+        <label>Time format
+          <select name="portal_time_format" ${host.state.busy || s.writable === false ? "disabled" : ""}>
+            ${[
+              ["auto", "Auto (browser)"],
+              ["12h", "12-hour"],
+              ["24h", "24-hour"],
+            ]
+              .map(
+                ([v, lab]) =>
+                  `<option value="${v}" ${(s.portal_time_format || "auto") === v ? "selected" : ""}>${lab}</option>`,
+              )
+              .join("")}
+          </select>
+          <span class="muted small">Every portal user. Does not change stored events or phone apps.</span>
+        </label>
+        <label>Week starts on
+          <select name="portal_week_start" ${host.state.busy || s.writable === false ? "disabled" : ""}>
+            ${[
+              ["auto", "Auto (browser)"],
+              ["monday", "Monday"],
+              ["sunday", "Sunday"],
+            ]
+              .map(
+                ([v, lab]) =>
+                  `<option value="${v}" ${(s.portal_week_start || "auto") === v ? "selected" : ""}>${lab}</option>`,
+              )
+              .join("")}
+          </select>
+          <span class="muted small">Calendar grid and date picker. ISO week numbers stay Monday-based.</span>
+        </label>
         ${check("portal_admin_ui_enabled", s.portal_admin_ui_enabled !== false, "Portal Administration UI enabled")}
         <label>Portal admin users (comma-separated)
           <input type="text" name="portal_admin_users" value="${esc(
@@ -225,6 +255,8 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     files_quarantine_days: Number(fd.get("files_quarantine_days") ?? 0),
     session_max_age_minutes: Number(fd.get("session_max_age_minutes") ?? 15),
     portal_log_level: String(fd.get("portal_log_level") ?? "off"),
+    portal_time_format: String(fd.get("portal_time_format") ?? "auto"),
+    portal_week_start: String(fd.get("portal_week_start") ?? "auto"),
     portal_admin_users: String(fd.get("portal_admin_users") ?? "").trim(),
     push_external_url: String(fd.get("push_external_url") ?? "").trim(),
     push_log_level: String(fd.get("push_log_level") ?? "off"),
@@ -241,10 +273,14 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
   try {
     const res = await api.adminUpdateSystemSettings(body);
     host.state.adminSystemSettings = res.data;
-    // Keep user-tab visibility in sync for this session without re-login
+    // Keep user-tab visibility and locale in sync for this session without re-login
     const d = res.data;
+    const tf = String(d.portal_time_format ?? "auto").toLowerCase();
+    const ws = String(d.portal_week_start ?? "auto").toLowerCase();
     host.state.portalUi = {
       ...host.state.portalUi,
+      timeFormat: tf === "12h" || tf === "24h" ? tf : "auto",
+      weekStart: ws === "monday" || ws === "sunday" ? ws : "auto",
       services: {
         caldav: !!d.cal_enabled,
         carddav: !!d.card_enabled,

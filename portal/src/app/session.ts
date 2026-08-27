@@ -161,7 +161,11 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];
+  state.monthEventsLoading = false;
+  state.calendarEventsReady = false;
   state.calView = "month";
+  state.weekScrollToDayStart = false;
+  state.weekWrapScrollTop = null;
   state.eventSearch = "";
   state.eventSearchFocus = false;
   {

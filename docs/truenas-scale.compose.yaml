@@ -86,8 +86,7 @@
 #                                Alias: BAIKAL_PORTAL_ADMIN_USERS
 #                                Overrides system.portal_admin_users in baikal.yaml
 #                                If unset and YAML empty: DAV user "admin" is Admin
-#   TIME_FORMAT=24h           — portal time display (auto|12h|24h)
-#   BAIKAL_PORTAL_WEEK_START=monday
+#   Time format / week start — Admin → System settings (not compose env)
 #   BAIKAL_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
 #                              — required canonical HTTPS URL when WebDAV-Push
 #                                is enabled in Admin -> AngaraDAV Settings
@@ -106,10 +105,10 @@ services:
   angaradav:
     # --- Image tags (GHCR: ghcr.io/offsyanka99/angaradav) ----------------
     # latest          = main branch (day-to-day)
-    # 2.1.0           = product release tag v2.1.0 (preferred pin)
+    # 2.4.3           = product release tag v2.4.3 (preferred pin)
     # sha-<7+ hex>    = exact git commit
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.1.0
+    # image: ghcr.io/offsyanka99/angaradav:2.4.3
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------
@@ -139,8 +138,7 @@ services:
       # Settings) when baikal.yaml has no timezone yet. One-time default only;
       # change it in Admin afterward if you need to override it.
       TZ: "America/Toronto"
-      TIME_FORMAT: "24h"                 # or 12h
-      BAIKAL_PORTAL_WEEK_START: "monday" # or sunday
+      # Time format and week start: Admin → System settings (not env).
       # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
       # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):

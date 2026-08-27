@@ -124,10 +124,33 @@ class App {
     }
 
     /**
+     * Instance portal time format from Admin YAML (`system.portal_time_format`).
+     * Env (`TIME_FORMAT`, `BAIKAL_PORTAL_TIME_FORMAT`) is ignored.
+     *
+     * @param array<string, mixed> $sys system section of baikal.yaml
+     */
+    public static function portalTimeFormatFromSystem(array $sys): string {
+        $time = strtolower(trim((string) ($sys['portal_time_format'] ?? 'auto')));
+
+        return in_array($time, ['auto', '12h', '24h'], true) ? $time : 'auto';
+    }
+
+    /**
+     * Instance portal week start from Admin YAML (`system.portal_week_start`).
+     * Env (`BAIKAL_PORTAL_WEEK_START`) is ignored.
+     *
+     * @param array<string, mixed> $sys system section of baikal.yaml
+     */
+    public static function portalWeekStartFromSystem(array $sys): string {
+        $week = strtolower(trim((string) ($sys['portal_week_start'] ?? 'auto')));
+
+        return in_array($week, ['auto', 'monday', 'sunday'], true) ? $week : 'auto';
+    }
+
+    /**
      * Portal UI prefs (time format / week start / log level / DAV service flags).
-     * Env overrides YAML for time/week/log.
-     * TIME_FORMAT / BAIKAL_PORTAL_TIME_FORMAT: auto|12h|24h
-     * BAIKAL_PORTAL_WEEK_START: auto|monday|sunday
+     * Time format and week start come from Admin YAML only (`system.portal_time_format`,
+     * `system.portal_week_start`). Log level still allows env override.
      * PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL: off|error|warn|info|debug.
      *
      * `services` mirrors Admin System settings (and public /info.php). Safe for all
@@ -145,25 +168,10 @@ class App {
      */
     private function portalUiSettings(): array {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
-        $time = strtolower(trim((string) (
-            getenv('TIME_FORMAT')
-            ?: getenv('BAIKAL_PORTAL_TIME_FORMAT')
-            ?: ($sys['portal_time_format'] ?? 'auto')
-        )));
-        if (!in_array($time, ['auto', '12h', '24h'], true)) {
-            $time = 'auto';
-        }
-        $week = strtolower(trim((string) (
-            getenv('BAIKAL_PORTAL_WEEK_START')
-            ?: ($sys['portal_week_start'] ?? 'auto')
-        )));
-        if (!in_array($week, ['auto', 'monday', 'sunday'], true)) {
-            $week = 'auto';
-        }
 
         return [
-            'timeFormat'         => $time,
-            'weekStart'          => $week,
+            'timeFormat'         => self::portalTimeFormatFromSystem($sys),
+            'weekStart'          => self::portalWeekStartFromSystem($sys),
             'logLevel'           => $this->portalLogLevel(),
             'sessionIdleSeconds' => $this->auth->sessionMaxAge(),
             'version'            => defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '',

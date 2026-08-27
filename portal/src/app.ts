@@ -94,7 +94,10 @@ export function mountApp(root: HTMLElement): void {
       renderHome(o);
     }
     bindAfterRender(o);
-    restoreScrollRoot(root, scroll);
+    restoreScrollRoot(root, {
+      ...scroll,
+      weekWrapTop: state.weekWrapScrollTop,
+    });
     requestAnimationFrame(() => {
       dt.positionDtPopovers(o);
       root.querySelector(".dt-time.is-selected")?.scrollIntoView({ block: "center" });

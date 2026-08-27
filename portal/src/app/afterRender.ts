@@ -7,6 +7,7 @@
 import type { AppOrchestrator } from "./orchestrator";
 import * as files from "./files";
 import * as notes from "./notes";
+import { alignWeekViewScroll } from "./calendars/week";
 import { bindDtPickerOutside, unbindDtPickerOutside } from "./shell";
 
 /** @deprecated use bindAfterRender — kept as alias for older imports */
@@ -43,6 +44,36 @@ export function bindAfterRender(o: AppOrchestrator): void {
   restoreListKeyboardFocus(o);
   focusOpenModal(o.root);
   restoreSearchFocus(o);
+  alignWeekScrollIfNeeded(o);
+  restoreWeekWrapScrollNow(o);
+  bindWeekWrapScroll(o);
+}
+
+function alignWeekScrollIfNeeded(o: AppOrchestrator): void {
+  if (!o.state.weekScrollToDayStart || o.state.calView !== "week") return;
+  if (!alignWeekViewScroll(o.root, o.state.userSettings.dayStartHour)) return;
+  const wrap = o.root.querySelector<HTMLElement>(".week-wrap");
+  if (wrap) o.state.weekWrapScrollTop = wrap.scrollTop;
+  if (!o.state.busy) o.state.weekScrollToDayStart = false;
+}
+
+function restoreWeekWrapScrollNow(o: AppOrchestrator): void {
+  if (o.state.weekScrollToDayStart || o.state.calView !== "week") return;
+  const wrap = o.root.querySelector<HTMLElement>(".week-wrap");
+  if (!wrap || o.state.weekWrapScrollTop === null) return;
+  wrap.scrollTop = o.state.weekWrapScrollTop;
+}
+
+function bindWeekWrapScroll(o: AppOrchestrator): void {
+  const wrap = o.root.querySelector<HTMLElement>(".week-wrap");
+  if (!wrap) return;
+  wrap.addEventListener(
+    "scroll",
+    () => {
+      o.state.weekWrapScrollTop = wrap.scrollTop;
+    },
+    { passive: true },
+  );
 }
 
 function restoreSearchFocus(o: AppOrchestrator): void {

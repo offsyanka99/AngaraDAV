@@ -9,6 +9,7 @@ export type ScrollSnapshot = {
   abListTop: number | null;
   calListTop: number | null;
   filesTableTop: number | null;
+  weekWrapTop: number | null;
 };
 
 /** Full re-render replaces DOM and would reset scroll; capture so list clicks stay put. */
@@ -17,6 +18,7 @@ export function captureScroll(root: HTMLElement): ScrollSnapshot {
   const abList = root.querySelector<HTMLElement>(".contacts-ab-list");
   const calList = root.querySelector<HTMLElement>(".calendars-owned-list");
   const filesTable = root.querySelector<HTMLElement>(".files-table-wrap");
+  const weekWrap = root.querySelector<HTMLElement>(".week-wrap");
   return {
     windowX: window.scrollX,
     windowY: window.scrollY,
@@ -24,6 +26,7 @@ export function captureScroll(root: HTMLElement): ScrollSnapshot {
     abListTop: abList?.scrollTop ?? null,
     calListTop: calList?.scrollTop ?? null,
     filesTableTop: filesTable?.scrollTop ?? null,
+    weekWrapTop: weekWrap?.scrollTop ?? null,
   };
 }
 
@@ -47,6 +50,17 @@ export function restoreScroll(root: HTMLElement, s: ScrollSnapshot): void {
       if (s.filesTableTop !== null) {
         const filesTable = root.querySelector<HTMLElement>(".files-table-wrap");
         if (filesTable) filesTable.scrollTop = s.filesTableTop;
+      }
+      const weekWrap = root.querySelector<HTMLElement>(".week-wrap");
+      if (weekWrap) {
+        const alignRaw = weekWrap.dataset.alignHour;
+        if (alignRaw !== undefined && alignRaw !== "") {
+          const hourPx = parseFloat(getComputedStyle(weekWrap).getPropertyValue("--week-hour")) || 40;
+          const hour = Number(alignRaw);
+          if (Number.isFinite(hour)) weekWrap.scrollTop = hour * hourPx;
+        } else if (s.weekWrapTop !== null) {
+          weekWrap.scrollTop = s.weekWrapTop;
+        }
       }
     });
   });

@@ -193,6 +193,7 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
       o.state.userSettings = next;
       o.state.userSettingsOpen = false;
       o.state.userSettingsError = null;
+      if (o.state.calView === "week") o.state.weekScrollToDayStart = true;
       applyTheme(next.theme);
       o.clearFlash();
       o.render();

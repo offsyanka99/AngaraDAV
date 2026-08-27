@@ -9,8 +9,16 @@ import type { CalendarsHost } from "./host";
 import { calendarColor } from "./loaders";
 import { formatEventChipLabel } from "./eventsView";
 import { calendarChrome } from "./toolbar";
+import { WEEK_HOUR_PX, weekScrollTopForDayStart } from "./weekScroll";
 
-const HOUR_PX = 40;
+const HOUR_PX = WEEK_HOUR_PX;
+
+export function alignWeekViewScroll(root: HTMLElement, dayStartHour: number): boolean {
+  const wrap = root.querySelector<HTMLElement>(".week-wrap");
+  if (!wrap) return false;
+  wrap.scrollTop = weekScrollTopForDayStart(dayStartHour);
+  return true;
+}
 
 function eventBlock(host: CalendarsHost, ev: CalendarEvent & { instanceId: number }, dayKey: string): string {
   const inst = ev.instanceId;
@@ -108,7 +116,11 @@ export function renderWeekView(host: CalendarsHost): string {
   return `<section class="card month-cal-card week-cal-card">
     ${chrome.toolbar}
     ${chrome.emptyHint}
-    <div class="week-wrap" style="--week-hour:${HOUR_PX}px;--day-start-h:${dayStart};--day-end-h:${dayEnd}">
+    <div class="week-wrap" style="--week-hour:${HOUR_PX}px;--day-start-h:${dayStart};--day-end-h:${dayEnd}"${
+      host.state.weekScrollToDayStart
+        ? ` data-align-hour="${Math.min(23, Math.max(0, dayStart - 1))}"`
+        : ""
+    }>
       <div class="week-frozen">
         <div class="week-grid-row week-head-row">
           <div class="week-gutter-head"></div>

@@ -12,6 +12,7 @@ import {
   persistCalendarSelection,
   readStoredCalendarSelection,
 } from "./calendars/selectionPersist";
+import { calendarEventsFingerprint } from "./calendars/loaders";
 import { firstEnabledUserTab, isUserTabEnabled } from "./session";
 
 export function normalizeActiveTab(o: AppOrchestrator): void {
@@ -87,13 +88,22 @@ export async function activateTab(
     state.editingTask = null;
   }
   if (opts.clearFlash !== false) clearFlash();
-  state.busy = true;
+  const reuseCalendar =
+    tab === "calendars" && state.calendarEventsReady && !state.monthEventsLoading;
+  let skipFinalRender = false;
+  if (!reuseCalendar) state.busy = true;
   render();
   try {
     if (tab === "contacts" && state.selectedAbId !== null) {
       await o.loadContacts(state.selectedAbId);
     } else if (tab === "calendars") {
-      await o.loadMonthEvents();
+      if (reuseCalendar) {
+        const prev = calendarEventsFingerprint(state.monthEvents);
+        await o.loadMonthEvents();
+        skipFinalRender = calendarEventsFingerprint(state.monthEvents) === prev;
+      } else {
+        await o.loadMonthEvents();
+      }
     } else if (tab === "tasks") {
       await tasks.loadTasks(o.tasksHost);
     } else if (tab === "notes") {
@@ -106,7 +116,7 @@ export async function activateTab(
     setFlash("error", e instanceof Error ? e.message : "Failed to load");
   } finally {
     state.busy = false;
-    render();
+    if (!skipFinalRender) render();
   }
 }
 
@@ -148,6 +158,7 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     const stored = readStoredCalendarSelection(state.user?.username);
     if (stored) {
       if (stored.view) state.calView = stored.view;
+      if (state.calView === "week") state.weekScrollToDayStart = true;
       const valid = stored.ids.filter((id) => state.calendars.some((c) => c.id === id));
       state.selectedIds = valid;
       if (

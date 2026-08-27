@@ -146,8 +146,8 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
   "admin-settings": {
     title: "System settings",
     paragraphs: [
-      "Edit DAV services, files, push, session timeout, portal admin role list, and admin password.",
-      "Saves write config/baikal.yaml atomically. Session timeout applies to portal idle cookies.",
+      "Edit DAV services, files, push, session timeout, time format, week start, portal admin role list, and admin password.",
+      "Saves write config/baikal.yaml atomically. Session timeout applies to portal idle cookies. Time format and week start apply to every portal user (not stored events or phone apps).",
     ],
   },
   "admin-database": {

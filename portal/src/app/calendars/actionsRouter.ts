@@ -184,6 +184,7 @@ export async function handleCalendarsAction(
     const view = t.dataset.view;
     if (view !== "month" && view !== "week" && view !== "agenda") return true;
     state.calView = view;
+    if (view === "week") state.weekScrollToDayStart = true;
     persistCalendarSelection(state);
     state.monthExpandDay = null;
     state.busy = true;

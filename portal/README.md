@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.4.2`
+**Version:** `2.4.3`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -64,7 +64,7 @@ hosts — they do not import `app.ts`.
 | **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete; upload progress dialog; folder item count; quota bar; same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/` |
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database**. Installer: `/portal/install/`. |
 
-Section help lives under **(i)** info modals. Optional time format / week start / log level from `/api/ui` or `/api/me` (`ui`).
+Section help lives under **(i)** info modals. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
 
 ### Administration (Admin role)
 

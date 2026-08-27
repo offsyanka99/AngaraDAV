@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.3 — 2026-08-27
+
+### Portal
+- **Time format** and **week start** are set in Administration → System settings (24-hour / 12-hour / auto; Monday / Sunday / auto). They apply to every portal user. Stored events and CalDAV clients are unchanged.
+- Compose env `TIME_FORMAT` and `BAIKAL_PORTAL_WEEK_START` is ignored. After upgrade, set the two fields in System settings if you previously relied on compose (default is browser `auto`).
+- **Week view** opens scrolled to one hour before User settings **Day starts at** (e.g. day start 6:00 → first row 5:00). Returning to Calendar keeps that scroll and no longer flashes a full reload when events are unchanged.
+- Portal HTML `<meta>` CSP no longer includes `frame-ancestors` (browsers ignore it in meta; nginx still sends `frame-ancestors 'none'`).
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
 ## 2.4.2 — 2026-08-26
 
 ### WebDAV-Push

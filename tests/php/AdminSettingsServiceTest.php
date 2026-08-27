@@ -203,6 +203,39 @@ try {
     assert_true($sqliteInfo['sqlite_file'] === '/data/db.sqlite', 'sqlite path');
     assert_true($sqliteInfo['hasPassword'] === false, 'sqlite no password');
 
+    $localeSvc = new AdminSettingsService($path);
+    $localeGet0 = $localeSvc->getSystemSettings();
+    assert_true(($localeGet0['portal_time_format'] ?? '') === 'auto', 'default time format auto');
+    assert_true(($localeGet0['portal_week_start'] ?? '') === 'auto', 'default week start auto');
+    $locale = $localeSvc->updateSystemSettings([
+        'portal_time_format' => '24h',
+        'portal_week_start'  => 'monday',
+    ]);
+    assert_true($locale['portal_time_format'] === '24h', 'PUT time format 24h');
+    assert_true($locale['portal_week_start'] === 'monday', 'PUT week start monday');
+    $localeGet = $localeSvc->getSystemSettings();
+    assert_true($localeGet['portal_time_format'] === '24h', 'GET time format round-trip');
+    assert_true($localeGet['portal_week_start'] === 'monday', 'GET week start round-trip');
+    $rawLocale = Yaml::parseFile($path);
+    assert_true(($rawLocale['system']['portal_time_format'] ?? null) === '24h', 'YAML portal_time_format');
+    assert_true(($rawLocale['system']['portal_week_start'] ?? null) === 'monday', 'YAML portal_week_start');
+
+    try {
+        $localeSvc->updateSystemSettings(['portal_time_format' => '36h']);
+        assert_true(false, 'invalid time format should fail');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'invalid time format → 400');
+    }
+    try {
+        $localeSvc->updateSystemSettings(['portal_week_start' => 'wednesday']);
+        assert_true(false, 'invalid week start should fail');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'invalid week start → 400');
+    }
+    $afterBad = $localeSvc->getSystemSettings();
+    assert_true($afterBad['portal_time_format'] === '24h', 'invalid PUT leaves time format');
+    assert_true($afterBad['portal_week_start'] === 'monday', 'invalid PUT leaves week start');
+
     // Reset to default — full wipe: yaml + DB + files + INSTALL_DISABLED
     $specific = $dir . '/Specific';
     @mkdir($specific, 0700, true);

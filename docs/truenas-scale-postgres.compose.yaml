@@ -75,9 +75,9 @@
 # Optional env (same as the SQLite variant; see docs/DEPLOYMENT.md for the
 # full list): BAIKAL_LOCK_INSTALL, BAIKAL_ALLOW_REINSTALL, PORTAL_LOG_LEVEL,
 # PORTAL_ADMIN_USERS (or BAIKAL_PORTAL_ADMIN_USERS) — portal Admin role DAV users,
-# TIME_FORMAT, BAIKAL_PORTAL_WEEK_START, BAIKAL_PUSH_EXTERNAL_URL,
-# PUSH_LOG_LEVEL, BAIKAL_FILES_STORAGE_PATH, BAIKAL_FILES_MAX_UPLOAD_MB,
-# BAIKAL_FILES_QUOTA_MB, BAIKAL_DAV_MAX_BODY_SIZE.
+# BAIKAL_PUSH_EXTERNAL_URL, PUSH_LOG_LEVEL, BAIKAL_FILES_STORAGE_PATH,
+# BAIKAL_FILES_MAX_UPLOAD_MB, BAIKAL_FILES_QUOTA_MB, BAIKAL_DAV_MAX_BODY_SIZE.
+# Time format and week start: Admin → System settings (not compose env).
 #
 # Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
 #       docs/DEPLOYMENT.md
@@ -113,9 +113,9 @@ services:
         max-file: "3"
 
   angaradav:
-    # See docs/truenas-scale.compose.yaml for tag naming (latest, 2.1.0, sha-…)
+    # See docs/truenas-scale.compose.yaml for tag naming (latest, 2.4.3, sha-…)
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.1.0
+    # image: ghcr.io/offsyanka99/angaradav:2.4.3
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     container_name: angaradav
@@ -140,8 +140,7 @@ services:
 
     environment:
       TZ: "America/Toronto"
-      TIME_FORMAT: "24h"                 # or 12h
-      BAIKAL_PORTAL_WEEK_START: "monday" # or sunday
+      # Time format and week start: Admin → System settings (not env).
       # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
       # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):

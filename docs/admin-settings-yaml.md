@@ -28,7 +28,7 @@ DAV and PHP need these before anyone logs in:
 
 ```yaml
 system:
-  configured_version: "2.4.2"     # upgrade gate
+  configured_version: "2.4.3"     # upgrade gate
   admin_passwordhash: "$2y$…"     # installer + Reset-to-Default
   auth_realm: BaikalDAV           # Digest A1 contract — read-only in Admin
 database:
@@ -46,7 +46,7 @@ database:
 1. **`Baikal\Model\Config::persist()`** writes the full `$aData` map. Install `initialize()` then dumps Push defaults, file quotas, timezone, service flags, etc.
 2. **Installer UI** (`portal/src/install.ts`) asks for CalDAV/CardDAV/Tasks/Notes/Files, DAV auth type, invite, session timeout — that belongs in Admin.
 3. **`html/dav.php` / `cal.php` / `card.php`** index `$config['system']['cal_enabled']` (and siblings) with **no default**. Sparse YAML would 500 until readers are fixed.
-4. **Env wins over YAML** for files path/quota, Push URL/log, portal time/week/log, `PORTAL_ADMIN_USERS`. TrueNAS compose even **sets** `TIME_FORMAT` and `BAIKAL_PORTAL_WEEK_START`, so Admin cannot be source of truth.
+4. **Env wins over YAML** for files path/quota, Push URL/log, portal log, `PORTAL_ADMIN_USERS`. **Done in 2.4.3:** `portal_time_format` / `portal_week_start` are Admin → System settings only; compose `TIME_FORMAT` / `BAIKAL_PORTAL_WEEK_START` is ignored.
 5. **Admin gaps:** `auth_realm` should be read-only; `push_allowed_hosts` is not in the form. Enabling Files does not always `prepareStorage` / `markActive`, so `/health.php` can stay `degraded` with `filesStorageReady: false`.
 
 ---
@@ -64,9 +64,11 @@ database:
 | `BAIKAL_DAV_MAX_BODY_SIZE` | nginx, not PHP |
 | `TZ` | PHP/OS clock; **seeds** timezone default only |
 
-**Environment — stop using for product** (after one-release deprecation): `BAIKAL_FILES_MAX_UPLOAD_MB`, `BAIKAL_FILES_QUOTA_MB`, `BAIKAL_PUSH_EXTERNAL_URL`, `PUSH_LOG_LEVEL`, `PORTAL_LOG_LEVEL`, `TIME_FORMAT`, `BAIKAL_PORTAL_WEEK_START`, `PORTAL_ADMIN_USERS`.
+**Environment — stop using for product** (after one-release deprecation): `BAIKAL_FILES_MAX_UPLOAD_MB`, `BAIKAL_FILES_QUOTA_MB`, `BAIKAL_PUSH_EXTERNAL_URL`, `PUSH_LOG_LEVEL`, `PORTAL_LOG_LEVEL`, `PORTAL_ADMIN_USERS`.
 
-For one release, env may apply **only if the YAML key is absent**. After Admin saves, YAML wins. Compose must drop baked-in `TIME_FORMAT` / week-start.
+**Done (2.4.3):** `TIME_FORMAT` / `BAIKAL_PORTAL_WEEK_START` — ignored; set in Admin → System settings. Compose examples no longer bake them in.
+
+For remaining product env, one release may apply **only if the YAML key is absent**. After Admin saves, YAML wins.
 
 **`PORTAL_ADMIN_USERS`:** today env **always** beats Admin. Change to: env only when `system.portal_admin_users` is unset. If env is set and YAML empty on first boot after this change, copy env into YAML once, then ignore env.
 
@@ -103,8 +105,8 @@ So sparse YAML does not crash DAV.
 
 ### Wave 4 — Env no longer shadows Admin — **M** (depends on 2)
 
-- Files quotas / Push / portal locale / log / admin-user list: env only if YAML key missing.
-- TrueNAS compose: remove default `TIME_FORMAT` / `BAIKAL_PORTAL_WEEK_START`; document “set in Admin”.
+- **Shipped in 2.4.3 (locale only):** TrueNAS compose dropped `TIME_FORMAT` / `BAIKAL_PORTAL_WEEK_START`; `/api/ui` reads Admin YAML; leftover env is ignored.
+- Remaining: files quotas / Push / portal log / admin-user list: env only if YAML key missing.
 - Admin GET shows **effective** value and `source: yaml | default | env`.
 - Tests: env set + YAML key set → YAML wins; env set + key absent → env.
 

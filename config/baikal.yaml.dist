@@ -39,9 +39,9 @@ system:
     # WebDAV-Push debug logging -> Specific/push_debug.log. Env overrides YAML:
     #   PUSH_LOG_LEVEL / BAIKAL_PUSH_LOG_LEVEL = off|error|warn|info|debug
     push_log_level: 'off'
-    # Portal SPA locale helpers (override browser auto-detect). Env also works:
-    #   TIME_FORMAT / BAIKAL_PORTAL_TIME_FORMAT = auto|12h|24h
-    #   BAIKAL_PORTAL_WEEK_START = auto|monday|sunday
+    # Portal SPA locale. Set in Admin → System settings (env is ignored).
+    #   portal_time_format: auto|12h|24h
+    #   portal_week_start: auto|monday|sunday
     portal_time_format: 'auto'
     portal_week_start: 'auto'
     # Portal debug logging (browser console + Docker/PHP error_log). Env:

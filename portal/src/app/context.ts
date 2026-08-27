@@ -219,11 +219,17 @@ export type AppState = {
   deleteAbConfirmId: number | null;
   monthCursor: { y: number; m: number };
   calView: "month" | "week" | "agenda";
+  /** After switching to week view, scroll the grid to (day start − 1 hour). */
+  weekScrollToDayStart: boolean;
+  /** Last week-grid scrollTop so returning to Calendar does not jump to midnight. */
+  weekWrapScrollTop: number | null;
   calFocusDay: string;
   eventSearch: string;
   eventSearchFocus: boolean;
   monthEvents: Array<CalendarEvent & { instanceId: number }>;
   monthEventsLoading: boolean;
+  /** True after the first events fetch this session (tab switch can reuse the cache). */
+  calendarEventsReady: boolean;
   eventModalOpen: boolean;
   editingEvent: CalendarEventDetail | null;
   creatingEvent: boolean;
@@ -395,11 +401,14 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     deleteAbConfirmId: null,
     monthCursor: { y: now.getFullYear(), m: now.getMonth() },
     calView: "month",
+    weekScrollToDayStart: false,
+    weekWrapScrollTop: null,
     calFocusDay: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
     eventSearch: "",
     eventSearchFocus: false,
     monthEvents: [],
     monthEventsLoading: false,
+    calendarEventsReady: false,
     eventModalOpen: false,
     editingEvent: null,
     creatingEvent: false,
