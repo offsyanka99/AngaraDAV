@@ -3,6 +3,7 @@ import type { TaskItem } from "../../api";
 import { esc } from "../../ui";
 import { itemKey } from "../keys";
 import type { TasksHost } from "./host";
+import { isOpenTaskStatus } from "./listing";
 
 export function tasksInTreeOrder(_host: TasksHost, list: TaskItem[]): { task: TaskItem; depth: number }[] {
   const byUid = new Map<string, TaskItem>();
@@ -80,7 +81,8 @@ export function parentTaskOptions(host: TasksHost, forTask: TaskItem, creating: 
       x.uid &&
       x.instanceId === calInstance &&
       !blocked.has(x.uid) &&
-      x.uid !== forTask.uid,
+      x.uid !== forTask.uid &&
+      isOpenTaskStatus(x.status),
   );
   const selected = forTask.parentUid || "";
   const opts = [

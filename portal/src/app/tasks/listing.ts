@@ -49,6 +49,12 @@ function dueBucket(iso: string | null | undefined, now = new Date()): "none" | "
   return "upcoming";
 }
 
+/** Open = not Done and not Cancelled (To do / In progress). */
+export function isOpenTaskStatus(status: string): boolean {
+  const s = status.toUpperCase();
+  return s !== "COMPLETED" && s !== "CANCELLED";
+}
+
 export function taskMatchesFilters(t: TaskItem, f: TaskColumnFilters, now = new Date()): boolean {
   if (f.status === "open") {
     if (t.status === "COMPLETED") return false;

@@ -7,6 +7,7 @@
 - Compose env `TIME_FORMAT` and `BAIKAL_PORTAL_WEEK_START` is ignored. After upgrade, set the two fields in System settings if you previously relied on compose (default is browser `auto`).
 - **Week view** opens scrolled to one hour before User settings **Day starts at** (e.g. day start 6:00 → first row 5:00). Returning to Calendar keeps that scroll and no longer flashes a full reload when events are unchanged.
 - Portal HTML `<meta>` CSP no longer includes `frame-ancestors` (browsers ignore it in meta; nginx still sends `frame-ancestors 'none'`).
+- **Tasks:** deleting a parent promotes subtasks by stripping `RELATED-TO` (they become real top-level tasks). **Delete with subtasks** removes the whole tree only after confirm. Parent-task picker lists open tasks only (not Done or Cancelled).
 
 Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
 

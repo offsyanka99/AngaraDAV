@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TaskItem } from "../../api.ts";
-import { DEFAULT_TASK_FILTERS, filterTasks, taskMatchesFilters } from "./listing.ts";
+import { DEFAULT_TASK_FILTERS, filterTasks, isOpenTaskStatus, taskMatchesFilters } from "./listing.ts";
 
 function task(over: Partial<TaskItem> & Pick<TaskItem, "uri">): TaskItem {
   return {
@@ -24,6 +24,17 @@ function task(over: Partial<TaskItem> & Pick<TaskItem, "uri">): TaskItem {
     ...over,
   };
 }
+
+describe("isOpenTaskStatus", () => {
+  it("treats to-do and in-progress as open", () => {
+    assert.equal(isOpenTaskStatus("NEEDS-ACTION"), true);
+    assert.equal(isOpenTaskStatus("IN-PROCESS"), true);
+  });
+  it("excludes done and cancelled", () => {
+    assert.equal(isOpenTaskStatus("COMPLETED"), false);
+    assert.equal(isOpenTaskStatus("CANCELLED"), false);
+  });
+});
 
 describe("task column filters", () => {
   const now = new Date(2026, 7, 20, 12, 0, 0);
