@@ -31,13 +31,14 @@ export async function handleShellAction(
     return true;
   }
 
-  if (action === "confirm-delete-ok") {
+  if (action === "confirm-delete-ok" || action === "confirm-delete-cascade") {
     const pending = state.confirmDelete;
     if (!pending) {
       render();
       return true;
     }
     const scope = pending.scope;
+    const cascade = action === "confirm-delete-cascade";
     closeConfirmDelete(state);
 
     if (scope === "event") {
@@ -74,13 +75,15 @@ export async function handleShellAction(
       clearFlash();
       render();
       try {
-        await api.deleteTask(state.editingTask.instanceId, state.editingTask.uri);
+        await api.deleteTask(state.editingTask.instanceId, state.editingTask.uri, {
+          cascade,
+        });
         state.selectedTaskKey = null;
         state.editingTask = null;
         state.creatingTask = false;
         state.taskModalOpen = false;
         await o.loadTasks();
-        setFlash("success", "Task deleted");
+        setFlash("success", cascade ? "Task and subtasks deleted" : "Task deleted");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Delete failed");
       } finally {

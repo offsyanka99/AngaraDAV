@@ -3,6 +3,7 @@ export { loadTasks } from "./loaders";
 export {
   tasksInTreeOrder,
   taskDescendantUids,
+  taskDescendantCount,
   parentTaskOptions,
   writableCheckedTasks,
 } from "./tree";

@@ -26,6 +26,8 @@ export type ConfirmDeleteState = {
   href?: string;
   /** For bulk-task */
   count?: number;
+  /** Direct + nested subtasks of a parent being deleted (exclude self). */
+  taskDescendantCount?: number;
 };
 
 export function renderConfirmDeleteModal(state: AppState): string {
@@ -34,6 +36,42 @@ export function renderConfirmDeleteModal(state: AppState): string {
   const detail = d.detail
     ? `<p class="muted small" style="margin:0.75rem 0 0">${esc(d.detail)}</p>`
     : "";
+  const hasSubs = (d.taskDescendantCount ?? 0) > 0;
+  const footer = hasSubs
+    ? [
+        {
+          label: "Cancel",
+          action: "confirm-delete-cancel",
+          variant: "ghost" as const,
+          disabled: state.busy,
+        },
+        {
+          label: "Delete task",
+          action: "confirm-delete-ok",
+          variant: "danger" as const,
+          disabled: state.busy,
+        },
+        {
+          label: "Delete with subtasks",
+          action: "confirm-delete-cascade",
+          variant: "danger" as const,
+          disabled: state.busy,
+        },
+      ]
+    : [
+        {
+          label: "Cancel",
+          action: "confirm-delete-cancel",
+          variant: "ghost" as const,
+          disabled: state.busy,
+        },
+        {
+          label: "Delete",
+          action: "confirm-delete-ok",
+          variant: "danger" as const,
+          disabled: state.busy,
+        },
+      ];
   return renderModal({
     id: "portal-confirm-delete-modal",
     title: d.title,
@@ -41,20 +79,7 @@ export function renderConfirmDeleteModal(state: AppState): string {
     closeAction: "confirm-delete-cancel",
     size: "sm",
     body: `<p style="margin:0">${esc(d.message)}</p>${detail}`,
-    footer: [
-      {
-        label: "Cancel",
-        action: "confirm-delete-cancel",
-        variant: "ghost",
-        disabled: state.busy,
-      },
-      {
-        label: "Delete",
-        action: "confirm-delete-ok",
-        variant: "danger",
-        disabled: state.busy,
-      },
-    ],
+    footer,
   });
 }
 

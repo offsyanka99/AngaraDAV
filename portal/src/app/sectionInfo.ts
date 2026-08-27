@@ -72,7 +72,7 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     title: "Tasks",
     paragraphs: [
       "Tasks are CalDAV VTODO items stored in your calendars. They sync with Apple Reminders, Thunderbird, DAVx⁵, and other clients via /dav.php/.",
-      "Subtasks use RELATED-TO;RELTYPE=PARENT (same calendar). Add a subtask from a parent, or set Parent in the form. Deleting a parent promotes its children to top-level.",
+      "Subtasks use RELATED-TO;RELTYPE=PARENT (same calendar). Add a subtask from a parent, or set Parent in the form. Deleting a parent keeps subtasks as top-level tasks (RELATED-TO is removed) unless you confirm Delete with subtasks.",
       "Click a column header to sort. Create tasks on any writable calendar that allows VTODO components.",
     ],
   },

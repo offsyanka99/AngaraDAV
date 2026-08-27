@@ -4,6 +4,7 @@
  */
 import type { AppOrchestrator } from "../orchestrator";
 import { filterTasks } from "./listing";
+import { taskDescendantCount } from "./tree";
 
 /**
  * Handle task actions. Returns true if the action was recognized
@@ -123,7 +124,8 @@ export async function handleTasksAction(
           n === 1
             ? "Delete the selected task?"
             : `Delete ${n} selected tasks?`,
-        detail: "CalDAV clients will sync the removal. This cannot be undone.",
+        detail:
+          "CalDAV clients will sync the removal. Subtasks of a selected parent that you did not select stay as top-level tasks. This cannot be undone.",
         count: n,
       };
       render();
@@ -203,11 +205,16 @@ export async function handleTasksAction(
   if (action === "delete-task") {
     if (!state.editingTask || state.creatingTask) return true;
     const title = String(state.editingTask.summary || "this task").trim() || "this task";
+    const n = state.editingTask.uid ? taskDescendantCount(o.tasksHost, state.editingTask.uid) : 0;
     state.confirmDelete = {
       scope: "task",
       title: "Delete task",
       message: `Delete “${title}”?`,
-      detail: "CalDAV clients will sync the removal. This cannot be undone.",
+      detail:
+        n > 0
+          ? `This task has ${n} subtask${n === 1 ? "" : "s"}. “Delete task” keeps them as top-level tasks (RELATED-TO is removed). “Delete with subtasks” removes this task and every nested subtask. This cannot be undone.`
+          : "CalDAV clients will sync the removal. This cannot be undone.",
+      taskDescendantCount: n,
     };
     render();
     return true;

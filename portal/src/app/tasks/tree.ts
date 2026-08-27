@@ -66,6 +66,12 @@ export function taskDescendantUids(host: TasksHost, selfUid: string): Set<string
   return blocked;
 }
 
+/** Nested subtasks of `selfUid` (does not include self). */
+export function taskDescendantCount(host: TasksHost, selfUid: string): number {
+  if (!selfUid) return 0;
+  return Math.max(0, taskDescendantUids(host, selfUid).size - 1);
+}
+
 export function parentTaskOptions(host: TasksHost, forTask: TaskItem, creating: boolean): string {
   const calInstance = forTask.instanceId;
   const blocked = creating || !forTask.uid ? new Set<string>() : taskDescendantUids(host, forTask.uid);

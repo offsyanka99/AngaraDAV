@@ -126,8 +126,49 @@ $svc->updateItem('alice', CalendarItemService::KIND_TASK, 10, $sub['uri'], [
 $svc->deleteItem('alice', CalendarItemService::KIND_TASK, 10, $task['uri']);
 $afterDel = $svc->getItem('alice', CalendarItemService::KIND_TASK, 10, $sub['uri']);
 assert_true(($afterDel['parentUid'] ?? null) === null, 'delete parent detaches subtask');
+$rawAfter = $pdo->prepare(
+    "SELECT calendardata FROM calendarobjects WHERE calendarid = 1 AND uri = ?"
+);
+$rawAfter->execute([$sub['uri']]);
+$icsAfter = (string) $rawAfter->fetchColumn();
+assert_true(
+    !preg_match('/^RELATED-TO/mi', $icsAfter),
+    'promote strips RELATED-TO from child ICS'
+);
 $svc->deleteItem('alice', CalendarItemService::KIND_TASK, 10, $sub['uri']);
 assert_true(count($svc->listItems('alice', CalendarItemService::KIND_TASK)) === 0, 'subtask deleted');
+
+// Cascade: delete parent and descendants only when requested
+$p2 = $svc->createItem('alice', CalendarItemService::KIND_TASK, [
+    'instanceId' => 10,
+    'summary'    => 'Checklist',
+    'status'     => 'NEEDS-ACTION',
+]);
+$c1 = $svc->createItem('alice', CalendarItemService::KIND_TASK, [
+    'instanceId' => 10,
+    'summary'    => 'Item A',
+    'status'     => 'NEEDS-ACTION',
+    'parentUid'  => $p2['uid'],
+]);
+$c2 = $svc->createItem('alice', CalendarItemService::KIND_TASK, [
+    'instanceId' => 10,
+    'summary'    => 'Item B',
+    'status'     => 'NEEDS-ACTION',
+    'parentUid'  => $p2['uid'],
+]);
+$gc = $svc->createItem('alice', CalendarItemService::KIND_TASK, [
+    'instanceId' => 10,
+    'summary'    => 'Item A.1',
+    'status'     => 'NEEDS-ACTION',
+    'parentUid'  => $c1['uid'],
+]);
+$svc->deleteItem('alice', CalendarItemService::KIND_TASK, 10, $p2['uri'], true);
+$left = $svc->listItems('alice', CalendarItemService::KIND_TASK);
+$leftUris = array_map(static fn ($r) => $r['uri'] ?? '', $left);
+assert_true(!in_array($p2['uri'], $leftUris, true), 'cascade deleted parent');
+assert_true(!in_array($c1['uri'], $leftUris, true), 'cascade deleted child');
+assert_true(!in_array($c2['uri'], $leftUris, true), 'cascade deleted sibling child');
+assert_true(!in_array($gc['uri'], $leftUris, true), 'cascade deleted grandchild');
 
 // Fresh parent for later cleanup path already empty — create note tests next
 $task = $svc->createItem('alice', CalendarItemService::KIND_TASK, [

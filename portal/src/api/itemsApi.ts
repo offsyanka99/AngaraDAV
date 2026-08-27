@@ -29,10 +29,13 @@ export const itemsApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  deleteTask: (instanceId: number, uri: string) =>
-    request<{ ok: boolean }>(`/tasks/${instanceId}/${encUri(uri)}`, {
-      method: "DELETE",
-    }),
+  deleteTask: (instanceId: number, uri: string, opts?: { cascade?: boolean }) =>
+    request<{ ok: boolean }>(
+      `/tasks/${instanceId}/${encUri(uri)}${opts?.cascade ? "?cascade=1" : ""}`,
+      {
+        method: "DELETE",
+      },
+    ),
   /** Bulk delete or update selected tasks (status / due / percent). */
   bulkTasks: (body: {
     op: "delete" | "update" | "copy";

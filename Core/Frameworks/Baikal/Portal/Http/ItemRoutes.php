@@ -64,7 +64,12 @@ class ItemRoutes {
                     return [$key => $item];
                 }
                 if ($method === 'DELETE') {
-                    $this->items->deleteItem($username, $kind, $instanceId, $uri);
+                    $cascade = false;
+                    if ($kind === CalendarItemService::KIND_TASK) {
+                        $raw = strtolower(trim((string) ($_GET['cascade'] ?? '')));
+                        $cascade = $raw === '1' || $raw === 'true' || $raw === 'yes';
+                    }
+                    $this->items->deleteItem($username, $kind, $instanceId, $uri, $cascade);
 
                     return ['ok' => true];
                 }

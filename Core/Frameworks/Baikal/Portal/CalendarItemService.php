@@ -268,7 +268,12 @@ class CalendarItemService {
         return $this->getItem($username, $kind, $instanceId, $uri);
     }
 
-    public function deleteItem(string $username, string $kind, int $instanceId, string $uri): void {
+    /**
+     * @param bool $cascade When true (tasks only), delete this VTODO and all descendants.
+     *                      When false, promote direct children (strip RELATED-TO;RELTYPE=PARENT).
+     *                      Never deletes children unless $cascade is true.
+     */
+    public function deleteItem(string $username, string $kind, int $instanceId, string $uri, bool $cascade = false): void {
         $this->componentForKind($kind);
         $calId = $this->requireAccess($username, $instanceId, true);
         if ($this->meta->isReadOnly($instanceId)) {
@@ -279,12 +284,21 @@ class CalendarItemService {
         if (!$obj) {
             throw new ApiException(ucfirst($kind) . ' not found', 404);
         }
-        // Orphan subtasks (clear RELATED-TO parent) so they stay usable after delete
         if ($kind === self::KIND_TASK && !empty($obj['calendardata'])) {
             $parsed = $this->parseTodo($this->calendardataToString($obj['calendardata']));
             $uid = trim((string) ($parsed['uid'] ?? ''));
             if ($uid !== '') {
-                $this->detachChildren($calId, $instanceId, $uid);
+                if ($cascade) {
+                    foreach ($this->descendantTodoUris($calId, $uid) as $childUri) {
+                        try {
+                            $this->backend->deleteCalendarObject([$calId, $instanceId], $childUri);
+                        } catch (\Throwable $e) {
+                            // continue deleting the rest of the tree
+                        }
+                    }
+                } else {
+                    $this->detachChildren($calId, $instanceId, $uid);
+                }
             }
         }
         $this->backend->deleteCalendarObject([$calId, $instanceId], $uri);
@@ -733,7 +747,57 @@ class CalendarItemService {
     }
 
     /**
-     * When a parent task is deleted, clear RELATED-TO on children so they become top-level.
+     * URIs of VTODO objects whose ancestor is $parentUid (not including the parent).
+     *
+     * @return list<string>
+     */
+    private function descendantTodoUris(int $calId, string $parentUid): array {
+        $byUid = [];
+        $stmt = $this->pdo->prepare(
+            "SELECT uri, uid, calendardata FROM calendarobjects
+             WHERE calendarid = ? AND UPPER(componenttype) = 'VTODO'"
+        );
+        $stmt->execute([$calId]);
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $uid = trim((string) ($row['uid'] ?? ''));
+            $data = $this->calendardataToString($row['calendardata'] ?? '');
+            $parsed = $this->parseTodo($data);
+            if ($uid === '') {
+                $uid = trim((string) ($parsed['uid'] ?? ''));
+            }
+            if ($uid === '') {
+                continue;
+            }
+            $p = $parsed['parentUid'] ?? null;
+            $byUid[strtolower($uid)] = [
+                'uri'       => (string) $row['uri'],
+                'parentUid' => is_string($p) ? $p : '',
+            ];
+        }
+        $want = [strtolower($parentUid) => true];
+        $uris = [];
+        $grew = true;
+        while ($grew) {
+            $grew = false;
+            foreach ($byUid as $uidKey => $info) {
+                if (isset($uris[$uidKey]) || isset($want[$uidKey])) {
+                    continue;
+                }
+                $p = strtolower((string) $info['parentUid']);
+                if ($p !== '' && isset($want[$p])) {
+                    $want[$uidKey] = true;
+                    $uris[$uidKey] = $info['uri'];
+                    $grew = true;
+                }
+            }
+        }
+
+        return array_values($uris);
+    }
+
+    /**
+     * When a parent task is deleted, strip RELATED-TO;RELTYPE=PARENT on direct
+     * children so they are real top-level tasks (not orphans that only look like roots).
      */
     private function detachChildren(int $calId, int $instanceId, string $parentUid): void {
         $stmt = $this->pdo->prepare(
@@ -769,6 +833,11 @@ class CalendarItemService {
             }
             $this->clearParentRelatedTo($todo);
             $todo->DTSTAMP = new \DateTime('now', new \DateTimeZone('UTC'));
+            $seq = 0;
+            if (isset($todo->SEQUENCE)) {
+                $seq = (int) $todo->SEQUENCE->getValue();
+            }
+            $todo->SEQUENCE = $seq + 1;
             $serialized = $vcal->serialize();
             $vcal->destroy();
             try {
