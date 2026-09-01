@@ -43,6 +43,13 @@ Full detail in the [test-engineer agent](.github/agents/test-engineer.agent.md).
 - `pytest tests/portal_admin_e2e.py -v` — live e2e against a disposable local instance only (`make local-up` first).
 - `make local-up` — local Docker dev instance on `:31088`; see [README.md](README.md) for ownership/recreate pitfalls.
 
+## Agent workflows
+
+- [workspace-exploration](.github/skills/workspace-exploration/SKILL.md) — read-only project, configuration, dependency, and target discovery.
+- [admin-api-development](.github/skills/admin-api-development/SKILL.md) — `/api/admin/*` services, routing, audit requirements, portal client work, and tests.
+- [portal-feature-development](.github/skills/portal-feature-development/SKILL.md) — portal TypeScript/Vite UI and API feature workflow.
+- [dav-protocol-development](.github/skills/dav-protocol-development/SKILL.md) — CalDAV/CardDAV/WebDAV and SabreDAV compatibility workflow.
+
 ## Other docs
 
 [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [portal/README.md](portal/README.md) · [patches/README.md](patches/README.md) · [Core/Frameworks/BaikalAdmin/README.md](Core/Frameworks/BaikalAdmin/README.md)
