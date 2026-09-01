@@ -3,6 +3,8 @@ import type {
   AdminCapabilities,
   AdminDashboardStats,
   AdminDatabaseSettings,
+  AdminSettingsBackup,
+  AdminSettingsRestoreResult,
   AdminSystemSettings,
   AdminUserAddressBook,
   AdminUserCalendar,
@@ -147,6 +149,25 @@ export const adminApi = {
     request<{ data: AdminSystemSettings }>("/admin/settings/system", {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+  /** Export the editable system settings as a portable JSON backup document. */
+  adminSettingsBackup: () =>
+    request<{ data: AdminSettingsBackup }>("/admin/settings/backup"),
+  /**
+   * Preview (dryRun: true) or apply (dryRun: false, confirm: true) a settings
+   * backup document previously produced by adminSettingsBackup().
+   */
+  adminRestoreSettings: (
+    backup: Record<string, unknown>,
+    opts: { dryRun?: boolean; confirm?: boolean } = {},
+  ) =>
+    request<{ data: AdminSettingsRestoreResult }>("/admin/settings/restore", {
+      method: "POST",
+      body: JSON.stringify({
+        backup,
+        dryRun: !!opts.dryRun,
+        confirm: !!opts.confirm,
+      }),
     }),
   /** Factory reset: remove baikal.yaml + INSTALL_DISABLED; then open installer. Requires current password. */
   adminResetToDefault: (confirm = true, password = "") =>

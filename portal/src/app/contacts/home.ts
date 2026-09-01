@@ -144,7 +144,6 @@ export function renderContactsHome(o: AppOrchestrator): string {
               <button type="button" class="info-modal-close" data-action="close-contact-modal" aria-label="Close">×</button>
             </header>
             <div class="cal-modal-body">
-              ${o.renderFlashBanner()}
               <form class="stack" data-form="contact">
                 <div class="contact-photo-row">
                   <div class="contact-photo-preview">
@@ -272,7 +271,6 @@ export function renderContactsHome(o: AppOrchestrator): string {
           titleId: "ab-modal-title",
           closeAction: "close-ab-modal",
           body: `
-              ${o.renderFlashBanner()}
               <section>
                 <p class="muted small mono" style="margin:0">
                   ${esc(selectedAb.uri)} · ${selectedAb.cardCount} contact${selectedAb.cardCount === 1 ? "" : "s"}
@@ -321,7 +319,6 @@ export function renderContactsHome(o: AppOrchestrator): string {
         closeAction: "cancel-delete-ab",
         size: "sm",
         body: `
-            ${o.renderFlashBanner()}
             <p>You are about to permanently delete <strong>${esc(deleteAbTarget.displayname)}</strong>
               <span class="muted small mono">(${esc(deleteAbTarget.uri)})</span>.</p>
             <p class="muted small">${

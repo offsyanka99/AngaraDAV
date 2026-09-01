@@ -139,6 +139,29 @@ export type AdminSystemSettings = {
   writable?: boolean;
 };
 
+/** GET /api/admin/settings/backup response payload. */
+export type AdminSettingsBackup = {
+  kind: string;
+  formatVersion: number;
+  productVersion: string;
+  createdAt: string;
+  createdBy: string;
+  settings: Record<string, unknown>;
+  database: Record<string, unknown>;
+  checksum: string;
+};
+
+/** POST /api/admin/settings/restore response payload (dryRun or applied). */
+export type AdminSettingsRestoreResult = {
+  changed: Record<string, { from: unknown; to: unknown }>;
+  unchanged: string[];
+  invalid: { key: string; reason: string }[];
+  unknown: string[];
+  productVersion: string;
+  versionMismatch: boolean;
+  applied: string[];
+};
+
 /** Feature status from GET /api/admin/capabilities (parity matrix). */
 export type AdminFeatureStatus = "full" | "read-only" | "coming-soon" | "deferred" | string;
 

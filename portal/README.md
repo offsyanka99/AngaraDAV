@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.4.3`
+**Version:** `2.4.5`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -62,7 +62,7 @@ hosts — they do not import `app.ts`.
 | **Tasks** | CalDAV `VTODO` list (sortable, full width), subtasks via `RELATED-TO;RELTYPE=PARENT`, multi-select bulk status/due/%, create/edit modal on writable calendars |
 | **Notes** | CalDAV `VJOURNAL` list (sortable, full width), create/edit modal, rich editor (H1–H3, blockquote, checkbox, strikethrough, inline code, horizontal line, lists/links) with jtx Board Markdown in `DESCRIPTION` |
 | **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete; upload progress dialog; folder item count; quota bar; same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/` |
-| **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database**. Installer: `/portal/install/`. |
+| **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database** · **Configuration**. Installer: `/portal/install/`. |
 
 Section help lives under **(i)** info modals. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
 
@@ -83,11 +83,12 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 #### UI surface
 
 - Opened from the **user menu → Administration** (hidden for non-admins).
-- Hash routes: `#admin` (Overview), `#admin/settings`, `#admin/users`, `#admin/users/{username}`, `#admin/database`.
+- Hash routes: `#admin` (Overview), `#admin/settings`, `#admin/users`, `#admin/users/{username}`, `#admin/database`, `#admin/configuration`.
 - **Overview:** stats + service On/Off + version/releases links.
 - **System settings:** form writes `baikal.yaml` (services, files, push, session, admin password); timezone select.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
+- **Configuration:** download/restore a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`), preview shows a changed/unknown/invalid diff before applying. **Reset to Default** (full factory wipe + reopen installer) lives here, not on System settings.
 - **Capabilities:** `GET /api/admin/capabilities` → `portalAdminUrl` + per-page `portalUrl` (all under `/portal/#admin…`).
 - Non-admins never see the menu item; `/api/admin/*` still returns **403**.
 
@@ -100,6 +101,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 | User calendars / address books | Yes |
 | System settings | Yes |
 | Database settings write | Yes (`confirm: "CONFIRM"`) |
+| Settings backup / restore | Yes (never secrets or user/DAV data) |
 | Installer / upgrade | Yes (`/portal/install/`) |
 
 Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → server import, elapsed time) and show the result when finished.

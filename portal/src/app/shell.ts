@@ -5,7 +5,7 @@ import { esc } from "../ui";
 import { aboutModalHtml } from "./about";
 import { DOCS_URL } from "./constants";
 import type { AppState } from "./context";
-import { renderFlashBanner } from "./flash";
+import { renderAuthFlash } from "./flash";
 import { adminUiEnabled, userIsAdmin } from "./session";
 import { userSettingsModalHtml } from "./userSettings";
 
@@ -63,29 +63,9 @@ export function shell(state: AppState, body: string, opts: ShellOpts = {}): stri
           <a class="brand" href="/portal/">${brand}</a>
         </nav>`;
 
-  // When calendar/event/contact/AB/files dialogs are open, keep flash off the main page
-  // so banners do not appear above (or before) the modal.
-  const flashOnMain = !(
-    state.calModalOpen ||
-    state.createCalModalOpen ||
-    state.deleteConfirmId !== null ||
-    state.deleteAbConfirmId !== null ||
-    state.eventModalOpen ||
-    state.contactModalOpen ||
-    state.noteModalOpen ||
-    state.taskModalOpen ||
-    state.abModalOpen ||
-    state.filesRenamePath !== null ||
-    state.filesDeletePaths !== null ||
-    state.filesTransfer !== null ||
-    state.filesMkdirOpen ||
-    state.filesPreview !== null ||
-    state.filesUploadConflict !== null ||
-    state.filesUploadProgress !== null ||
-    state.confirmDelete !== null ||
-    state.userSettingsOpen
-  );
-  const flashHtml = flashOnMain ? renderFlashBanner(state) : "";
+  // Only the sign-in screen keeps an inline banner (session expired, install
+  // gate); every other system message is a toast rendered outside this shell.
+  const flashHtml = opts.auth ? renderAuthFlash(state) : "";
 
   // Full-width sticky tab strip under topnav (same height for user + admin)
   const tabsBar =

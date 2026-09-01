@@ -137,7 +137,7 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void> {
       log.event("bootstrap.anonymous");
     } else {
       log.error("bootstrap failed", e instanceof Error ? e.message : e);
-      setFlash(state, "error", e instanceof Error ? e.message : "Failed to load");
+      setFlash("error", e instanceof Error ? e.message : "Failed to load");
     }
   }
   deps.render();

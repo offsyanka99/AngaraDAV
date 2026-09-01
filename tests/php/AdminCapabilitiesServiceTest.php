@@ -45,7 +45,7 @@ foreach ($cap['pages'] as $p) {
     $order[] = $p['id'];
 }
 
-assert_true($order === ['overview', 'settings', 'users', 'database'], 'tab order overview→settings→users→database');
+assert_true($order === ['overview', 'settings', 'users', 'database', 'configuration'], 'tab order overview→settings→users→database→configuration');
 
 assert_true(isset($byId['overview']), 'overview page defined');
 assert_true($byId['overview']['available'] === true, 'overview available');

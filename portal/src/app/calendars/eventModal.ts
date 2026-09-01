@@ -126,7 +126,6 @@ export function renderEventModal(host: CalendarsHost): string {
         <button type="button" class="info-modal-close" data-action="close-event-modal" aria-label="Close">×</button>
       </header>
       <div class="cal-modal-body">
-        ${host.renderFlashBanner()}
         ${
           !host.state.creatingEvent && (e.hasRrule || freq)
             ? `<p class="muted small" style="margin:0 0 0.75rem">Repeat rules apply to the whole series (CalDAV RRULE).</p>`

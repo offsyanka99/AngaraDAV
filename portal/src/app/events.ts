@@ -229,6 +229,13 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     return;
   }
 
+  if (action === "admin-restore-file" && el instanceof HTMLInputElement) {
+    const file = el.files?.[0] ?? null;
+    el.value = "";
+    if (file) void admin.onAdminRestoreFileSelected(o.adminHost, file);
+    return;
+  }
+
   if (action === "files-upload-pick-files" && el instanceof HTMLInputElement) {
     files.onFilesUploadInput(o.filesHost, el, false);
     return;

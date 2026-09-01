@@ -105,10 +105,10 @@ services:
   angaradav:
     # --- Image tags (GHCR: ghcr.io/offsyanka99/angaradav) ----------------
     # latest          = main branch (day-to-day)
-    # 2.4.3           = product release tag v2.4.3 (preferred pin)
+    # 2.4.5           = product release tag v2.4.5 (preferred pin)
     # sha-<7+ hex>    = exact git commit
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.4.3
+    # image: ghcr.io/offsyanka99/angaradav:2.4.5
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------

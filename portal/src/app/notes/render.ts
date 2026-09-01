@@ -1,7 +1,6 @@
 /** Notes tab UI (Phase 7). */
 import { esc, renderModal } from "../../ui";
 import { toLocalInputValue } from "../datetime";
-import { renderFlashBanner } from "../flash";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
@@ -54,8 +53,7 @@ function renderNoteModal(host: NotesHost): string {
     cardClassName: "note-edit-modal-card",
     form: true,
     formAttrs: 'data-form="note"',
-    body: `${renderFlashBanner(host.state)}
-            ${
+    body: `${
               creating
                 ? `<label>Calendar
                     <select name="instanceId" required ${host.state.noteCalendars.length === 0 ? "disabled" : ""}>

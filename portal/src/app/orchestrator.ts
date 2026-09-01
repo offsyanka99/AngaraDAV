@@ -83,7 +83,6 @@ export type AppOrchestrator = {
   // UI helpers
   shell: (main: string, opts: { tabs: string }) => string;
   renderLogin: () => void;
-  renderFlashBanner: () => string;
   renderMonthGrid: () => string;
   renderEventModal: () => string;
   adminSubnavButtons: () => string;

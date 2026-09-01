@@ -1,7 +1,6 @@
 /** Tasks tab UI (Phase 7). */
 import { esc, renderModal } from "../../ui";
 import { toLocalInputValue } from "../datetime";
-import { renderFlashBanner } from "../flash";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
 import { infoTitle } from "../sectionInfo";
@@ -275,8 +274,7 @@ function renderTaskModal(
     size: "wide",
     form: true,
     formAttrs: 'data-form="task"',
-    body: `${renderFlashBanner(host.state)}
-            ${
+    body: `${
               creating
                 ? `<label>Calendar
                     <select name="instanceId" required ${host.state.taskCalendars.length === 0 ? "disabled" : ""}>

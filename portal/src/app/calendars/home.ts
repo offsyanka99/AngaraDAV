@@ -114,7 +114,6 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
           titleId: "cal-modal-title",
           closeAction: "close-cal-modal",
           body: `
-              ${o.renderFlashBanner()}
               <section>
                 <p class="muted small mono" style="margin:0">
                   ${esc(selected.uri)}
@@ -218,7 +217,6 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
         closeAction: "cancel-delete-cal",
         size: "sm",
         body: `
-            ${o.renderFlashBanner()}
             <p>You are about to permanently delete <strong>${esc(deleteTarget.displayname)}</strong>
               <span class="muted small mono">(${esc(deleteTarget.uri)})</span>.</p>
             <p class="muted small">All events, tasks, and notes in this calendar will be removed. Shares will be revoked. This cannot be undone.</p>
@@ -249,7 +247,6 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
         titleId: "cal-create-title",
         closeAction: "close-create-cal-modal",
         body: `
-            ${o.renderFlashBanner()}
             <p class="muted small" style="margin:0 0 0.75rem">
               Create a personal calendar, optional holidays feed, or a read-only calendar.
               <button type="button" class="info-btn" data-action="info" data-info="add-calendar"

@@ -7,7 +7,13 @@ import type { AdminPageId } from "../types";
 import type { AdminHost } from "./host";
 
 function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
-  if (raw === "overview" || raw === "users" || raw === "settings" || raw === "database") {
+  if (
+    raw === "overview" ||
+    raw === "users" ||
+    raw === "settings" ||
+    raw === "database" ||
+    raw === "configuration"
+  ) {
     return raw;
   }
   return null;
@@ -41,13 +47,14 @@ export function adminStatusBadgeClass(_host: AdminHost, status: string): string 
 }
 
 export function adminSubnavButtons(host: AdminHost): string {
-  /** Fixed UI order: Overview → System settings → Users → Database */
-  const order: AdminPageId[] = ["overview", "settings", "users", "database"];
+  /** Fixed UI order: Overview → System settings → Users → Database → Configuration */
+  const order: AdminPageId[] = ["overview", "settings", "users", "database", "configuration"];
   const labels: Record<AdminPageId, string> = {
     overview: "Overview",
     settings: "System settings",
     users: "Users",
     database: "Database",
+    configuration: "Configuration",
   };
   const fromApi = host.state.adminCapabilities?.pages;
   const byId = new Map<string, AdminCapabilityPage>();

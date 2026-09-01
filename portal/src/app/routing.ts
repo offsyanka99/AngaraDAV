@@ -23,7 +23,8 @@ export function parseAdminPageId(raw: string | null | undefined): AdminPageId | 
     raw === "overview" ||
     raw === "users" ||
     raw === "settings" ||
-    raw === "database"
+    raw === "database" ||
+    raw === "configuration"
   ) {
     return raw;
   }
@@ -33,7 +34,7 @@ export function parseAdminPageId(raw: string | null | undefined): AdminPageId | 
 /**
  * Parse location hash into portal tab + optional admin sub-page + user detail.
  * Supports #admin, #admin/overview, #admin/users, #admin/users/{username},
- * #admin/settings, #admin/database.
+ * #admin/settings, #admin/database, #admin/configuration.
  */
 export function parseLocationRoute(): {
   tab: TabId | null;

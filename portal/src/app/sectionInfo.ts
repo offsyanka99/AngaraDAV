@@ -157,6 +157,13 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
       "Passwords and encryption keys are never returned. Saving requires typing CONFIRM — wrong values can take the instance offline.",
     ],
   },
+  "admin-configuration": {
+    title: "Configuration",
+    paragraphs: [
+      "Download a JSON backup of the editable system settings, or restore one after reviewing a diff. No passwords, secrets, or user/DAV data are ever included.",
+      "Reset to Default (below) wipes this instance entirely — config, database, and WebDAV files — and reopens the installer.",
+    ],
+  },
 };
 
 export function infoTitle(title: string, infoKey: string, tag: "h1" | "h2" = "h2"): string {

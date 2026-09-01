@@ -36,9 +36,16 @@ export {
 } from "./users";
 export {
   renderAdminSettingsShell,
-  renderAdminResetModal,
   onAdminSettingsSave,
 } from "./settings";
+export {
+  renderAdminConfigurationShell,
+  renderAdminResetModal,
+  onAdminBackupDownload,
+  onAdminRestoreFileSelected,
+  onAdminRestoreDiscard,
+  onAdminRestoreApply,
+} from "./configuration";
 export {
   collectAdminDatabaseFormBody,
   onAdminDatabaseFormSubmit,

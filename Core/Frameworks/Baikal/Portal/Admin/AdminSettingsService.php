@@ -107,6 +107,34 @@ class AdminSettingsService {
     }
 
     /**
+     * Allow-listed settings keys (used by AdminBackupService to build/validate backups).
+     *
+     * @return list<string>
+     */
+    public function editableKeys(): array {
+        return self::EDITABLE_KEYS;
+    }
+
+    /** True when $key must never be accepted from a request/backup body. */
+    public function isForbiddenKey(string $key): bool {
+        return in_array($key, self::FORBIDDEN_BODY_KEYS, true);
+    }
+
+    /**
+     * Validate + coerce a single value for $key without persisting it
+     * (used by AdminBackupService to preview a restore before writing).
+     *
+     * @param mixed $value
+     *
+     * @return mixed
+     *
+     * @throws ApiException when $value is invalid for $key
+     */
+    public function coerceSettingValue(string $key, $value) {
+        return $this->validateAndCoerce($key, $value);
+    }
+
+    /**
      * Factory-reset: wipe config, database, DAV data, and file homes so
      * /portal/install/ starts clean.
      *

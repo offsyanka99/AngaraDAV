@@ -3,6 +3,7 @@
 namespace Baikal\Portal;
 
 use Baikal\Portal\Admin\AdminAudit;
+use Baikal\Portal\Admin\AdminBackupService;
 use Baikal\Portal\Admin\AdminCapabilitiesService;
 use Baikal\Portal\Admin\AdminDashboardService;
 use Baikal\Portal\Admin\AdminSettingsService;
@@ -26,6 +27,7 @@ class App {
     private AdminUserService $adminUsers;
     private AdminUserResourceService $adminResources;
     private AdminSettingsService $adminSettings;
+    private AdminBackupService $adminBackup;
     private CalendarService $calendars;
     private EventService $events;
     private ShareService $shares;
@@ -68,6 +70,7 @@ class App {
             $configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'),
             $this->portalSpecificDir()
         );
+        $this->adminBackup = new AdminBackupService($this->adminSettings, $this->portalSpecificDir());
         $calendarStore = new CalendarStore($pdo);
         $this->calendarImport = new CalendarImportService($calendarStore);
         $this->calendars = new CalendarService($calendarStore, $this->calendarImport);
@@ -730,6 +733,51 @@ class App {
                         . ' status=' . $e->getStatus()
                         . ' error=' . $e->getMessage(),
                         $e->getStatus() >= 500 ? 'error' : 'warn'
+                    );
+                    throw $e;
+                }
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Settings backup: export the editable system settings as a JSON document
+        if ($adminPath === '/admin/settings/backup' || $adminPath === '/admin/settings/backup/') {
+            if ($method === 'GET') {
+                $data = $this->adminBackup->export($adminUser);
+                $this->adminAudit->mutation($adminUser, 'export-settings-backup', 'system', 'ok');
+
+                return ['data' => $data];
+            }
+            throw new ApiException('Method not allowed', 405);
+        }
+
+        // Settings restore: apply the "changed" keys from a previously exported backup
+        if ($adminPath === '/admin/settings/restore' || $adminPath === '/admin/settings/restore/') {
+            if ($method === 'POST') {
+                $body = $this->http->jsonBody();
+                $backup = is_array($body['backup'] ?? null) ? $body['backup'] : [];
+                $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
+                $dryRun = !empty($body['dryRun']);
+                try {
+                    $result = $dryRun
+                        ? $this->adminBackup->preview($backup)
+                        : $this->adminBackup->restore($backup, $confirm, $adminUser);
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        $dryRun ? 'preview-settings-restore' : 'restore-settings-backup',
+                        'system',
+                        'ok',
+                        ['keys' => implode(',', $result['applied'] ?? [])]
+                    );
+
+                    return ['data' => $result];
+                } catch (ApiException $e) {
+                    $this->adminAudit->mutation(
+                        $adminUser,
+                        $dryRun ? 'preview-settings-restore' : 'restore-settings-backup',
+                        'system',
+                        'error:' . $e->getStatus(),
+                        ['msg' => $e->getMessage()]
                     );
                     throw $e;
                 }

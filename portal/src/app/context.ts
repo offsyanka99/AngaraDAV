@@ -8,6 +8,7 @@ import {
   type AdminCapabilities,
   type AdminDashboardStats,
   type AdminDatabaseSettings,
+  type AdminSettingsRestoreResult,
   type AdminSystemSettings,
   type AdminUserAddressBook,
   type AdminUserCalendar,
@@ -184,6 +185,13 @@ export type AppState = {
   adminResetModalOpen: boolean;
   adminResetConfirmChecked: boolean;
   adminResetPassword: string;
+  adminBackupBusy: boolean;
+  adminBackupError: string | null;
+  adminRestoreFileName: string | null;
+  adminRestoreDoc: Record<string, unknown> | null;
+  adminRestorePreview: AdminSettingsRestoreResult | null;
+  adminRestoreError: string | null;
+  adminRestoreApplying: boolean;
   adminDatabaseSettings: AdminDatabaseSettings | null;
   adminDatabaseSettingsLoading: boolean;
   adminDatabaseSettingsError: string | null;
@@ -267,7 +275,6 @@ export type AppState = {
   sessionIdleTimer: ReturnType<typeof setTimeout> | null;
   appVersion: string;
   handlingSessionExpiry: boolean;
-  suppressErrorFlashAfterExpiry: boolean;
   tasks: TaskItem[];
   notes: NoteItem[];
   taskCalendars: ItemCalendarOption[];
@@ -374,6 +381,13 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     adminResetModalOpen: false,
     adminResetConfirmChecked: false,
     adminResetPassword: "",
+    adminBackupBusy: false,
+    adminBackupError: null,
+    adminRestoreFileName: null,
+    adminRestoreDoc: null,
+    adminRestorePreview: null,
+    adminRestoreError: null,
+    adminRestoreApplying: false,
     adminDatabaseSettings: null,
     adminDatabaseSettingsLoading: false,
     adminDatabaseSettingsError: null,
@@ -449,7 +463,6 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     sessionIdleTimer: null,
     appVersion: APP_VERSION_FALLBACK,
     handlingSessionExpiry: false,
-    suppressErrorFlashAfterExpiry: false,
     tasks: [],
     notes: [],
     taskCalendars: [],

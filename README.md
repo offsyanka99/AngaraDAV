@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.4.3 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
+**Version:** 2.4.5 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.3`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.5`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 
@@ -20,7 +20,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.3`, `sha-…`) · linux/
 | **Tasks** — VTODO, subtasks, bulk edit, column filters | CalDAV |
 | **Notes** — VJOURNAL rich text in a modal (H1–H3, quote, lists, checkboxes, strikethrough, inline code; jtx Markdown in `DESCRIPTION`) | CalDAV |
 | **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename | WebDAV `/dav.php/files/{username}/` |
-| **Administration** — users, system settings, database (Admin-role DAV users) | `/portal/install/` for setup |
+| **Administration** — users, system settings, database, settings backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
 | **WebDAV-Push** (optional) — near-real-time CalDAV/CardDAV change notices (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
 
 Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Tabs follow Admin **DAV services** toggles.

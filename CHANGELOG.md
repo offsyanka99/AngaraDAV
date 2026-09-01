@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.5 — 2026-09-01
+
+### Portal
+- **Administration → Configuration.** New tab to back up and restore system settings, and the new home for **Reset to Default** (moved off System settings).
+  - **Backup** downloads a JSON snapshot of the editable settings (services, files, push, session, locale, admin roles). It never includes passwords, secrets, database credentials, or user/DAV data.
+  - **Restore** reads a backup file client-side and previews a diff (changed / unchanged / unknown / invalid keys) before writing anything; applying reuses the same validation as the System settings form, so an out-of-range or malformed value is rejected rather than silently written.
+  - Restore is rate-limited per admin and audited (key names only, never values).
+- New endpoints `GET /api/admin/settings/backup`, `POST /api/admin/settings/restore` (`dryRun` for preview, `confirm: true` to apply).
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
+## 2.4.4 — 2026-08-31
+
+### Portal
+- **System messages are now toasts.** Action results appear in a stack at the bottom right (top on narrow screens) instead of pushing the page down. Success and info messages fade after 5–10 seconds (longer for wordy ones); errors stay until dismissed. Repeated identical messages collapse into one with a `×N` badge, and at most four are shown at a time.
+- Auto-dismiss pauses while the pointer or keyboard focus is on a toast and while the browser tab is hidden.
+- Toasts float above dialogs, so messages raised while a modal is open are no longer hidden or dropped. Screen readers get them through dedicated live regions (assertive for errors, polite otherwise).
+- The sign-in screen keeps its inline banner for the session-timeout and setup/upgrade notices.
+
+Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
+
 ## 2.4.3 — 2026-08-27
 
 ### Portal

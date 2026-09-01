@@ -4,6 +4,7 @@
 import { ApiError, type PortalUi } from "../api";
 import { log, setLogLevel } from "../log";
 import type { AppState } from "./context";
+import { notify } from "./notify";
 import type { TabId } from "./types";
 
 export function userIsAdmin(state: AppState): boolean {
@@ -294,7 +295,9 @@ export function handleSessionExpired(
   try {
     log.event("session.expired");
     opts.clearSession();
-    state.suppressErrorFlashAfterExpiry = true;
+    // In-flight requests are about to fail with 401; keep their error toasts out.
+    notify.dismissAll();
+    notify.setErrorsSuppressed(true);
     state.flash = {
       type: "info",
       message:

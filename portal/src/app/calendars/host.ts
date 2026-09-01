@@ -28,7 +28,6 @@ export type CalendarsHost = {
   getDtFieldCurrentValue: (field: string) => string;
   setDtFieldValue: (field: string, value: string | null) => void;
   positionDtPopovers: () => void;
-  renderFlashBanner: () => string;
   accessBadge: (access: string) => string;
   formatImportResult: (r: { imported: number; updated: number; skipped: number }) => string;
   /** Reload calendars/contacts lists after create/edit calendar */

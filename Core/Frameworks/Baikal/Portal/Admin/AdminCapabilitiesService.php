@@ -46,7 +46,7 @@ class AdminCapabilitiesService {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
         $uiEnabled = self::boolFlag($sys, 'portal_admin_ui_enabled', true);
 
-        // UI tab order: Overview → System settings → Users → Database
+        // UI tab order: Overview → System settings → Users → Database → Configuration
         $pages = [
             [
                 'id'          => 'overview',
@@ -83,6 +83,15 @@ class AdminCapabilitiesService {
                 'portalUrl'   => '/portal/#admin/database',
                 'portalLabel' => 'Database',
                 'summary'     => 'Connection settings; password never returned. Saves require typing CONFIRM.',
+            ],
+            [
+                'id'          => 'configuration',
+                'label'       => 'Configuration',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/configuration',
+                'portalLabel' => 'Configuration',
+                'summary'     => 'Download or restore a settings backup; reset the instance to defaults.',
             ],
         ];
 

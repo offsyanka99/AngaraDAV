@@ -9,10 +9,10 @@ import type { AdminPageId } from "./app/types";
 import { bootstrap as bootstrapPortal, onLogin as onLoginPortal } from "./app/bootstrap";
 import {
   clearFlash as clearFlashState,
-  renderFlashBanner as renderFlashBannerState,
   setFlash as setFlashState,
 } from "./app/flash";
 import { renderLogin as renderLoginView } from "./app/login";
+import { mountNotifications } from "./app/notify";
 import {
   captureScroll as captureScrollRoot,
   restoreScroll as restoreScrollRoot,
@@ -80,7 +80,7 @@ export function mountApp(root: HTMLElement): void {
   let o: AppOrchestrator;
 
   function setFlash(type: FlashType, message: string) {
-    setFlashState(state, type, message);
+    setFlashState(type, message);
   }
   function clearFlash() {
     clearFlashState(state);
@@ -196,7 +196,6 @@ export function mountApp(root: HTMLElement): void {
     getDtFieldCurrentValue: (field) => dt.getDtFieldCurrentValue(o, field),
     setDtFieldValue: (field, value) => dt.setDtFieldValue(o, field, value),
     positionDtPopovers: () => dt.positionDtPopovers(o),
-    renderFlashBanner: () => renderFlashBannerState(state),
     accessBadge: accessBadgeFn,
     formatImportResult: formatImportResultFn,
     loadHome: () => loadHomeNav(o),
@@ -287,7 +286,6 @@ export function mountApp(root: HTMLElement): void {
     shell: (main, opts) => shellHtml(state, main, opts),
     renderLogin: () =>
       renderLoginView(root, state, (body, shellOpts) => shellHtml(state, body, shellOpts)),
-    renderFlashBanner: () => renderFlashBannerState(state),
     renderMonthGrid: () => calendars.renderMonthGrid(calendarsHost),
     renderEventModal: () => calendars.renderEventModal(calendarsHost),
     adminSubnavButtons: () => admin.adminSubnavButtons(adminHost),
@@ -331,6 +329,9 @@ export function mountApp(root: HTMLElement): void {
 
   ctx = { root, state, api, render, setFlash, clearFlash };
   void ctx;
+
+  // Toast stack lives on <body>, outside root, so render() cannot reset its timers.
+  mountNotifications();
 
   // Mount-time listeners once (delegated-events Step 1 dual path).
   // Post-render bindApp(o) still attaches element-level handlers until later steps.

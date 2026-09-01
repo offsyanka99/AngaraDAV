@@ -3,7 +3,7 @@
  */
 import { api } from "../../api";
 import { log } from "../../log";
-import { esc, renderConfirmCheckbox, renderModal } from "../../ui";
+import { esc } from "../../ui";
 import { timezoneSelectOptions } from "../../timezones";
 import { infoTitle } from "../sectionInfo";
 import type { AdminHost } from "./host";
@@ -174,64 +174,7 @@ export function renderAdminSettingsShell(host: AdminHost): string {
           <button type="submit" class="btn btn-primary" ${host.state.busy || s.writable === false ? "disabled" : ""}>Save settings</button>
         </div>
       </form>
-    </section>
-    <section class="card card-danger-zone">
-      <div class="section-header">
-        <h2>Danger zone</h2>
-      </div>
-      <p class="muted small">
-        <strong>Reset to Default</strong> is a full factory wipe: config, database (all users and data),
-        WebDAV files, and install lock. A timestamped backup of
-        <span class="mono">baikal.yaml</span> is kept next to config; <strong>back up volumes first</strong>
-        if you need data recovery. Everything else is deleted, then the installer opens.
-      </p>
-      <div class="form-actions-row" style="margin-top:0.75rem">
-        <button type="button" class="btn btn-danger" data-action="admin-reset-open" ${host.state.busy || s.writable === false ? "disabled" : ""}>
-          Reset to Default
-        </button>
-      </div>
-    </section>
-    ${renderAdminResetModal(host)}`;
-}
-
-export function renderAdminResetModal(host: AdminHost): string {
-  if (!host.state.adminResetModalOpen) return "";
-  return renderModal({
-    id: "admin-reset-modal",
-    title: "Reset to Default",
-    titleId: "admin-reset-title",
-    closeAction: "admin-reset-close",
-    size: "sm",
-    body: `
-        <p>This permanently wipes this AngaraDAV instance and opens the installer.</p>
-        <ul class="admin-feature-list muted">
-          <li>Deletes <span class="mono">config/baikal.yaml</span> (timestamped backup only)</li>
-          <li>Deletes the database (all DAV users, calendars, contacts, events)</li>
-          <li>Deletes WebDAV file homes and quarantine</li>
-          <li>Removes <span class="mono">INSTALL_DISABLED</span> so install can run</li>
-        </ul>
-        <p class="muted small">This cannot be undone. You will complete setup at <span class="mono">/portal/install/</span>.</p>
-        ${renderConfirmCheckbox({
-          action: "admin-reset-toggle",
-          label: "I understand all data will be deleted and the installer will open",
-          checked: host.state.adminResetConfirmChecked,
-          disabled: host.state.busy,
-          style: "admin",
-        })}
-        <label style="margin-top:1rem">Your portal password
-          <input type="password" data-action="admin-reset-password" value="${esc(host.state.adminResetPassword)}"
-            autocomplete="current-password" placeholder="Re-enter password to confirm" ${host.state.busy ? "disabled" : ""} />
-        </label>`,
-    footer: [
-      { label: "Cancel", action: "admin-reset-close", variant: "ghost", disabled: host.state.busy },
-      {
-        label: "Reset and open installer",
-        action: "admin-reset-confirm",
-        variant: "danger",
-        disabled: host.state.busy || !host.state.adminResetConfirmChecked || host.state.adminResetPassword.trim() === "",
-      },
-    ],
-  });
+    </section>`;
 }
 
 export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement): Promise<void> {

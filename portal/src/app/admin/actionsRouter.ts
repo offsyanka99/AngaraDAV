@@ -15,9 +15,20 @@ import {
   loadAdminUsers,
 } from "./loaders";
 import { onAdminDatabaseTest } from "./database";
+import {
+  onAdminBackupDownload,
+  onAdminRestoreApply,
+  onAdminRestoreDiscard,
+} from "./configuration";
 
 function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
-  if (raw === "overview" || raw === "users" || raw === "settings" || raw === "database") {
+  if (
+    raw === "overview" ||
+    raw === "users" ||
+    raw === "settings" ||
+    raw === "database" ||
+    raw === "configuration"
+  ) {
     return raw;
   }
   return null;
@@ -372,6 +383,18 @@ if (action === "admin-reset-confirm") {
     host.state.busy = false;
     host.render();
   }
+  return true;
+}
+if (action === "admin-backup-download") {
+  await onAdminBackupDownload(host);
+  return true;
+}
+if (action === "admin-restore-discard") {
+  onAdminRestoreDiscard(host);
+  return true;
+}
+if (action === "admin-restore-apply") {
+  await onAdminRestoreApply(host);
   return true;
 }
 if (action === "admin-database-refresh") {

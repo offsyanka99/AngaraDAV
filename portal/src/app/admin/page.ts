@@ -18,6 +18,7 @@ import { renderAdminOverview } from "./overview";
 import { renderAdminUsersShell } from "./users";
 import { renderAdminSettingsShell } from "./settings";
 import { renderAdminDatabaseShell } from "./database";
+import { renderAdminConfigurationShell } from "./configuration";
 
 export async function activateAdminPage(
   host: AdminHost,
@@ -100,5 +101,6 @@ export function renderAdminSection(host: AdminHost): string {
   if (host.state.adminPage === "users") return renderAdminUsersShell(host);
   if (host.state.adminPage === "settings") return renderAdminSettingsShell(host);
   if (host.state.adminPage === "database") return renderAdminDatabaseShell(host);
+  if (host.state.adminPage === "configuration") return renderAdminConfigurationShell(host);
   return renderAdminOverview(host);
 }
