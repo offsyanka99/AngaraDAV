@@ -8,6 +8,7 @@ use Baikal\Core\Files\SchemaManager;
 use Symfony\Component\Yaml\Yaml;
 
 $root = dirname(__DIR__) . '/';
+define('ANGARA_CONTEXT', true);
 define('BAIKAL_CONTEXT', true);
 define('PROJECT_CONTEXT_BASEURI', '/');
 define('PROJECT_PATH_ROOT', $root);

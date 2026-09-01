@@ -13,7 +13,7 @@
 # `docker rm angaradav` will not remove this container.
 #
 # Bind dirs Docker creates as root are chowned by the entrypoint unless you set
-# BAIKAL_SKIP_CHOWN. If you do set it, first:
+# ANGARA_SKIP_CHOWN (legacy alias: BAIKAL_SKIP_CHOWN). If you do set it, first:
 #   sudo chown -R 101:101 .local-run
 # Otherwise the container exits with a clear error (PHP cannot write baikal.yaml).
 #
@@ -37,7 +37,7 @@ services:
     environment:
       TZ: UTC
       # Uncomment only after: sudo chown -R 101:101 .local-run
-      # BAIKAL_SKIP_CHOWN: "1"
+      # ANGARA_SKIP_CHOWN: "1"
     volumes:
       - ../.local-run/config:/var/www/baikal/config
       - ../.local-run/Specific:/var/www/baikal/Specific

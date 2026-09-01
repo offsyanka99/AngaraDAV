@@ -53,11 +53,11 @@ if (!defined('PROJECT_PATH_CORERESOURCES')) {
 if (!defined('PROJECT_PATH_DOCUMENTROOT')) {
     define('PROJECT_PATH_DOCUMENTROOT', $root . '/html/');
 }
-if (!defined('BAIKAL_CONTEXT')) {
-    define('BAIKAL_CONTEXT', true);
+if (!defined('ANGARA_CONTEXT')) {
+    define('ANGARA_CONTEXT', true);
 }
-if (!defined('BAIKAL_CONTEXT_INSTALL')) {
-    define('BAIKAL_CONTEXT_INSTALL', true);
+if (!defined('ANGARA_CONTEXT_INSTALL')) {
+    define('ANGARA_CONTEXT_INSTALL', true);
 }
 
 // Session for CSRF
@@ -143,7 +143,7 @@ try {
 
     // Version base compare: same base + different build SHA must not force upgrade step
     $raw = Yaml::parseFile($path);
-    $base = defined('BAIKAL_VERSION_BASE') ? (string) BAIKAL_VERSION_BASE : '2.0.2';
+    $base = defined('ANGARA_VERSION_BASE') ? (string) ANGARA_VERSION_BASE : '2.0.2';
     $raw['system']['configured_version'] = $base . '+deadbeef';
     file_put_contents($path, Yaml::dump($raw));
     $stSameBase = $svc->status();

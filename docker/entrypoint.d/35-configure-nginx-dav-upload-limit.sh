@@ -3,10 +3,10 @@
 set -eu
 
 ME=$(basename "$0")
-LIMIT=${BAIKAL_DAV_MAX_BODY_SIZE:-1G}
+LIMIT=${ANGARA_DAV_MAX_BODY_SIZE:-${BAIKAL_DAV_MAX_BODY_SIZE:-1G}}
 
 if ! printf '%s' "$LIMIT" | grep -Eq '^[1-9][0-9]*[kKmMgG]?$'; then
-  echo "$ME: error: BAIKAL_DAV_MAX_BODY_SIZE must be a positive nginx size such as 512M or 2G" >&2
+  echo "$ME: error: ANGARA_DAV_MAX_BODY_SIZE must be a positive nginx size such as 512M or 2G" >&2
   exit 1
 fi
 

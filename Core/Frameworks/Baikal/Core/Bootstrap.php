@@ -58,14 +58,14 @@ class Bootstrap {
         self::definePath('PROJECT_PATH_FRAMEWORKS', PROJECT_PATH_CORE . 'Frameworks/');
         self::definePath('PROJECT_PATH_WWWROOT', PROJECT_PATH_CORE . 'WWWRoot/');
 
-        $configDir = getenv('BAIKAL_PATH_CONFIG');
+        $configDir = getenv('ANGARA_PATH_CONFIG');
         if ($configDir !== false && $configDir !== '') {
             self::definePath('PROJECT_PATH_CONFIG', $configDir);
         } else {
             self::definePath('PROJECT_PATH_CONFIG', PROJECT_PATH_ROOT . 'config/');
         }
 
-        $specificDir = getenv('BAIKAL_PATH_SPECIFIC');
+        $specificDir = getenv('ANGARA_PATH_SPECIFIC');
         if ($specificDir !== false && $specificDir !== '') {
             self::definePath('PROJECT_PATH_SPECIFIC', $specificDir);
         } else {
@@ -184,9 +184,10 @@ class Bootstrap {
         }
 
         // Skip DB on install unless this is an upgrade (configured_version differs).
-        if (defined('BAIKAL_CONTEXT_INSTALL') && BAIKAL_CONTEXT_INSTALL === true
+        $inInstallContext = defined('ANGARA_CONTEXT_INSTALL') && ANGARA_CONTEXT_INSTALL === true;
+        if ($inInstallContext
             && (!isset($config['system']['configured_version'])
-                || $config['system']['configured_version'] === BAIKAL_VERSION)
+                || $config['system']['configured_version'] === ANGARA_VERSION)
         ) {
             return;
         }

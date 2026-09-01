@@ -12,7 +12,7 @@
 #      mkdir -p /mnt/tank/apps/angaradav/config /mnt/tank/apps/angaradav/Specific/db
 # 2. Ownership for nginx inside the image (uid/gid 101):
 #      chown -R 101:101 /mnt/tank/apps/angaradav
-#    Then set BAIKAL_SKIP_CHOWN=1 below so startup does not re-chown mounts
+#    Then set ANGARA_SKIP_CHOWN=1 below so startup does not re-chown mounts
 #    (avoids a long hang on 40-fix-baikal-file-permissions.sh).
 # 3. Edit volumes host path and host port if needed
 # 4. Prefer HTTPS via TrueNAS reverse proxy / Caddy / Traefik in production
@@ -77,26 +77,26 @@
 #   Admin password uses password_hash(); legacy SHA-256 upgrades on login.
 #
 # Optional env:
-#   BAIKAL_LOCK_INSTALL=1     — refuse installer reopen after deploy
-#   BAIKAL_ALLOW_REINSTALL=1  — re-open installer intentionally
+#   ANGARA_LOCK_INSTALL=1     — refuse installer reopen after deploy (legacy: BAIKAL_LOCK_INSTALL)
+#   ANGARA_ALLOW_REINSTALL=1  — re-open installer intentionally (legacy: BAIKAL_ALLOW_REINSTALL)
 #   PORTAL_LOG_LEVEL=debug    — browser console + Specific/portal_debug.log only
 #                              (not docker/nginx; old images wrongly used error_log)
 #   PORTAL_ADMIN_USERS=alice,bob
 #                              — DAV usernames with portal Admin role (/api/admin/*)
-#                                Alias: BAIKAL_PORTAL_ADMIN_USERS
+#                                Alias: ANGARA_PORTAL_ADMIN_USERS (legacy: BAIKAL_PORTAL_ADMIN_USERS)
 #                                Overrides system.portal_admin_users in baikal.yaml
 #                                If unset and YAML empty: DAV user "admin" is Admin
 #   Time format / week start — Admin → System settings (not compose env)
-#   BAIKAL_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
+#   ANGARA_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
 #                              — required canonical HTTPS URL when WebDAV-Push
-#                                is enabled in Admin -> AngaraDAV Settings
+#                                is enabled in Admin -> AngaraDAV Settings (legacy: BAIKAL_PUSH_EXTERNAL_URL)
 #   PUSH_LOG_LEVEL=debug       — temporary Push diagnostics in
 #                                Specific/push_debug.log (default off)
-#   BAIKAL_FILES_STORAGE_PATH=/var/lib/baikal-files
-#                              — optional separately mounted file-home dataset
-#   BAIKAL_FILES_MAX_UPLOAD_MB=1024
-#   BAIKAL_FILES_QUOTA_MB=10240
-#   BAIKAL_DAV_MAX_BODY_SIZE=1G — nginx PUT request ceiling
+#   ANGARA_FILES_STORAGE_PATH=/var/lib/baikal-files
+#                              — optional separately mounted file-home dataset (legacy: BAIKAL_FILES_STORAGE_PATH)
+#   ANGARA_FILES_MAX_UPLOAD_MB=1024
+#   ANGARA_FILES_QUOTA_MB=10240
+#   ANGARA_DAV_MAX_BODY_SIZE=1G — nginx PUT request ceiling
 #
 # Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
 #       docs/DEPLOYMENT.md · upstream https://sabre.io/baikal/
@@ -105,10 +105,10 @@ services:
   angaradav:
     # --- Image tags (GHCR: ghcr.io/offsyanka99/angaradav) ----------------
     # latest          = main branch (day-to-day)
-    # 2.4.5           = product release tag v2.4.5 (preferred pin)
+    # 2.5.0           = product release tag v2.5.0 (preferred pin)
     # sha-<7+ hex>    = exact git commit
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.4.5
+    # image: ghcr.io/offsyanka99/angaradav:2.5.0
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     # --- Alternative: build AngaraDAV from source on the NAS --------------
@@ -142,22 +142,22 @@ services:
       # Portal debug → browser DevTools + Specific/portal_debug.log (default off).
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
       # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):
-      # PORTAL_ADMIN_USERS: "alice,bob"  # or BAIKAL_PORTAL_ADMIN_USERS; default DAV user "admin"
+      # PORTAL_ADMIN_USERS: "alice,bob"  # or ANGARA_PORTAL_ADMIN_USERS; default DAV user "admin"
       # Required only after enabling WebDAV-Push in baikal.yaml/admin:
-      # BAIKAL_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
+      # ANGARA_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only
       # Generic WebDAV files are disabled by default. Enable in Admin settings.
       # WARNING: if you uncomment this, you MUST also add a matching bind mount
       # below (see "Optional separate dataset" in the volumes: section) or
       # uploaded files are lost on every container recreate.
-      # BAIKAL_FILES_STORAGE_PATH: "/var/lib/baikal-files"
-      # BAIKAL_FILES_MAX_UPLOAD_MB: "1024"
-      # BAIKAL_FILES_QUOTA_MB: "10240"
-      # BAIKAL_DAV_MAX_BODY_SIZE: "1G"
+      # ANGARA_FILES_STORAGE_PATH: "/var/lib/baikal-files"
+      # ANGARA_FILES_MAX_UPLOAD_MB: "1024"
+      # ANGARA_FILES_QUOTA_MB: "10240"
+      # ANGARA_DAV_MAX_BODY_SIZE: "1G"
       # Skip entrypoint chown (recommended on TrueNAS after host chown 101:101):
-      BAIKAL_SKIP_CHOWN: "1"
+      ANGARA_SKIP_CHOWN: "1"
       # After first successful install, recommended for internet-facing hosts:
-      # BAIKAL_LOCK_INSTALL: "1"
+      # ANGARA_LOCK_INSTALL: "1"
       # MSMTPRC: |
       #   defaults
       #   auth on
@@ -173,7 +173,7 @@ services:
       - type: bind
         source: /mnt/tank/apps/angaradav/Specific
         target: /var/www/baikal/Specific
-      # Optional separate dataset when BAIKAL_FILES_STORAGE_PATH is set above:
+      # Optional separate dataset when ANGARA_FILES_STORAGE_PATH is set above:
       # - type: bind
       #   source: /mnt/tank/apps/angaradav/files
       #   target: /var/lib/baikal-files

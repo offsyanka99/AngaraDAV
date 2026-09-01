@@ -3,7 +3,7 @@
 # Zip layout used to be build/baikal + baikal-$(VERSION).zip (Baïkal leftover).
 BUILD_DIR=build/angaradav
 BUILD_FILES=Core html LICENSE README.md composer.json
-VERSION=$(shell php -r "include 'Core/Distrib.php'; echo BAIKAL_VERSION;")
+VERSION=$(shell php -r "include 'Core/Distrib.php'; echo ANGARA_VERSION;")
 
 help:
 	@echo "AngaraDAV $(VERSION)"

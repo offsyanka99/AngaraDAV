@@ -12,7 +12,7 @@ namespace Baikal\Core\Plugins\Push;
  * DAV error stream clean while still giving operators a verbose trace on demand.
  *
  * Level is resolved from (first wins):
- *   env PUSH_LOG_LEVEL, env BAIKAL_PUSH_LOG_LEVEL, system.push_log_level.
+ *   env ANGARA_PUSH_LOG_LEVEL, env PUSH_LOG_LEVEL, system.push_log_level.
  * Allowed: off | error | warn | info | debug (default off).
  */
 class PushLogger {
@@ -31,8 +31,8 @@ class PushLogger {
      */
     public function __construct(?string $configLevel = null, ?string $path = null) {
         $level = strtolower(trim((string) (
-            getenv('PUSH_LOG_LEVEL')
-            ?: getenv('BAIKAL_PUSH_LOG_LEVEL')
+            getenv('ANGARA_PUSH_LOG_LEVEL')
+            ?: getenv('PUSH_LOG_LEVEL')
             ?: ($configLevel ?? 'off')
         )));
         if (!isset(self::LEVELS[$level])) {

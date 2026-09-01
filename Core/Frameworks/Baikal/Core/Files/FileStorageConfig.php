@@ -25,7 +25,7 @@ class FileStorageConfig {
         $system = is_array($config['system'] ?? null) ? $config['system'] : [];
         $this->enabled = !empty($system['files_enabled']);
 
-        $configuredPath = self::environmentValue('BAIKAL_FILES_STORAGE_PATH');
+        $configuredPath = self::environmentValue('ANGARA_FILES_STORAGE_PATH');
         if ($configuredPath === null) {
             $configuredPath = trim((string) ($system['files_storage_path'] ?? ''));
         }
@@ -210,23 +210,23 @@ class FileStorageConfig {
 
     /**
      * Maximum upload size, in bytes. Single source of truth is
-     * files_max_upload_mb / BAIKAL_FILES_MAX_UPLOAD_MB (stored in MB). Falls
+     * files_max_upload_mb / ANGARA_FILES_MAX_UPLOAD_MB (stored in MB). Falls
      * back to a pre-1.0.7 byte-based files_max_upload_bytes /
-     * BAIKAL_FILES_MAX_UPLOAD_BYTES value, used as-is with no MB rounding,
+     * ANGARA_FILES_MAX_UPLOAD_BYTES value, used as-is with no MB rounding,
      * only when the MB-based setting is absent, so existing installs keep
      * their exact configured limit until re-saved.
      */
     private static function resolveMaxUploadBytes(array $system): int {
-        $hasMbSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_MB') !== null
+        $hasMbSetting = self::environmentValue('ANGARA_FILES_MAX_UPLOAD_MB') !== null
             || array_key_exists('files_max_upload_mb', $system);
         if ($hasMbSetting) {
-            return self::configuredInteger($system, 'files_max_upload_mb', 'BAIKAL_FILES_MAX_UPLOAD_MB', 1024, 1, 1048576) * 1048576;
+            return self::configuredInteger($system, 'files_max_upload_mb', 'ANGARA_FILES_MAX_UPLOAD_MB', 1024, 1, 1048576) * 1048576;
         }
 
-        $hasLegacyBytesSetting = self::environmentValue('BAIKAL_FILES_MAX_UPLOAD_BYTES') !== null
+        $hasLegacyBytesSetting = self::environmentValue('ANGARA_FILES_MAX_UPLOAD_BYTES') !== null
             || array_key_exists('files_max_upload_bytes', $system);
         if ($hasLegacyBytesSetting) {
-            return self::configuredInteger($system, 'files_max_upload_bytes', 'BAIKAL_FILES_MAX_UPLOAD_BYTES', 1073741824, 1048576, PHP_INT_MAX);
+            return self::configuredInteger($system, 'files_max_upload_bytes', 'ANGARA_FILES_MAX_UPLOAD_BYTES', 1073741824, 1048576, PHP_INT_MAX);
         }
 
         return 1024 * 1048576;
@@ -234,22 +234,22 @@ class FileStorageConfig {
 
     /**
      * Per-user application quota, in bytes (0 = unlimited). Single source of
-     * truth is files_quota_mb / BAIKAL_FILES_QUOTA_MB (stored in MB). Falls
-     * back to a pre-1.0.9 byte-based files_quota_bytes / BAIKAL_FILES_QUOTA_BYTES
-     * value, used as-is with no MB rounding, only when the MB-based setting
-     * is absent.
+     * truth is files_quota_mb / ANGARA_FILES_QUOTA_MB (stored in MB). Falls
+     * back to a pre-1.0.9 byte-based files_quota_bytes /
+     * ANGARA_FILES_QUOTA_BYTES value, used as-is with no MB rounding, only
+     * when the MB-based setting is absent.
      */
     private static function resolveQuotaBytes(array $system): int {
-        $hasMbSetting = self::environmentValue('BAIKAL_FILES_QUOTA_MB') !== null
+        $hasMbSetting = self::environmentValue('ANGARA_FILES_QUOTA_MB') !== null
             || array_key_exists('files_quota_mb', $system);
         if ($hasMbSetting) {
-            return self::configuredInteger($system, 'files_quota_mb', 'BAIKAL_FILES_QUOTA_MB', 10240, 0, 1073741824) * 1048576;
+            return self::configuredInteger($system, 'files_quota_mb', 'ANGARA_FILES_QUOTA_MB', 10240, 0, 1073741824) * 1048576;
         }
 
-        $hasLegacyBytesSetting = self::environmentValue('BAIKAL_FILES_QUOTA_BYTES') !== null
+        $hasLegacyBytesSetting = self::environmentValue('ANGARA_FILES_QUOTA_BYTES') !== null
             || array_key_exists('files_quota_bytes', $system);
         if ($hasLegacyBytesSetting) {
-            return self::configuredInteger($system, 'files_quota_bytes', 'BAIKAL_FILES_QUOTA_BYTES', 10737418240, 0, PHP_INT_MAX);
+            return self::configuredInteger($system, 'files_quota_bytes', 'ANGARA_FILES_QUOTA_BYTES', 10737418240, 0, PHP_INT_MAX);
         }
 
         return 10240 * 1048576;
@@ -263,7 +263,7 @@ class FileStorageConfig {
         int $minimum,
         int $maximum
     ): int {
-        $raw = $environmentKey !== '' ? self::environmentValue($environmentKey) : null;
+        $raw = self::environmentValue($environmentKey);
         if ($raw === null) {
             $raw = $system[$key] ?? $default;
         }

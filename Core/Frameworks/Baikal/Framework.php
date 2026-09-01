@@ -38,15 +38,17 @@ class Framework {
      * @param array<string, mixed> $extra extra JSON fields for the portal API
      */
     static function installTool(string $reason = 'not_configured', array $extra = []) {
-        if (defined("BAIKAL_CONTEXT_INSTALL") && BAIKAL_CONTEXT_INSTALL === true) {
+        $inInstallContext = defined("ANGARA_CONTEXT_INSTALL") && ANGARA_CONTEXT_INSTALL === true;
+        if ($inInstallContext) {
             # Install tool has been launched and we're already on the install page
             return;
         }
 
         # Portal JSON API: never emit an HTML Location redirect
-        if (defined('BAIKAL_CONTEXT_PORTAL_API') && BAIKAL_CONTEXT_PORTAL_API === true) {
-            $product = defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '';
-            $productBase = defined('BAIKAL_VERSION_BASE') ? (string) BAIKAL_VERSION_BASE : baikal_version_base($product);
+        $inPortalApiContext = defined('ANGARA_CONTEXT_PORTAL_API') && ANGARA_CONTEXT_PORTAL_API === true;
+        if ($inPortalApiContext) {
+            $product = defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '';
+            $productBase = defined('ANGARA_VERSION_BASE') ? (string) ANGARA_VERSION_BASE : baikal_version_base($product);
             $payload = array_merge([
                 'code'           => $reason,
                 'installUrl'     => '/portal/install/',
@@ -68,7 +70,7 @@ class Framework {
 
     static function bootstrap() {
         # Registering Baikal classloader
-        define("BAIKAL_PATH_FRAMEWORKROOT", dirname(__FILE__) . "/");
+        define("ANGARA_PATH_FRAMEWORKROOT", dirname(__FILE__) . "/");
 
         \Baikal\Core\Tools::assertEnvironmentIsOk();
         \Baikal\Core\Tools::configureEnvironment();
