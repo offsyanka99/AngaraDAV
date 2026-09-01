@@ -24,11 +24,11 @@ class InstallApp {
         if (!defined('PROJECT_PATH_ROOT')) {
             throw new ApiException('PROJECT_PATH_ROOT not defined', 500);
         }
-        if (!defined('BAIKAL_CONTEXT')) {
-            define('BAIKAL_CONTEXT', true);
+        if (!defined('ANGARA_CONTEXT')) {
+            define('ANGARA_CONTEXT', true);
         }
-        if (!defined('BAIKAL_CONTEXT_INSTALL')) {
-            define('BAIKAL_CONTEXT_INSTALL', true);
+        if (!defined('ANGARA_CONTEXT_INSTALL')) {
+            define('ANGARA_CONTEXT_INSTALL', true);
         }
         if (!defined('PROJECT_CONTEXT_BASEURI')) {
             define('PROJECT_CONTEXT_BASEURI', '/');

@@ -30,7 +30,7 @@ namespace Baikal\Model\Config;
 class Standard extends \Baikal\Model\Config {
     # Default values
     protected $aData = [
-        "configured_version"       => BAIKAL_VERSION,
+        "configured_version"       => ANGARA_VERSION,
         "timezone"                 => "Europe/Paris",
         "card_enabled"             => true,
         "cal_enabled"              => true,

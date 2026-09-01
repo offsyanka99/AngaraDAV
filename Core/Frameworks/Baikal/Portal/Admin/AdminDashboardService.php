@@ -66,8 +66,8 @@ class AdminDashboardService {
         $contacts = $this->countTable('cards');
 
         return [
-            'version'      => defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '',
-            'git'          => defined('BAIKAL_GIT_SHA') ? (string) BAIKAL_GIT_SHA : '',
+            'version'      => defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '',
+            'git'          => defined('ANGARA_GIT_SHA') ? (string) ANGARA_GIT_SHA : '',
             'users'        => $users,
             'calendars'    => $calendars,
             'events'       => $events,

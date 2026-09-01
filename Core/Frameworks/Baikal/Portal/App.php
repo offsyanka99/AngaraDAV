@@ -154,7 +154,7 @@ class App {
      * Portal UI prefs (time format / week start / log level / DAV service flags).
      * Time format and week start come from Admin YAML only (`system.portal_time_format`,
      * `system.portal_week_start`). Log level still allows env override.
-     * PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL: off|error|warn|info|debug.
+     * PORTAL_LOG_LEVEL: off|error|warn|info|debug.
      *
      * `services` mirrors Admin System settings (and public /info.php). Safe for all
      * authenticated users — not secrets; used by the SPA to hide disabled tabs.
@@ -177,8 +177,8 @@ class App {
             'weekStart'          => self::portalWeekStartFromSystem($sys),
             'logLevel'           => $this->portalLogLevel(),
             'sessionIdleSeconds' => $this->auth->sessionMaxAge(),
-            'version'            => defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '',
-            'git'                => defined('BAIKAL_GIT_SHA') ? (string) BAIKAL_GIT_SHA : '',
+            'version'            => defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '',
+            'git'                => defined('ANGARA_GIT_SHA') ? (string) ANGARA_GIT_SHA : '',
             // Defaults match AdminDashboardService / install (notes & files off by default)
             'services'           => [
                 'caldav'  => $this->systemBoolFlag($sys, 'cal_enabled', true),
@@ -215,13 +215,13 @@ class App {
 
     /**
      * Portal log level (SPA console + optional server request log). Env overrides YAML.
-     * PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL / system.portal_log_level: off|error|warn|info|debug.
+     * ANGARA_PORTAL_LOG_LEVEL / PORTAL_LOG_LEVEL / system.portal_log_level: off|error|warn|info|debug.
      */
     private function portalLogLevel(): string {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
         $level = strtolower(trim((string) (
-            getenv('PORTAL_LOG_LEVEL')
-            ?: getenv('BAIKAL_PORTAL_LOG_LEVEL')
+            getenv('ANGARA_PORTAL_LOG_LEVEL')
+            ?: getenv('PORTAL_LOG_LEVEL')
             ?: ($sys['portal_log_level'] ?? 'off')
         )));
         if (!in_array($level, ['off', 'error', 'warn', 'info', 'debug'], true)) {
@@ -527,7 +527,7 @@ class App {
                 return [
                     'user'      => null,
                     'csrfToken' => null,
-                    'version'   => defined('BAIKAL_VERSION') ? BAIKAL_VERSION : null,
+                    'version'   => defined('ANGARA_VERSION') ? ANGARA_VERSION : null,
                     'davPath'   => '/dav.php/',
                     'ui'        => $this->portalUiSettings(),
                 ];
@@ -538,7 +538,7 @@ class App {
             return [
                 'user'      => $profile,
                 'csrfToken' => $this->auth->csrfToken(),
-                'version'   => defined('BAIKAL_VERSION') ? BAIKAL_VERSION : null,
+                'version'   => defined('ANGARA_VERSION') ? ANGARA_VERSION : null,
                 'davPath'   => '/dav.php/',
                 'ui'        => $this->portalUiSettings(),
             ];

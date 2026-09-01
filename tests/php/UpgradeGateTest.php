@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Framework install/upgrade gate under BAIKAL_CONTEXT_PORTAL_API (JSON, not HTML 302).
+ * Framework install/upgrade gate under ANGARA_CONTEXT_PORTAL_API (JSON, not HTML 302).
  *
  * Run: php tests/php/UpgradeGateTest.php
  */
@@ -52,11 +52,11 @@ if (!defined('PROJECT_PATH_DOCUMENTROOT')) {
 if (!defined('PROJECT_PATH_CORERESOURCES')) {
     define('PROJECT_PATH_CORERESOURCES', $root . '/Core/Resources/');
 }
-if (!defined('BAIKAL_CONTEXT')) {
-    define('BAIKAL_CONTEXT', true);
+if (!defined('ANGARA_CONTEXT')) {
+    define('ANGARA_CONTEXT', true);
 }
-if (!defined('BAIKAL_CONTEXT_PORTAL_API')) {
-    define('BAIKAL_CONTEXT_PORTAL_API', true);
+if (!defined('ANGARA_CONTEXT_PORTAL_API')) {
+    define('ANGARA_CONTEXT_PORTAL_API', true);
 }
 if (!defined('PROJECT_URI')) {
     define('PROJECT_URI', '/');
@@ -106,8 +106,8 @@ try {
     }
 
     // Install context must not throw (wizard is already running)
-    if (!defined('BAIKAL_CONTEXT_INSTALL')) {
-        define('BAIKAL_CONTEXT_INSTALL', true);
+    if (!defined('ANGARA_CONTEXT_INSTALL')) {
+        define('ANGARA_CONTEXT_INSTALL', true);
     }
     try {
         \Baikal\Framework::installTool('upgrade_required', ['configuredVersion' => '1.0.0']);

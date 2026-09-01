@@ -6,7 +6,7 @@ namespace Baikal\Portal;
  * Portal Admin role checks for /api/admin/* and profile enrichment.
  *
  * Who is Admin (first match wins):
- *   1. Env PORTAL_ADMIN_USERS or BAIKAL_PORTAL_ADMIN_USERS (comma/space list)
+ *   1. Env ANGARA_PORTAL_ADMIN_USERS or PORTAL_ADMIN_USERS (comma/space list)
  *   2. YAML system.portal_admin_users (list or comma-separated string)
  *   3. If neither is set: DAV user named "admin" (case-insensitive)
  *
@@ -45,9 +45,9 @@ class AdminAuth {
         }
 
         $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
-        $raw = getenv('PORTAL_ADMIN_USERS');
+        $raw = getenv('ANGARA_PORTAL_ADMIN_USERS');
         if ($raw === false || $raw === '') {
-            $raw = getenv('BAIKAL_PORTAL_ADMIN_USERS');
+            $raw = getenv('PORTAL_ADMIN_USERS');
         }
         if ($raw === false || $raw === '') {
             $raw = $sys['portal_admin_users'] ?? null;

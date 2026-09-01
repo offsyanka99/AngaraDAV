@@ -52,7 +52,7 @@ class AdminBackupService {
         return [
             'kind'           => self::KIND,
             'formatVersion'  => self::FORMAT_VERSION,
-            'productVersion' => defined('BAIKAL_VERSION') ? BAIKAL_VERSION : '',
+            'productVersion' => defined('ANGARA_VERSION') ? ANGARA_VERSION : '',
             'createdAt'      => gmdate('Y-m-d\TH:i:s\Z'),
             'createdBy'      => $actor,
             'settings'       => $editable,
@@ -134,7 +134,7 @@ class AdminBackupService {
             'invalid'         => $invalid,
             'unknown'         => $unknown,
             'productVersion'  => $productVersion,
-            'versionMismatch' => defined('BAIKAL_VERSION') && $productVersion !== '' && $productVersion !== BAIKAL_VERSION,
+            'versionMismatch' => defined('ANGARA_VERSION') && $productVersion !== '' && $productVersion !== ANGARA_VERSION,
             'applied'         => [],
         ];
 

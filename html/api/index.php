@@ -35,10 +35,10 @@ if (!is_dir($root . 'vendor')) {
 }
 
 define('PROJECT_PATH_ROOT', $root);
-define('BAIKAL_CONTEXT', true);
+define('ANGARA_CONTEXT', true);
 define('PROJECT_CONTEXT_BASEURI', '/');
 // Portal JSON API: Framework install/upgrade gate must return JSON, not Location: /portal/install/
-define('BAIKAL_CONTEXT_PORTAL_API', true);
+define('ANGARA_CONTEXT_PORTAL_API', true);
 
 require PROJECT_PATH_ROOT . 'vendor/autoload.php';
 require PROJECT_PATH_ROOT . 'Core/Distrib.php';

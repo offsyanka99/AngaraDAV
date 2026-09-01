@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.4.5 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
+**Version:** 2.5.0 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.5`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.0`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 
@@ -25,7 +25,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.4.5`, `sha-…`) · linux/
 
 Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Tabs follow Admin **DAV services** toggles.
 
-Optional **WebDAV-Push** wakes CalDAV/CardDAV clients instead of waiting for the next poll (shared calendars included; portal writes enqueue the same jobs as `/dav.php/`). Enable it in **Administration → AngaraDAV Settings → Enable WebDAV-Push** and set the canonical HTTPS DAV base (`push_external_url` or `BAIKAL_PUSH_EXTERNAL_URL`, typically `https://your-host/dav.php/`). Push is not advertised until that URL is valid HTTPS. It does **not** cover WebDAV file homes.
+Optional **WebDAV-Push** wakes CalDAV/CardDAV clients instead of waiting for the next poll (shared calendars included; portal writes enqueue the same jobs as `/dav.php/`). Enable it in **Administration → AngaraDAV Settings → Enable WebDAV-Push** and set the canonical HTTPS DAV base (`push_external_url` or `ANGARA_PUSH_EXTERNAL_URL`, typically `https://your-host/dav.php/`). Push is not advertised until that URL is valid HTTPS. It does **not** cover WebDAV file homes.
 
 Companion app: [WebDAV-sync](https://github.com/offsyanka99/WebDAV-sync) for Android file homes.
 
@@ -115,9 +115,11 @@ More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/loc
 
 ## Compatibility
 
-Upgrades keep existing data. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `BAIKAL_*` env vars, `baikal.yaml`, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. Databases: **SQLite** or **PostgreSQL** only.
+Upgrades keep existing data. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `baikal.yaml`, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_SKIP_CHOWN`/`BAIKAL_DAV_MAX_BODY_SIZE` forms indefinitely (Docker/nginx runtime knobs, not this program's scope). Databases: **SQLite** or **PostgreSQL** only.
 
-Admin role: env `PORTAL_ADMIN_USERS` / `BAIKAL_PORTAL_ADMIN_USERS`, or YAML `system.portal_admin_users`. If unset, DAV user `admin` is Admin.
+Product/build globals use `ANGARA_VERSION_BASE`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`, `ANGARA_BUILD_GIT`, and `ANGARA_GIT_SHA`. As of **2.5.0**, the `BAIKAL_*` compatibility aliases for these (and for the runtime env vars migrated in Phases 1-4: context/path constants, files storage, WebDAV-Push, portal admin/log-level, and installer lock/reinstall) have been removed; only `ANGARA_*` (and any previously-supported unprefixed variable) is read. Rebuild images so `Core/BuildInfo.php` defines `ANGARA_BUILD_GIT` — old images stamping only `BAIKAL_BUILD_GIT` no longer resolve a build SHA.
+
+Admin role: env `PORTAL_ADMIN_USERS`, or YAML `system.portal_admin_users`. If unset, DAV user `admin` is Admin.
 
 ---
 

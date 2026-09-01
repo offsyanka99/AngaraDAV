@@ -14,11 +14,11 @@ $version = 'unknown';
 $git = null;
 if (is_readable($root . 'Core/Distrib.php')) {
     require $root . 'Core/Distrib.php';
-    if (defined('BAIKAL_VERSION')) {
-        $version = BAIKAL_VERSION;
+    if (defined('ANGARA_VERSION')) {
+        $version = ANGARA_VERSION;
     }
-    if (defined('BAIKAL_GIT_SHA') && BAIKAL_GIT_SHA !== '') {
-        $git = BAIKAL_GIT_SHA;
+    if (defined('ANGARA_GIT_SHA') && ANGARA_GIT_SHA !== '') {
+        $git = ANGARA_GIT_SHA;
     }
 }
 

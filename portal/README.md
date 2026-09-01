@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.4.5`
+**Version:** `2.5.0`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -74,7 +74,7 @@ Primary admin UI is the **portal** (same DB + `baikal.yaml`). Auth is a **DAV us
 
 | Priority | Source | Example |
 |----------|--------|---------|
-| 1 | Env `PORTAL_ADMIN_USERS` or `BAIKAL_PORTAL_ADMIN_USERS` | `alice,bob` |
+| 1 | Env `PORTAL_ADMIN_USERS` | `alice,bob` |
 | 2 | YAML `system.portal_admin_users` | list or `"alice, bob"` |
 | 3 | Default | DAV username **`admin`** (case-insensitive) if neither env nor YAML sets a list |
 
@@ -113,7 +113,7 @@ Set log level in `baikal.yaml` or env (env wins):
 | Source | Key | Values |
 |--------|-----|--------|
 | YAML | `system.portal_log_level` | `off` (default), `error`, `warn`, `info`, `debug` |
-| Env | `PORTAL_LOG_LEVEL` or `BAIKAL_PORTAL_LOG_LEVEL` | same |
+| Env | `PORTAL_LOG_LEVEL` | same |
 
 - **Browser:** DevTools -> Console (`[angaradav-portal]` prefix). `info` = API timings + UI events; `debug` = outbound requests + raw actions.
 - **Server:** all portal request traces append to `Specific/portal_debug.log` (never nginx `[error]` via FastCGI stderr).

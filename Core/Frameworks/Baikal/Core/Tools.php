@@ -33,8 +33,9 @@ class Tools {
     }
 
     static function assertEnvironmentIsOk() {
-        # Asserting Baikal Context
-        if (!defined("BAIKAL_CONTEXT") || BAIKAL_CONTEXT !== true) {
+        # Asserting AngaraDAV/Baikal Context
+        $inContext = defined('ANGARA_CONTEXT') && ANGARA_CONTEXT === true;
+        if (!$inContext) {
             exit("Bootstrap.php may not be included outside the Baikal context");
         }
 
@@ -73,7 +74,8 @@ class Tools {
 
     static function assertBaikalIsOk() {
         # DB connection is optional during install; assert it for normal operation.
-        if (!Bootstrap::isDbInitialized() && (!defined("BAIKAL_CONTEXT_INSTALL") || BAIKAL_CONTEXT_INSTALL === false)) {
+        $inInstallContext = defined("ANGARA_CONTEXT_INSTALL") && ANGARA_CONTEXT_INSTALL === true;
+        if (!Bootstrap::isDbInitialized() && !$inInstallContext) {
             throw new \Exception("<strong>Fatal error</strong>: no connection to a database is available.");
         }
 

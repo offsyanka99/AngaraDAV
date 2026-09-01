@@ -2,17 +2,19 @@
 # Ensure writable mounts are owned by nginx (uid 101).
 #
 # Full-tree chown of /var/www/baikal is slow on TrueNAS/bind mounts and can
-# look "stuck". Only fix the volume mount points unless BAIKAL_SKIP_CHOWN is set.
+# look "stuck". Only fix the volume mount points unless ANGARA_SKIP_CHOWN
+# (or legacy BAIKAL_SKIP_CHOWN) is set.
 #
 # Prefer host-side ownership once:
 #   chown -R 101:101 /mnt/tank/apps/baikal
-# then set BAIKAL_SKIP_CHOWN=1 in compose for faster starts.
+# then set ANGARA_SKIP_CHOWN=1 in compose for faster starts.
 
 ME=$(basename "$0")
+SKIP_CHOWN=${ANGARA_SKIP_CHOWN:-${BAIKAL_SKIP_CHOWN:-}}
 
-case "${BAIKAL_SKIP_CHOWN:-}" in
+case "$SKIP_CHOWN" in
   1|true|TRUE|yes|YES|on|ON)
-    echo "$ME: info: BAIKAL_SKIP_CHOWN=${BAIKAL_SKIP_CHOWN} — skipping chown"
+    echo "$ME: info: SKIP_CHOWN=${SKIP_CHOWN} — skipping chown"
     exit 0
     ;;
 esac

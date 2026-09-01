@@ -146,7 +146,7 @@ class AdminSettingsService {
      *   - Other Specific runtime state (logs, rate files, push identity, …)
      *
      * Requires explicit confirm=true.
-     * Honours BAIKAL_LOCK_INSTALL unless BAIKAL_ALLOW_REINSTALL=1.
+     * Honours ANGARA_LOCK_INSTALL unless ANGARA_ALLOW_REINSTALL=1.
      *
      * @return array{ok: true, redirectUrl: string, backupPath: string|null, wiped: list<string>}
      */
@@ -155,10 +155,10 @@ class AdminSettingsService {
             throw new ApiException('Confirmation required: set confirm to true after acknowledging the reset', 400);
         }
 
-        $forceLock = getenv('BAIKAL_LOCK_INSTALL') === '1';
-        $allowReinstall = getenv('BAIKAL_ALLOW_REINSTALL') === '1';
+        $forceLock = self::envFlagIsOne('ANGARA_LOCK_INSTALL');
+        $allowReinstall = self::envFlagIsOne('ANGARA_ALLOW_REINSTALL');
         if ($forceLock && !$allowReinstall) {
-            throw new ApiException('Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to allow reset to default.', 403);
+            throw new ApiException('Installer is locked (ANGARA_LOCK_INSTALL=1). Set ANGARA_ALLOW_REINSTALL=1 to allow reset to default.', 403);
         }
 
         // Fresh read so we know DB + files paths before deleting yaml
@@ -212,6 +212,10 @@ class AdminSettingsService {
             'backupPath'  => $backupPath,
             'wiped'       => $wiped,
         ];
+    }
+
+    private static function envFlagIsOne(string $angaraKey): bool {
+        return getenv($angaraKey) === '1';
     }
 
     /**
@@ -411,7 +415,7 @@ class AdminSettingsService {
         $out['hasAdminPassword'] = $hash !== '';
         // admin_passwordhash is never copied into $out (not in EDITABLE_KEYS)
 
-        $out['configured_version'] = (string) ($sys['configured_version'] ?? (defined('BAIKAL_VERSION') ? BAIKAL_VERSION : ''));
+        $out['configured_version'] = (string) ($sys['configured_version'] ?? (defined('ANGARA_VERSION') ? ANGARA_VERSION : ''));
         $out['auth_realm'] = (string) ($sys['auth_realm'] ?? 'BaikalDAV');
         $out['writable'] = $this->isWritable();
 

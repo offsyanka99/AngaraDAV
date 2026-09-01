@@ -8,8 +8,8 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Unauthenticated bootstrap / upgrade service for /api/install/* and /portal/install/.
  *
- * Does not use portal Admin role. Honours INSTALL_DISABLED, BAIKAL_LOCK_INSTALL,
- * and BAIKAL_ALLOW_REINSTALL the same way as classic /admin/install/.
+ * Does not use portal Admin role. Honours INSTALL_DISABLED, ANGARA_LOCK_INSTALL,
+ * and ANGARA_ALLOW_REINSTALL the same way as classic /admin/install/.
  */
 class InstallService {
     private const RATE_MAX = 30;
@@ -44,7 +44,7 @@ class InstallService {
     public function status(): array {
         $perms = $this->permissions();
         $csrf = $this->csrfToken();
-        $productVersion = defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '';
+        $productVersion = defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '';
         $base = [
             'csrfToken'       => $csrf,
             'productVersion'  => $productVersion,
@@ -113,7 +113,7 @@ class InstallService {
                 'locked'            => true,
                 'configuredVersion' => $configuredVersion,
                 'hasAdminPassword'  => true,
-                'message'           => 'Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to re-open.',
+                'message'           => 'Installer is locked (ANGARA_LOCK_INSTALL=1). Set ANGARA_ALLOW_REINSTALL=1 to re-open.',
             ]);
         }
 
@@ -186,7 +186,7 @@ class InstallService {
         $std->set('invite_from', trim((string) ($body['invite_from'] ?? '')));
         $std->set('dav_auth_type', $davAuth);
         $std->set('session_max_age_minutes', max(1, min(10080, (int) ($body['session_max_age_minutes'] ?? 15))));
-        $std->set('configured_version', defined('BAIKAL_VERSION') ? BAIKAL_VERSION : '2.1.0');
+        $std->set('configured_version', defined('ANGARA_VERSION') ? ANGARA_VERSION : '2.1.0');
         $std->set('admin_passwordhash', $password);
         $std->persist();
 
@@ -312,9 +312,9 @@ class InstallService {
     }
 
     private function portalAdminEnvNote(): string {
-        $raw = getenv('PORTAL_ADMIN_USERS');
+        $raw = getenv('ANGARA_PORTAL_ADMIN_USERS');
         if ($raw === false || $raw === '') {
-            $raw = getenv('BAIKAL_PORTAL_ADMIN_USERS');
+            $raw = getenv('PORTAL_ADMIN_USERS');
         }
         if ($raw === false || trim((string) $raw) === '') {
             return '';
@@ -432,9 +432,9 @@ class InstallService {
      * When PORTAL_ADMIN_USERS env is unset, grant portal Admin role to DAV user "admin".
      */
     private function ensurePortalAdminUsersYaml(): void {
-        $envAdmins = getenv('PORTAL_ADMIN_USERS');
+        $envAdmins = getenv('ANGARA_PORTAL_ADMIN_USERS');
         if ($envAdmins === false || $envAdmins === '') {
-            $envAdmins = getenv('BAIKAL_PORTAL_ADMIN_USERS');
+            $envAdmins = getenv('PORTAL_ADMIN_USERS');
         }
         if ($envAdmins !== false && trim((string) $envAdmins) !== '') {
             return; // env wins; do not fight it in YAML
@@ -495,7 +495,7 @@ class InstallService {
             throw new ApiException('Config missing', 500);
         }
         $from = (string) ($config['system']['configured_version'] ?? '');
-        $to = defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '';
+        $to = defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '';
 
         $isLegacyMysql = !empty($config['database']['mysql']);
         $isMysqlBackend = ($config['database']['backend'] ?? '') === 'mysql';
@@ -591,12 +591,19 @@ class InstallService {
     }
 
     private function isEnvHardLocked(): bool {
-        return getenv('BAIKAL_LOCK_INSTALL') === '1' && getenv('BAIKAL_ALLOW_REINSTALL') !== '1';
+        $locked = self::envFlagIsOne('ANGARA_LOCK_INSTALL');
+        $allowed = self::envFlagIsOne('ANGARA_ALLOW_REINSTALL');
+
+        return $locked && !$allowed;
+    }
+
+    private static function envFlagIsOne(string $angaraKey): bool {
+        return getenv($angaraKey) === '1';
     }
 
     private function assertNotHardLockedForMutations(): void {
         if ($this->isEnvHardLocked()) {
-            throw new ApiException('Installer is locked (BAIKAL_LOCK_INSTALL=1). Set BAIKAL_ALLOW_REINSTALL=1 to re-open.', 403);
+            throw new ApiException('Installer is locked (ANGARA_LOCK_INSTALL=1). Set ANGARA_ALLOW_REINSTALL=1 to re-open.', 403);
         }
     }
 

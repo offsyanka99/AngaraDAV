@@ -106,13 +106,13 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
 COPY --from=builder --chown=nginx:nginx /src /var/www/baikal
 COPY --from=portal --chown=nginx:nginx /build/html/portal /var/www/baikal/html/portal
 
-# Persist short git SHA for BAIKAL_VERSION (…+git.<sha>) and /health.php / portal footer.
+# Persist short git SHA for ANGARA_VERSION (…+git.<sha>) and /health.php / portal footer.
 RUN SHORT="$(printf '%s' "${GIT_SHA}" | tr -cd '0-9a-fA-F' | cut -c1-7)"; \
     if [ -z "${SHORT}" ] || [ "${SHORT}" = "unknown" ]; then SHORT="unknown"; fi; \
     printf '%s\n' \
       '<?php' \
       '// Generated at image build — do not edit.' \
-      "define('BAIKAL_BUILD_GIT', '${SHORT}');" \
+    "define('ANGARA_BUILD_GIT', '${SHORT}');" \
       "define('BAIKAL_BUILD_TIME', '${BUILD_TIME}');" \
       > /var/www/baikal/Core/BuildInfo.php \
     && chown nginx:nginx /var/www/baikal/Core/BuildInfo.php

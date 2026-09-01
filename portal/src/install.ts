@@ -259,8 +259,8 @@ function renderLocked(): string {
   return `<section class="card card-danger-zone">
     <h2>Installer locked</h2>
     ${renderFlash("error", status?.message || "Installer is locked.")}
-    <p class="muted small">Production hard-lock: <span class="mono">BAIKAL_LOCK_INSTALL=1</span>.
-      Set <span class="mono">BAIKAL_ALLOW_REINSTALL=1</span> to re-open, or use portal Admin → Reset to Default when allowed.</p>
+    <p class="muted small">Production hard-lock: <span class="mono">ANGARA_LOCK_INSTALL=1</span>.
+      Set <span class="mono">ANGARA_ALLOW_REINSTALL=1</span> to re-open, or use portal Admin → Reset to Default when allowed.</p>
     <div class="form-actions-row" style="margin-top:1rem">
       <a class="btn btn-primary" href="/portal/">Open portal</a>
     </div>

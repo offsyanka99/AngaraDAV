@@ -107,7 +107,7 @@ class PushPlugin extends ServerPlugin {
             : [];
         $this->validator = new SubscriptionValidator($allowedHosts);
         $this->subject = $this->deriveSubject($sys);
-        $externalUrl = getenv('BAIKAL_PUSH_EXTERNAL_URL') ?: ($sys['push_external_url'] ?? '');
+        $externalUrl = getenv('ANGARA_PUSH_EXTERNAL_URL') ?: ($sys['push_external_url'] ?? '');
         $this->externalBaseUrl = $this->normalizeExternalBaseUrl((string) $externalUrl);
         $this->maxPerPrincipal = $this->boundedConfigInt($sys, 'push_max_subscriptions_per_principal', 20, 1, 1000);
         $this->maxPerResource = $this->boundedConfigInt($sys, 'push_max_subscriptions_per_resource', 100, 1, 5000);

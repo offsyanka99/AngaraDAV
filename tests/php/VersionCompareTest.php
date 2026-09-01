@@ -25,16 +25,16 @@ function assert_true(bool $cond, string $msg): void {
 }
 
 assert_true(
-    !str_contains(BAIKAL_VERSION, '+git.'),
-    'BAIKAL_VERSION must not contain +git. prefix'
+    !str_contains(ANGARA_VERSION, '+git.'),
+    'ANGARA_VERSION must not contain +git. prefix'
 );
-if (BAIKAL_GIT_SHA !== '') {
+if (ANGARA_GIT_SHA !== '') {
     assert_true(
-        BAIKAL_VERSION === BAIKAL_VERSION_BASE . '+' . BAIKAL_GIT_SHA,
-        'BAIKAL_VERSION is base+sha when git SHA is known'
+        ANGARA_VERSION === ANGARA_VERSION_BASE . '+' . ANGARA_GIT_SHA,
+        'ANGARA_VERSION is base+sha when git SHA is known'
     );
 } else {
-    assert_true(BAIKAL_VERSION === BAIKAL_VERSION_BASE, 'BAIKAL_VERSION equals base without SHA');
+    assert_true(ANGARA_VERSION === ANGARA_VERSION_BASE, 'ANGARA_VERSION equals base without SHA');
 }
 
 assert_true(baikal_version_base('2.0.1+fef872a') === '2.0.1', 'strip +sha build metadata');
@@ -42,8 +42,8 @@ assert_true(baikal_version_base('2.0.1+git.fef872a') === '2.0.1', 'strip legacy 
 assert_true(baikal_version_base('2.0.0') === '2.0.0', 'plain base unchanged');
 assert_true(baikal_version_base('') === '', 'empty stays empty');
 
-// Product base is BAIKAL_VERSION_BASE (2.0.1 at time of writing)
-$product = BAIKAL_VERSION_BASE;
+// Product base is ANGARA_VERSION_BASE.
+$product = ANGARA_VERSION_BASE;
 assert_true(baikal_needs_upgrade('2.0.0') === true, 'older configured requires upgrade');
 assert_true(baikal_needs_upgrade('2.0.0+git.abc') === true, 'older +legacy-git requires upgrade');
 assert_true(baikal_needs_upgrade($product) === false, 'same base does not require upgrade');

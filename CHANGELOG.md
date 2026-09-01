@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.0 — 2026-09-01
+
+### Rebrand
+- **`ANGARA_*` is now the canonical name** for product/build constants, runtime environment variables (files storage/upload/quota, push, portal log level, portal admin users, installer lock/reinstall, config/specific paths), Docker entrypoint variables (`ANGARA_SKIP_CHOWN`, `ANGARA_DAV_MAX_BODY_SIZE`), and internal bootstrap/context constants.
+- Out of scope: PHP namespaces (`Baikal\*`), `config/baikal.yaml`, Docker path `/var/www/baikal`, Digest realm `BaikalDAV`, and the `X-BAIKAL-CUSTOM` vCard property are unchanged and have no removal plan. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_*` forms indefinitely.
+
+### Breaking Changes
+- **Removed the `BAIKAL_*` compatibility aliases** for product/build constants (`BAIKAL_VERSION_BASE`, `BAIKAL_VERSION`, `BAIKAL_HOMEPAGE`, `BAIKAL_BUILD_GIT`, `BAIKAL_GIT_SHA`), bootstrap/context constants (`BAIKAL_CONTEXT`, `BAIKAL_CONTEXT_INSTALL`, `BAIKAL_CONTEXT_PORTAL_API`), path overrides (`BAIKAL_PATH_CONFIG`, `BAIKAL_PATH_SPECIFIC`, `BAIKAL_PATH_FRAMEWORKROOT`), file storage settings (`BAIKAL_FILES_STORAGE_PATH`, `BAIKAL_FILES_MAX_UPLOAD_MB`/`_BYTES`, `BAIKAL_FILES_QUOTA_MB`/`_BYTES`), push/portal settings (`BAIKAL_PUSH_EXTERNAL_URL`, `BAIKAL_PUSH_LOG_LEVEL`, `BAIKAL_PORTAL_LOG_LEVEL`, `BAIKAL_PORTAL_ADMIN_USERS`), and installer lock controls (`BAIKAL_LOCK_INSTALL`, `BAIKAL_ALLOW_REINSTALL`). Only `ANGARA_*` (and any previously-supported unprefixed variable) is read now — rebuild Docker images and update deployments still setting only a `BAIKAL_*` form for these. See [docs/baikal-to-angara-migration-plan.md](docs/baikal-to-angara-migration-plan.md) for the full removal record.
+
 ## 2.4.5 — 2026-09-01
 
 ### Portal

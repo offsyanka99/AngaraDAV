@@ -27,10 +27,10 @@
 
 /*
  * Product compatibility line (bump when documenting a release).
- * Full BAIKAL_VERSION appends +<sha> when a build SHA is available
+ * Full ANGARA_VERSION appends +<sha> when a build SHA is available
  * (e.g. 2.1.0+fef872a — no "git." prefix).
  */
-define('BAIKAL_VERSION_BASE', '2.4.5');
+define('ANGARA_VERSION_BASE', '2.5.0');
 
 // Optional image build stamp written by Dockerfile (Core/BuildInfo.php).
 if (is_readable(__DIR__ . '/BuildInfo.php')) {
@@ -66,9 +66,9 @@ function baikal_needs_upgrade(?string $configuredVersion): bool {
     if ($configured === '') {
         return false;
     }
-    $product = defined('BAIKAL_VERSION_BASE')
-        ? (string) BAIKAL_VERSION_BASE
-        : baikal_version_base(defined('BAIKAL_VERSION') ? (string) BAIKAL_VERSION : '');
+    $product = defined('ANGARA_VERSION_BASE')
+        ? (string) ANGARA_VERSION_BASE
+        : baikal_version_base(defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '');
 
     if ($product === '') {
         return false;
@@ -81,14 +81,14 @@ function baikal_needs_upgrade(?string $configuredVersion): bool {
  * Resolve short git SHA: env → BuildInfo.php → local git (dev only).
  */
 function baikal_resolve_git_sha(): string {
-    foreach (['BAIKAL_BUILD_GIT', 'GITHUB_SHA'] as $key) {
+    foreach (['ANGARA_BUILD_GIT', 'GITHUB_SHA'] as $key) {
         $raw = getenv($key);
         if (is_string($raw) && trim($raw) !== '' && strtolower(trim($raw)) !== 'unknown') {
             return baikal_short_git_sha(trim($raw));
         }
     }
-    if (defined('BAIKAL_BUILD_GIT')) {
-        $built = trim((string) constant('BAIKAL_BUILD_GIT'));
+    if (defined('ANGARA_BUILD_GIT')) {
+        $built = trim((string) constant('ANGARA_BUILD_GIT'));
         if ($built !== '' && strtolower($built) !== 'unknown') {
             return baikal_short_git_sha($built);
         }
@@ -117,12 +117,12 @@ function baikal_short_git_sha(string $sha): string {
     return substr($sha, 0, 7);
 }
 
-$baikalGit = baikal_resolve_git_sha();
-define('BAIKAL_GIT_SHA', $baikalGit);
+$angaraGit = baikal_resolve_git_sha();
+define('ANGARA_GIT_SHA', $angaraGit);
 define(
-    'BAIKAL_VERSION',
-    $baikalGit !== ''
-        ? BAIKAL_VERSION_BASE . '+' . $baikalGit
-        : BAIKAL_VERSION_BASE
+    'ANGARA_VERSION',
+    $angaraGit !== ''
+        ? ANGARA_VERSION_BASE . '+' . $angaraGit
+        : ANGARA_VERSION_BASE
 );
-define('BAIKAL_HOMEPAGE', 'https://github.com/offsyanka99/AngaraDAV');
+define('ANGARA_HOMEPAGE', 'https://github.com/offsyanka99/AngaraDAV');

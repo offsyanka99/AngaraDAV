@@ -36,7 +36,7 @@ function assert_true(bool $condition, string $message): void {
 }
 
 // Isolate env so getenv overrides from the host shell cannot break assertions
-$envKeys = ['PORTAL_ADMIN_USERS', 'BAIKAL_PORTAL_ADMIN_USERS'];
+$envKeys = ['PORTAL_ADMIN_USERS'];
 $envBackup = [];
 foreach ($envKeys as $k) {
     $v = getenv($k);
