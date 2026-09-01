@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - refactor/angara-product-constants
       # Phase 1 import perf test image -> ghcr.io/.../angaradav:perf-import-sqlite-tx
       - perf/import-sqlite-tx
       - 'release/**'
