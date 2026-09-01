@@ -49,6 +49,7 @@ Full detail in the [test-engineer agent](.github/agents/test-engineer.agent.md).
 - [admin-api-development](.github/skills/admin-api-development/SKILL.md) — `/api/admin/*` services, routing, audit requirements, portal client work, and tests.
 - [portal-feature-development](.github/skills/portal-feature-development/SKILL.md) — portal TypeScript/Vite UI and API feature workflow.
 - [dav-protocol-development](.github/skills/dav-protocol-development/SKILL.md) — CalDAV/CardDAV/WebDAV and SabreDAV compatibility workflow.
+- [security-review](.github/skills/security-review/SKILL.md) — security review for API/auth, files, DAV/Push, deployment, secrets, and dependencies.
 
 ## Other docs
 
