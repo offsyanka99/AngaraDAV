@@ -137,6 +137,8 @@ export type PortalUiState = {
   timeFormat: "auto" | "12h" | "24h";
   weekStart: "auto" | "monday" | "sunday";
   logLevel: string;
+  /** Portal background-sync poll interval (seconds). Fallback 30 until /ui or /me. */
+  syncPollSeconds: number;
   /**
    * null = services not yet known (fail-open: show all user tabs).
    * object = from login/me/ui; hide tabs for disabled services.
@@ -324,6 +326,8 @@ export type AppState = {
   filesUploadConflict: FilesUploadConflict | null;
   /** Themed delete confirm (event/task/note/contact/bulk/revoke). */
   confirmDelete: ConfirmDeleteState | null;
+  /** Generic confirm before Refresh discards an open editor. */
+  confirmRefresh: boolean;
   /** Document click handler while datetime popover is open. */
   dtPickerDocClick: ((ev: MouseEvent) => void) | null;
 };
@@ -456,6 +460,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
       timeFormat: "auto",
       weekStart: "auto",
       logLevel: "off",
+      syncPollSeconds: 30,
       services: null,
     },
     searchTimer: null,
@@ -509,6 +514,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesPreviewSeq: 0,
     filesUploadConflict: null,
     confirmDelete: null,
+    confirmRefresh: false,
     dtPickerDocClick: null,
   };
 }

@@ -1,5 +1,6 @@
 /** Notes loaders (Phase 7). */
 import { api } from "../../api";
+import { captureSyncSnapshot } from "../backgroundSync";
 import { itemKey } from "../keys";
 import type { NotesHost } from "./host";
 
@@ -19,4 +20,5 @@ export async function loadNotes(host: NotesHost) {
       host.state.noteModalOpen = false;
     }
   }
+  await captureSyncSnapshot(host);
 }

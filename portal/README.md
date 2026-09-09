@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.0`
+**Version:** `2.5.1`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -65,6 +65,8 @@ hosts — they do not import `app.ts`.
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database** · **Configuration**. Installer: `/portal/install/`. |
 
 Section help lives under **(i)** info modals. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
+
+While a user tab is visible, the portal polls collection revisions (`GET /api/sync-status`) and shows a sticky toast when CalDAV/CardDAV/WebDAV clients (or another browser tab) change the open view. **Refresh** reloads that tab in-place. The poll interval is **Administration → System settings → Portal sync poll interval** (default 30s) and does not extend session idle.
 
 ### Administration (Admin role)
 

@@ -7,6 +7,11 @@ import { api } from "../api";
 import { log } from "../log";
 import { closeAboutModal, openAboutModal } from "./about";
 import { closeConfirmDelete } from "./confirmDelete";
+import {
+  backgroundSyncHost,
+  cancelRefreshConfirm,
+  confirmRefreshAndReload,
+} from "./backgroundSync";
 import type { AppOrchestrator } from "./orchestrator";
 import { parseTabId } from "./routing";
 import * as contacts from "./contacts";
@@ -24,6 +29,26 @@ export async function handleShellAction(
   ev: Event,
 ): Promise<boolean> {
   const { state, render, clearFlash, setFlash } = o;
+
+  if (action === "confirm-refresh-cancel") {
+    const host = backgroundSyncHost();
+    if (host) cancelRefreshConfirm(host);
+    else {
+      state.confirmRefresh = false;
+      render();
+    }
+    return true;
+  }
+
+  if (action === "confirm-refresh-ok") {
+    const host = backgroundSyncHost();
+    if (host) await confirmRefreshAndReload(host);
+    else {
+      state.confirmRefresh = false;
+      render();
+    }
+    return true;
+  }
 
   if (action === "confirm-delete-cancel") {
     closeConfirmDelete(state);

@@ -15,7 +15,8 @@ WORKDIR /src
 COPY composer.json composer.lock ./
 COPY Core ./Core
 COPY html ./html
-COPY LICENSE SECURITY.md ./
+COPY LICENSE ./
+COPY docs/SECURITY.md ./SECURITY.md
 # Vendor patches (e.g. dual-format calendar-timezone for Home Assistant)
 COPY patches ./patches
 COPY scripts/apply-vendor-patches.sh ./scripts/apply-vendor-patches.sh

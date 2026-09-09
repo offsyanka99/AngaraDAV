@@ -53,4 +53,4 @@ Full detail in the [test-engineer agent](.github/agents/test-engineer.agent.md).
 
 ## Other docs
 
-[CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [portal/README.md](portal/README.md) · [patches/README.md](patches/README.md) · [Core/Frameworks/BaikalAdmin/README.md](Core/Frameworks/BaikalAdmin/README.md)
+[CHANGELOG.md](CHANGELOG.md) · [docs/SECURITY.md](docs/SECURITY.md) · [portal/README.md](portal/README.md) · [patches/README.md](patches/README.md) · [Core/Frameworks/BaikalAdmin/README.md](Core/Frameworks/BaikalAdmin/README.md)

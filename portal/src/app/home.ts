@@ -126,6 +126,7 @@ export function renderHome(o: AppOrchestrator): void {
       state.filesPreview !== null ||
       state.filesUploadConflict !== null ||
       state.confirmDelete !== null ||
+      state.confirmRefresh ||
       state.adminUserCreateOpen ||
       state.adminUserEditOpen ||
       state.adminUserDeleteUsername !== null ||

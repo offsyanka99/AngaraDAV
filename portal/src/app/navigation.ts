@@ -14,6 +14,7 @@ import {
 } from "./calendars/selectionPersist";
 import { calendarEventsFingerprint } from "./calendars/loaders";
 import { firstEnabledUserTab, isUserTabEnabled } from "./session";
+import { onBackgroundSyncTabChange } from "./backgroundSync";
 
 export function normalizeActiveTab(o: AppOrchestrator): void {
   const { state } = o;
@@ -58,6 +59,7 @@ export async function activateTab(
     files.closeFilesItemMenu(o.filesHost);
   }
   if (tab === "admin") {
+    onBackgroundSyncTabChange();
     // Entering Administration from the user menu → Overview (or last hash page)
     await o.activateAdminPage(state.adminPage || "overview", {
       ...opts,
@@ -69,6 +71,7 @@ export async function activateTab(
   state.userMenuOpen = false;
   state.listKeyboardFocus = false;
   o.persistTab(tab);
+  onBackgroundSyncTabChange();
   log.event("tab", { tab });
   if (tab !== "calendars") {
     state.calModalOpen = false;

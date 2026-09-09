@@ -22,6 +22,7 @@ export type BootstrapDeps = {
   render: () => void;
   handleSessionExpired: (message?: string) => void;
   clearPortalSessionState: () => void;
+  startBackgroundSync: () => void;
   normalizeActiveTab: () => void;
   persistTab: (tab: TabId, adminPage?: AdminPageId, username?: string | null) => void;
   loadHome: () => Promise<void>;
@@ -129,6 +130,7 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void> {
       deps.persistTab(state.activeTab, state.adminPage);
       await deps.loadHome();
       await loadAdminForActivePage(deps);
+      deps.startBackgroundSync();
     }
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
@@ -175,6 +177,7 @@ export async function onLogin(form: HTMLFormElement, deps: LoginDeps): Promise<v
     deps.persistTab(state.activeTab, state.adminPage);
     await deps.loadHome();
     await loadAdminForActivePage(deps);
+    deps.startBackgroundSync();
     deps.setFlash("success", "Signed in");
   } catch (e) {
     log.warn("login.failed", e instanceof Error ? e.message : e);

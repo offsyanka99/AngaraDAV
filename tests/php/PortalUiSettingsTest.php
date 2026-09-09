@@ -58,6 +58,11 @@ try {
         ),
         'App.php does not getenv locale env'
     );
+    assert_true(
+        is_string($src) && str_contains($src, "'syncPollSeconds'")
+            && str_contains($src, 'SyncStatusService::pollSecondsFromConfig'),
+        'portalUiSettings exposes syncPollSeconds'
+    );
 } finally {
     $restore = static function (string $name, $prev): void {
         if ($prev === false) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.1 — 2026-09-09
+
+### Portal
+- **Background-change awareness.** While a user tab is visible, the portal polls `GET /api/sync-status` (default every 30 seconds; Administration → System settings, 10–300) for calendar/address-book synctokens and, on the Files tab, a cheap directory fingerprint. When another client or tab changes the data you are looking at, a sticky info toast offers **Refresh**. Refresh re-runs that tab’s loaders (never a full page reload unless loaders fail) and asks before discarding an open editor. Polls do not extend session idle.
+
+### Docs
+- Security policy moved to [docs/SECURITY.md](docs/SECURITY.md) (GitHub still recognizes this path).
+
 ## 2.5.0 — 2026-09-01
 
 ### Rebrand

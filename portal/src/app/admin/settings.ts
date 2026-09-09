@@ -6,6 +6,7 @@ import { log } from "../../log";
 import { esc } from "../../ui";
 import { timezoneSelectOptions } from "../../timezones";
 import { infoTitle } from "../sectionInfo";
+import { clampPollSeconds, setBackgroundSyncInterval } from "../backgroundSync";
 import type { AdminHost } from "./host";
 import {
   adminComingSoonBanner,
@@ -90,6 +91,7 @@ export function renderAdminSettingsShell(host: AdminHost): string {
 
         <h3 class="admin-subsection-title">Session & portal</h3>
         ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal session")}
+        ${num("portal_sync_poll_seconds", s.portal_sync_poll_seconds ?? 30, "Portal sync poll interval (seconds)", "How often an open portal tab checks for changes from other apps (10–300). Refresh is never automatic.")}
         <label>Portal log level
           <select name="portal_log_level" ${host.state.busy || s.writable === false ? "disabled" : ""}>
             ${["off", "error", "warn", "info", "debug"]
@@ -197,6 +199,7 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     files_quota_mb: Number(fd.get("files_quota_mb") ?? 0),
     files_quarantine_days: Number(fd.get("files_quarantine_days") ?? 0),
     session_max_age_minutes: Number(fd.get("session_max_age_minutes") ?? 15),
+    portal_sync_poll_seconds: Number(fd.get("portal_sync_poll_seconds") ?? 30),
     portal_log_level: String(fd.get("portal_log_level") ?? "off"),
     portal_time_format: String(fd.get("portal_time_format") ?? "auto"),
     portal_week_start: String(fd.get("portal_week_start") ?? "auto"),
@@ -220,10 +223,12 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     const d = res.data;
     const tf = String(d.portal_time_format ?? "auto").toLowerCase();
     const ws = String(d.portal_week_start ?? "auto").toLowerCase();
+    const syncPollSeconds = clampPollSeconds(d.portal_sync_poll_seconds ?? 30);
     host.state.portalUi = {
       ...host.state.portalUi,
       timeFormat: tf === "12h" || tf === "24h" ? tf : "auto",
       weekStart: ws === "monday" || ws === "sunday" ? ws : "auto",
+      syncPollSeconds,
       services: {
         caldav: !!d.cal_enabled,
         carddav: !!d.card_enabled,
@@ -232,6 +237,7 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
         files: !!d.files_enabled,
       },
     };
+    setBackgroundSyncInterval(syncPollSeconds);
     log.event("admin.settings.save");
     host.setFlash("success", "System settings saved");
   } catch (e) {

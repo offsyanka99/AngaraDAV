@@ -36,6 +36,7 @@ class App {
     private ContactImportService $contactImport;
     private CalendarItemService $items;
     private FileService $files;
+    private SyncStatusService $syncStatus;
     private FileDownloadRateLimiter $fileDownloadLimiter;
     private HttpIO $http;
     private CalendarRoutes $calendarRoutes;
@@ -82,6 +83,7 @@ class App {
         $this->contactImport = new ContactImportService($contactStore, $vcard);
         $this->items = new CalendarItemService($pdo);
         $this->files = new FileService($pdo, $config);
+        $this->syncStatus = new SyncStatusService($pdo, $this->files, $config);
         $this->fileDownloadLimiter = new FileDownloadRateLimiter(
             $this->portalSpecificDir() . '/portal_file_download_rate.json'
         );
@@ -164,6 +166,7 @@ class App {
      *   weekStart: string,
      *   logLevel: string,
      *   sessionIdleSeconds: int,
+     *   syncPollSeconds: int,
      *   version: string,
      *   git: string,
      *   services: array{caldav: bool, carddav: bool, tasks: bool, notes: bool, files: bool}
@@ -177,6 +180,7 @@ class App {
             'weekStart'          => self::portalWeekStartFromSystem($sys),
             'logLevel'           => $this->portalLogLevel(),
             'sessionIdleSeconds' => $this->auth->sessionMaxAge(),
+            'syncPollSeconds'    => SyncStatusService::pollSecondsFromConfig($this->config),
             'version'            => defined('ANGARA_VERSION') ? (string) ANGARA_VERSION : '',
             'git'                => defined('ANGARA_GIT_SHA') ? (string) ANGARA_GIT_SHA : '',
             // Defaults match AdminDashboardService / install (notes & files off by default)
@@ -553,6 +557,20 @@ class App {
             $adminUser = $this->adminAuth->requireAdmin();
 
             return $this->dispatchAdminRoutes($method, $path, $adminUser);
+        }
+
+        // Close the session lock before SQL/stat so other clicks are not serialized behind this poll.
+        if ($method === 'GET' && $path === '/sync-status') {
+            $username = $this->auth->peekUser();
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+            $includeFiles = isset($_GET['includeFiles'])
+                && (string) $_GET['includeFiles'] !== ''
+                && (string) $_GET['includeFiles'] !== '0';
+            $filesPath = isset($_GET['path']) ? (string) $_GET['path'] : '';
+
+            return $this->syncStatus->get($username, $includeFiles, $filesPath);
         }
 
         $username = $this->auth->requireUser();

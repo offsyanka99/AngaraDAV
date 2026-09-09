@@ -5,6 +5,7 @@ import { api, ApiError, type FileEntry } from "../../api";
 import { log } from "../../log";
 import type { FilesHost } from "./host";
 import { closeFilesItemMenu } from "./itemMenu";
+import { captureSyncSnapshot } from "../backgroundSync";
 
 export async function loadFiles(host: FilesHost): Promise<void> {
   host.state.filesLoading = true;
@@ -40,6 +41,7 @@ export async function loadFiles(host: FilesHost): Promise<void> {
       enabled: status.enabled,
       ready: status.ready,
     });
+    await captureSyncSnapshot(host);
   } finally {
     host.state.filesLoading = false;
   }

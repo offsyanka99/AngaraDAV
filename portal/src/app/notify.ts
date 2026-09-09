@@ -252,6 +252,11 @@ function dismissAll(): void {
   for (const t of [...toasts]) dismiss(t.id);
 }
 
+function isVisible(id: number): boolean {
+  const t = toasts.find((x) => x.id === id);
+  return !!t && !t.leaving;
+}
+
 /**
  * After a session expiry every in-flight request fails; suppress the resulting
  * error toasts so only the "session timed out" banner is shown.
@@ -267,5 +272,6 @@ export const notify = {
   error: (message: string, opts?: NoticeOptions) => show("error", message, opts),
   dismiss,
   dismissAll,
+  isVisible,
   setErrorsSuppressed,
 };

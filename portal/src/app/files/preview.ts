@@ -4,31 +4,20 @@
 import { api } from "../../api";
 import { log } from "../../log";
 import { esc, renderModal } from "../../ui";
-import type { AppState, FilesPreview } from "../context";
+import type { FilesPreview } from "../context";
 import { formatBytes } from "../format";
 import type { FilesHost } from "./host";
 import { closeFilesItemMenu } from "./itemMenu";
 import { officeBlobToHtml } from "./officePreview";
 import { classifyFilesPreview } from "./previewKind";
+import { disposeFilesPreviewState } from "./stateReset";
 import { resetFilesTransferTree } from "./transfer";
 
 export { classifyFilesPreview } from "./previewKind";
+export { disposeFilesPreviewState } from "./stateReset";
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
-
-export function disposeFilesPreviewState(state: AppState): void {
-  const prev = state.filesPreview;
-  if (prev?.objectUrl) {
-    try {
-      URL.revokeObjectURL(prev.objectUrl);
-    } catch {
-      /* ignore */
-    }
-  }
-  state.filesPreviewSeq += 1;
-  state.filesPreview = null;
-}
 
 export function closeFilesPreview(host: FilesHost): void {
   disposeFilesPreviewState(host.state);

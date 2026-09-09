@@ -1,6 +1,7 @@
 .git
 .github
 docs
+!docs/SECURITY.md
 tests
 logs
 vendor

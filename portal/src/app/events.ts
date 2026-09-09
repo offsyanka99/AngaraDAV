@@ -17,6 +17,7 @@ import * as calendars from "./calendars";
 import * as contacts from "./contacts";
 import * as files from "./files";
 import { aboutModalIsOpen, closeAboutModal } from "./about";
+import { backgroundSyncHost, cancelRefreshConfirm } from "./backgroundSync";
 import { unbindDtPickerOutside } from "./shell";
 import { closeUserSettings, persistUserSettings, readUserSettingsFromForm } from "./userSettings";
 import { applyTheme } from "./theme";
@@ -830,6 +831,15 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   if (state.confirmDelete) {
     state.confirmDelete = null;
     render();
+    return;
+  }
+  if (state.confirmRefresh) {
+    const host = backgroundSyncHost();
+    if (host) cancelRefreshConfirm(host);
+    else {
+      state.confirmRefresh = false;
+      render();
+    }
     return;
   }
   // About / info modals stack above other dialogs — close only them first

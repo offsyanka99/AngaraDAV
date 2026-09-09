@@ -7,6 +7,7 @@ import type { Calendar, CalendarEvent } from "../../api";
 import type { CalendarsHost } from "./host";
 import { eventsRangeForView } from "./eventsView";
 import { persistCalendarSelection } from "./selectionPersist";
+import { captureSyncSnapshot } from "../backgroundSync";
 
 export function calendarEventsFingerprint(
   events: Array<CalendarEvent & { instanceId?: number }>,
@@ -41,6 +42,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
   if (ids.length === 0) {
     host.state.monthEvents = [];
     host.state.calendarEventsReady = true;
+    await captureSyncSnapshot(host);
     return;
   }
   const { from, to } = eventsRangeForView(host);
@@ -69,6 +71,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
       from,
       to,
     });
+    await captureSyncSnapshot(host);
   } catch (e) {
     host.state.monthEvents = [];
     host.state.calendarEventsReady = true;

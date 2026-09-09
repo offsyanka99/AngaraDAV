@@ -16,6 +16,9 @@ use Sabre\DAV\Exception\NotFound;
  * Portal API for private WebDAV file homes (same storage as /dav.php/files/{user}/).
  */
 class FileService {
+    /** Max direct children hashed for GET /sync-status (add/remove still changes the digest via count). */
+    public const FINGERPRINT_CHILD_CAP = 500;
+
     /** @var \PDO */
     private $pdo;
 
@@ -165,6 +168,66 @@ class FileService {
         return [
             'path'    => $relative,
             'entries' => $entries,
+        ];
+    }
+
+    /**
+     * @return array{path: string, fingerprint: string|null, missing: bool, capped: bool}
+     */
+    public function directoryFingerprint(string $username, string $path = ''): array {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+        $relative = $this->normalizeListPath($path);
+        $absolute = $storage->getPath($relative);
+
+        if ($relative !== '' && (!$storage->isVisibleChild($relative) || !is_dir($absolute) || is_link($absolute))) {
+            return [
+                'path'        => $relative,
+                'fingerprint' => null,
+                'missing'     => true,
+                'capped'      => false,
+            ];
+        }
+
+        $children = [];
+        $iterator = new \FilesystemIterator(
+            $absolute,
+            \FilesystemIterator::CURRENT_AS_FILEINFO | \FilesystemIterator::SKIP_DOTS
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink()) {
+                continue;
+            }
+            $isDir = $entry->isDir();
+            $children[] = [
+                'name'  => $entry->getFilename(),
+                'type'  => $isDir ? 'dir' : 'file',
+                'mtime' => (int) $entry->getMTime(),
+                'size'  => $isDir ? 0 : (int) $entry->getSize(),
+            ];
+        }
+
+        usort($children, static function (array $a, array $b): int {
+            return strcasecmp((string) $a['name'], (string) $b['name']);
+        });
+
+        $total = count($children);
+        $capped = $total > self::FINGERPRINT_CHILD_CAP;
+        if ($capped) {
+            $children = array_slice($children, 0, self::FINGERPRINT_CHILD_CAP);
+        }
+
+        $parts = [];
+        foreach ($children as $child) {
+            $parts[] = $child['name'] . '|' . $child['type'] . '|' . $child['mtime'] . '|' . $child['size'];
+        }
+        $parts[] = 'count=' . $total;
+
+        return [
+            'path'        => $relative,
+            'fingerprint' => hash('sha256', implode("\n", $parts)),
+            'missing'     => false,
+            'capped'      => $capped,
         ];
     }
 

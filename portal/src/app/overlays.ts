@@ -4,6 +4,7 @@
  */
 import { infoModalHtml } from "./sectionInfo";
 import { renderConfirmDeleteModal } from "./confirmDelete";
+import { renderConfirmRefreshModal } from "./confirmRefresh";
 import type { AppState } from "./context";
 import type { AppOrchestrator } from "./orchestrator";
 import * as calendars from "./calendars";
@@ -53,12 +54,14 @@ export function overlayStabilityKey(state: AppState): string {
     ? [imp.phase, imp.readPercent ?? "", imp.processPercent ?? "", imp.processCurrent, imp.ok ?? ""].join("|")
     : "";
   const confirm = state.confirmDelete ? state.confirmDelete.scope : "";
-  return `p:${previewKey};u:${uploadKey};i:${importKey};c:${confirm}`;
+  const refresh = state.confirmRefresh ? "1" : "";
+  return `p:${previewKey};u:${uploadKey};i:${importKey};c:${confirm};r:${refresh}`;
 }
 
 export function overlayHtml(o: AppOrchestrator): string {
   return `${infoModalHtml()}
       ${renderConfirmDeleteModal(o.state)}
+      ${renderConfirmRefreshModal(o.state)}
       ${calendars.renderImportProgressModal(o.calendarsHost)}
       ${files.renderFilesUploadProgressModal(o.filesHost)}
       ${renderFilesPreviewModal(o.filesHost)}`;

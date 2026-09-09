@@ -50,6 +50,8 @@ class Standard extends \Baikal\Model\Config {
         "base_uri"                 => "",
         // Admin UI idle session lifetime (minutes); rolling while active
         "session_max_age_minutes"  => 15,
+        // Portal background-sync poll interval (seconds); does not extend idle
+        "portal_sync_poll_seconds" => 30,
         // WebDAV-Push (draft-bitfire-webdav-push): server-initiated change
         // notifications over Web Push (RFC 8030/8291/8292) for CalDAV/CardDAV.
         "push_enabled"             => false,
@@ -112,6 +114,12 @@ class Standard extends \Baikal\Model\Config {
         if ($sProp === "session_max_age_minutes") {
             $minutes = max(1, (int) $sValue);
             parent::set($sProp, $minutes);
+
+            return $this;
+        }
+
+        if ($sProp === "portal_sync_poll_seconds") {
+            parent::set($sProp, max(10, min(300, (int) $sValue)));
 
             return $this;
         }

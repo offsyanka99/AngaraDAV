@@ -49,6 +49,7 @@ class AdminSettingsService {
         'invite_from',
         'dav_auth_type',
         'session_max_age_minutes',
+        'portal_sync_poll_seconds',
         'push_enabled',
         'push_external_url',
         'push_log_level',
@@ -931,6 +932,9 @@ class AdminSettingsService {
             case 'session_max_age_minutes':
                 return max(1, min(10080, (int) $value));
 
+            case 'portal_sync_poll_seconds':
+                return max(10, min(300, (int) $value));
+
             case 'dav_auth_type':
                 $t = (string) $value;
                 if (!in_array($t, ['Digest', 'Basic', 'Apache'], true)) {
@@ -1019,6 +1023,7 @@ class AdminSettingsService {
             'invite_from'             => '',
             'dav_auth_type'           => 'Digest',
             'session_max_age_minutes' => 15,
+            'portal_sync_poll_seconds' => 30,
             'push_enabled'            => false,
             'push_external_url'       => '',
             'push_log_level'          => 'off',

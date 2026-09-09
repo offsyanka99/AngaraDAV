@@ -21,6 +21,9 @@ system:
     auth_realm: BaikalDAV
     base_uri: ''
     session_max_age_minutes: 15
+    # Portal background-sync poll interval (seconds). SPA checks collection
+    # revisions while a user tab is visible. Bounds 10–300; does not extend idle.
+    portal_sync_poll_seconds: 30
     # WebDAV-Push (draft-bitfire-webdav-push): server-initiated CalDAV/CardDAV
     # change notifications over Web Push (RFC 8030/8291/8292), e.g. for DAVx5.
     # Requires the minishlink/web-push composer package + openssl PHP extension.

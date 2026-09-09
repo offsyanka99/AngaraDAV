@@ -97,6 +97,24 @@ class Auth {
         return $u;
     }
 
+    /** Authenticated username without bumping last-seen. */
+    public function peekUser(): string {
+        $u = $_SESSION[self::SESSION_KEY] ?? null;
+        if (!is_string($u) || $u === '') {
+            if ($this->timedOut) {
+                throw new ApiException('Session timed out. Please sign in again.', 401);
+            }
+            throw new ApiException('Not authenticated', 401);
+        }
+        if ($this->sessionIdleExpired()) {
+            $this->timedOut = true;
+            $this->logout();
+            throw new ApiException('Session timed out. Please sign in again.', 401);
+        }
+
+        return $u;
+    }
+
     /**
      * Verify DAV credentials without creating a session (re-auth for dangerous admin actions).
      * Uses the same digesta1 scheme as login. Failed attempts count toward login rate limit.
@@ -230,10 +248,23 @@ class Auth {
     }
 
     /**
+     * True when LAST_SEEN_KEY is older than sessionMaxAge.
+     * Legacy sessions without LOGIN_AT_KEY are not treated as expired (touchSession migrates them).
+     */
+    private function sessionIdleExpired(): bool {
+        $loginAt = isset($_SESSION[self::LOGIN_AT_KEY]) ? (int) $_SESSION[self::LOGIN_AT_KEY] : 0;
+        if ($loginAt <= 0) {
+            return false;
+        }
+        $last = isset($_SESSION[self::LAST_SEEN_KEY]) ? (int) $_SESSION[self::LAST_SEEN_KEY] : 0;
+
+        return $last > 0 && (time() - $last) > $this->sessionMaxAge;
+    }
+
+    /**
      * Refresh last-seen; return false if session expired.
      */
     private function touchSession(): bool {
-        $last = isset($_SESSION[self::LAST_SEEN_KEY]) ? (int) $_SESSION[self::LAST_SEEN_KEY] : 0;
         $loginAt = isset($_SESSION[self::LOGIN_AT_KEY]) ? (int) $_SESSION[self::LOGIN_AT_KEY] : 0;
         if ($loginAt <= 0) {
             // Legacy sessions without timestamps — migrate once
@@ -242,7 +273,7 @@ class Auth {
 
             return true;
         }
-        if ($last > 0 && (time() - $last) > $this->sessionMaxAge) {
+        if ($this->sessionIdleExpired()) {
             $this->timedOut = true;
             $this->logout();
 

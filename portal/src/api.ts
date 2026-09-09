@@ -17,6 +17,7 @@ import { contactsApi } from "./api/contactsApi";
 import { filesApi } from "./api/filesApi";
 import { itemsApi } from "./api/itemsApi";
 import { sessionApi } from "./api/sessionApi";
+import { syncApi } from "./api/syncApi";
 
 export const api = {
   ...sessionApi,
@@ -25,4 +26,5 @@ export const api = {
   ...contactsApi,
   ...itemsApi,
   ...filesApi,
+  ...syncApi,
 };

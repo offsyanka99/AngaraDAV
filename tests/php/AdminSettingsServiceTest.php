@@ -236,6 +236,19 @@ try {
     assert_true($afterBad['portal_time_format'] === '24h', 'invalid PUT leaves time format');
     assert_true($afterBad['portal_week_start'] === 'monday', 'invalid PUT leaves week start');
 
+    $pollGet0 = $localeSvc->getSystemSettings();
+    assert_true((int) ($pollGet0['portal_sync_poll_seconds'] ?? 0) === 30, 'default poll seconds 30');
+    $poll = $localeSvc->updateSystemSettings(['portal_sync_poll_seconds' => 45]);
+    assert_true((int) $poll['portal_sync_poll_seconds'] === 45, 'PUT poll seconds 45');
+    $rawPoll = Yaml::parseFile($path);
+    assert_true((int) ($rawPoll['system']['portal_sync_poll_seconds'] ?? 0) === 45, 'YAML portal_sync_poll_seconds');
+    $pollMin = $localeSvc->updateSystemSettings(['portal_sync_poll_seconds' => 1]);
+    assert_true((int) $pollMin['portal_sync_poll_seconds'] === 10, 'poll seconds clamped min 10');
+    $pollMax = $localeSvc->updateSystemSettings(['portal_sync_poll_seconds' => 999]);
+    assert_true((int) $pollMax['portal_sync_poll_seconds'] === 300, 'poll seconds clamped max 300');
+    $pollRound = $localeSvc->getSystemSettings();
+    assert_true((int) $pollRound['portal_sync_poll_seconds'] === 300, 'GET poll seconds round-trip');
+
     // Reset to default — full wipe: yaml + DB + files + INSTALL_DISABLED
     $specific = $dir . '/Specific';
     @mkdir($specific, 0700, true);

@@ -6,7 +6,7 @@ argument-hint: "Which change, component, or threat surface should be reviewed?"
 
 # Security Review
 
-Use this skill to review a defined change or surface for concrete security regressions. Start with [SECURITY.md](../../../SECURITY.md) and [AGENTS.md](../../../AGENTS.md). Report findings first, ordered by severity, with an exploit path, affected code, and the smallest practical remediation.
+Use this skill to review a defined change or surface for concrete security regressions. Start with [SECURITY.md](../../../docs/SECURITY.md) and [AGENTS.md](../../../AGENTS.md). Report findings first, ordered by severity, with an exploit path, affected code, and the smallest practical remediation.
 
 ## Portal API And Administration
 

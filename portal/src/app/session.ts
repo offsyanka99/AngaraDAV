@@ -5,6 +5,7 @@ import { ApiError, type PortalUi } from "../api";
 import { log, setLogLevel } from "../log";
 import type { AppState } from "./context";
 import { notify } from "./notify";
+import { clampPollSeconds, DEFAULT_POLL_SECONDS, setBackgroundSyncInterval } from "./backgroundSync";
 import type { TabId } from "./types";
 
 export function userIsAdmin(state: AppState): boolean {
@@ -44,12 +45,18 @@ export function applyPortalUi(state: AppState, ui: PortalUi | null | undefined):
       files: typeof s.files === "boolean" ? s.files : base.files,
     };
   }
+  const syncPollSeconds =
+    typeof ui.syncPollSeconds === "number" && Number.isFinite(ui.syncPollSeconds)
+      ? clampPollSeconds(ui.syncPollSeconds)
+      : state.portalUi.syncPollSeconds || DEFAULT_POLL_SECONDS;
   state.portalUi = {
     timeFormat: tf === "12h" || tf === "24h" ? tf : "auto",
     weekStart: ws === "monday" || ws === "sunday" ? ws : "auto",
     logLevel: ui.logLevel || "off",
+    syncPollSeconds,
     services,
   };
+  setBackgroundSyncInterval(syncPollSeconds);
   setLogLevel(state.portalUi.logLevel);
   if (
     typeof ui.sessionIdleSeconds === "number" &&
@@ -226,6 +233,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.filesUploadDropActive = false;
   state.filesUploadConflict = null;
   state.confirmDelete = null;
+  state.confirmRefresh = false;
   state.dtPickerDocClick = null;
   state.checkedFilePaths = [];
   state.photoPreview = null;

@@ -1,5 +1,6 @@
 /** Contacts loaders (Phase 7). */
 import { api } from "../../api";
+import { captureSyncSnapshot } from "../backgroundSync";
 import type { ContactsHost } from "./host";
 
 export async function loadContacts(host: ContactsHost, abId: number) {
@@ -19,6 +20,7 @@ export async function loadContacts(host: ContactsHost, abId: number) {
       host.state.removePhotoPending = false;
     }
   }
+  await captureSyncSnapshot(host);
 }
 
 export async function openContact(host: ContactsHost, uri: string) {

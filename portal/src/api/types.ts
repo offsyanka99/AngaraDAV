@@ -119,6 +119,7 @@ export type AdminSystemSettings = {
   invite_from: string;
   dav_auth_type: string;
   session_max_age_minutes: number;
+  portal_sync_poll_seconds?: number;
   push_enabled: boolean;
   push_external_url: string;
   push_log_level: string;
@@ -474,6 +475,8 @@ export type PortalUi = {
   logLevel?: string;
   /** Server idle session lifetime in seconds (matches session_max_age_minutes). */
   sessionIdleSeconds?: number;
+  /** Portal background-sync poll interval in seconds (10–300). */
+  syncPollSeconds?: number;
   /** Full product version including +sha when known (from server), e.g. 2.0.1+fef872a. */
   version?: string;
   /** Short git SHA only. */
@@ -483,6 +486,25 @@ export type PortalUi = {
    * (fail-open). When present, disabled services hide the matching tab.
    */
   services?: PortalUiServices;
+};
+
+export type SyncStatus = {
+  pollSeconds: number;
+  calendars: Array<{
+    instanceId: number;
+    calendarId: number;
+    synctoken: number;
+    components: string;
+  }>;
+  addressBooks: Array<{ id: number; synctoken: number }>;
+  files: {
+    enabled: boolean;
+    ready: boolean;
+    path: string;
+    fingerprint: string | null;
+    missing: boolean;
+    capped?: boolean;
+  };
 };
 
 /** Install/upgrade wizard status (public; works while portal API is blocked for upgrades). */

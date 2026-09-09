@@ -1,5 +1,6 @@
 /** Tasks loaders (Phase 7). */
 import { api } from "../../api";
+import { captureSyncSnapshot } from "../backgroundSync";
 import { itemKey } from "../keys";
 import type { TasksHost } from "./host";
 
@@ -19,4 +20,5 @@ export async function loadTasks(host: TasksHost) {
       host.state.taskModalOpen = false;
     }
   }
+  await captureSyncSnapshot(host);
 }

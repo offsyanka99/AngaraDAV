@@ -41,8 +41,14 @@ export function setOnSessionActivity(handler: (() => void) | null): void {
   onSessionActivity = handler;
 }
 
+function pathOnly(path: string): string {
+  const q = path.indexOf("?");
+  return q >= 0 ? path.slice(0, q) : path;
+}
+
 export function notifySessionActivity(path: string): void {
-  if (isAuthExemptPath(path)) return;
+  const pathname = pathOnly(path);
+  if (isAuthExemptPath(pathname) || isIdleExemptPath(pathname)) return;
   try {
     onSessionActivity?.();
   } catch {
@@ -52,13 +58,19 @@ export function notifySessionActivity(path: string): void {
 
 /** Paths that may return 401 without meaning “session expired while using the app”. */
 function isAuthExemptPath(path: string): boolean {
+  const pathname = pathOnly(path);
   return (
-    path === "/login" ||
-    path === "/ui" ||
-    path === "/logout" ||
-    path === "/install/status" ||
-    path.startsWith("/install/")
+    pathname === "/login" ||
+    pathname === "/ui" ||
+    pathname === "/logout" ||
+    pathname === "/install/status" ||
+    pathname.startsWith("/install/")
   );
+}
+
+/** Authenticated GETs that must not extend the client idle timer. 401 still expires the session. */
+function isIdleExemptPath(path: string): boolean {
+  return pathOnly(path) === "/sync-status";
 }
 
 export function notifyUnauthorized(path: string, message: string): void {

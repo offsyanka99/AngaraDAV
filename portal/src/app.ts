@@ -7,6 +7,7 @@ import type { FlashType } from "./ui";
 import { createAppState, type AppContext } from "./app/context";
 import type { AdminPageId } from "./app/types";
 import { bootstrap as bootstrapPortal, onLogin as onLoginPortal } from "./app/bootstrap";
+import { startBackgroundSync, stopBackgroundSync } from "./app/backgroundSync";
 import {
   clearFlash as clearFlashState,
   setFlash as setFlashState,
@@ -121,12 +122,25 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function clearPortalSessionState(): void {
+    stopBackgroundSync();
     clearPortalSessionStateImpl(state, {
       stopImportElapsedTimer,
       stopFilesUploadElapsedTimer,
       resetFilesTransferTree,
       unbindUserMenuOutside,
       unbindFilesUploadMenuOutside,
+    });
+  }
+
+  function startBackgroundSyncPoller(): void {
+    startBackgroundSync({
+      state,
+      render,
+      loadNotes: () => notes.loadNotes(notesHost),
+      loadTasks: () => tasks.loadTasks(tasksHost),
+      loadMonthEvents: () => calendars.loadMonthEvents(calendarsHost),
+      loadContacts: (abId) => contacts.loadContacts(contactsHost, abId),
+      loadFiles: () => files.loadFiles(filesHost),
     });
   }
 
@@ -144,6 +158,7 @@ export function mountApp(root: HTMLElement): void {
       render,
       handleSessionExpired,
       clearPortalSessionState,
+      startBackgroundSync: startBackgroundSyncPoller,
       normalizeActiveTab: () => normalizeActiveTabNav(o),
       persistTab,
       loadHome: () => loadHomeNav(o),

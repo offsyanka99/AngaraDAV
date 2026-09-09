@@ -8,6 +8,7 @@ import { basenamePath } from "../paths";
 import type { FilesHost } from "./host";
 import { closeFilesItemMenu } from "./itemMenu";
 import { loadFiles } from "./loaders";
+import { resetFilesTransferTreeState } from "./stateReset";
 
 export function isBlockedTransferDest(_host: FilesHost, dest: string, sources: string[]): boolean {
   for (const src of sources) {
@@ -18,10 +19,7 @@ export function isBlockedTransferDest(_host: FilesHost, dest: string, sources: s
 }
 
 export function resetFilesTransferTree(host: FilesHost): void {
-  host.state.filesTransfer = null;
-  host.state.filesTransferDest = "";
-  host.state.filesTreeChildren = {};
-  host.state.filesTreeExpanded = [];
+  resetFilesTransferTreeState(host.state);
 }
 
 export async function openFilesTransfer(host: FilesHost, op: "copy" | "move", paths: string[]): Promise<void> {
