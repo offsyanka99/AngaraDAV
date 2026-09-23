@@ -104,7 +104,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 | System settings | Yes |
 | Database settings write | Yes (`confirm: "CONFIRM"`) |
 | Settings backup / restore | Yes (never secrets or user/DAV data) |
-| Installer / upgrade | Yes (`/portal/install/`) |
+| Installer / upgrade | Yes (`/portal/install/`). Upgrade keeps `portal_log_level`, `portal_time_format`, and `portal_week_start` |
 
 Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → server import, elapsed time) and show the result when finished.
 

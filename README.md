@@ -115,7 +115,7 @@ More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/loc
 
 ## Compatibility
 
-Upgrades keep existing data. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `baikal.yaml`, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_SKIP_CHOWN`/`BAIKAL_DAV_MAX_BODY_SIZE` forms indefinitely (Docker/nginx runtime knobs, not this program's scope). Databases: **SQLite** or **PostgreSQL** only.
+Upgrades keep existing data. Confirming an upgrade updates `configured_version` and leaves the rest of `baikal.yaml` in place, including **Portal log level**, **Time format**, and **Week starts on**. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `baikal.yaml`, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_SKIP_CHOWN`/`BAIKAL_DAV_MAX_BODY_SIZE` forms indefinitely (Docker/nginx runtime knobs, not this program's scope). Databases: **SQLite** or **PostgreSQL** only.
 
 Product/build globals use `ANGARA_VERSION_BASE`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`, `ANGARA_BUILD_GIT`, and `ANGARA_GIT_SHA`. As of **2.5.0**, the `BAIKAL_*` compatibility aliases for these (and for the runtime env vars migrated in Phases 1-4: context/path constants, files storage, WebDAV-Push, portal admin/log-level, and installer lock/reinstall) have been removed; only `ANGARA_*` (and any previously-supported unprefixed variable) is read. Rebuild images so `Core/BuildInfo.php` defines `ANGARA_BUILD_GIT` — old images stamping only `BAIKAL_BUILD_GIT` no longer resolve a build SHA.
 

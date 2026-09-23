@@ -264,7 +264,7 @@ Admin conventions: every mutation is wrapped `try { … audit 'ok' } catch (ApiE
 
 ### Installer — [Core/Frameworks/Baikal/Portal/Install](Core/Frameworks/Baikal/Portal/Install)
 
-`InstallApp` is a separate unauthenticated router mounted at `/api/install/*`, sharing only `SameOrigin` and session start with the main app. `InstallService::status()` resolves the step in fixed order: `permissions` → `initialize` → `upgrade` → `locked` → `done` → `database`. Lock semantics: `Specific/INSTALL_DISABLED` marker; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (both compared strictly against `'1'`). `SchemaUpgrade::run()` never throws — it returns `{ok, errors, success}`.
+`InstallApp` is a separate unauthenticated router mounted at `/api/install/*`, sharing only `SameOrigin` and session start with the main app. `InstallService::status()` resolves the step in fixed order: `permissions` → `initialize` → `upgrade` → `locked` → `done` → `database`. Lock semantics: `Specific/INSTALL_DISABLED` marker; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (both compared strictly against `'1'`). `SchemaUpgrade::run()` never throws — it returns `{ok, errors, success}`. The version bump calls `Config::persist()`, which merges the settings model onto the existing `system` section, so keys the model does not own (`portal_log_level`, `portal_time_format`, `portal_week_start`, `portal_admin_users`, and the rest) are not reset.
 
 ---
 
@@ -505,7 +505,7 @@ Wire plugins in [Core/Frameworks/Baikal/Core/Server.php](Core/Frameworks/Baikal/
 
 Recorded as facts, not recommendations:
 
-- CI runs 17 of the 35 `tests/php/` scripts (16 named in `code-analysis`, plus `FileSchemaDriverTest.php`); the rest run only via `make php-test`.
+- CI runs 18 of the 36 `tests/php/` scripts (17 named in `code-analysis`, plus `FileSchemaDriverTest.php`); the rest run only via `make php-test`.
 - No CI job runs the portal `npm test` or `npm run build`; the portal is built only inside the Docker image stage.
 - `composer test` does not execute `tests/php`.
 - Portal test files must be added to `package.json` manually — there is no glob.

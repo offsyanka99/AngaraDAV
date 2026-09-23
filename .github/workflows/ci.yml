@@ -42,6 +42,8 @@ jobs:
         run: php tests/php/SameOriginTest.php
       - name: Portal self-service password change unit test
         run: php tests/php/AuthPasswordChangeTest.php
+      - name: Config persist keeps settings on upgrade unit test
+        run: php tests/php/ConfigPersistUpgradeTest.php
       - name: Admin security review unit test
         run: php tests/php/AdminSecurityReviewTest.php
       - name: Nginx CSP headers unit test

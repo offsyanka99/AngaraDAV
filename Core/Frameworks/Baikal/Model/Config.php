@@ -147,7 +147,13 @@ abstract class Config {
         } else {
             $config = [];
         }
-        $config[$this->sConfigFileSection] = $this->aData;
+        $existing = $config[$this->sConfigFileSection] ?? [];
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        // Keep keys this model does not own (portal log level, time format,
+        // week start, portal admin list, …). Upgrade only rewrites configured_version.
+        $config[$this->sConfigFileSection] = array_merge($existing, $this->aData);
         self::writeConfigFile($config);
     }
 }
