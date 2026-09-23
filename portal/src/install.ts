@@ -8,7 +8,6 @@ import { esc, renderFlash } from "./ui";
 
 export type InstallStep =
   | "permissions"
-  | "migrate-config"
   | "initialize"
   | "database"
   | "upgrade"
@@ -53,8 +52,6 @@ export type InstallStatus = {
   completed?: boolean;
   nextUrl?: string;
   messages?: string[];
-  legacyConfigFile?: string;
-  configFile?: string;
 };
 
 let csrf = "";
@@ -230,20 +227,6 @@ function renderDatabase(): string {
   </section>`;
 }
 
-function renderMigrateConfig(): string {
-  const from = status?.legacyConfigFile || "baikal.yaml";
-  const to = status?.configFile || "configuration.yaml";
-  return `<section class="card">
-    <h2>Rename config file</h2>
-    <p>This instance still has <span class="mono">config/${esc(from)}</span>.
-      AngaraDAV now reads <span class="mono">config/${esc(to)}</span>.</p>
-    <p class="muted small">The file is renamed in place. Portal log level, time format, week start, and every other setting stay as they are. This step can be removed from the product after the lab has run it.</p>
-    <div class="form-actions-row" style="margin-top:1rem">
-      <button type="button" class="btn btn-primary" data-action="migrate-config" ${busy ? "disabled" : ""}>Rename config file</button>
-    </div>
-  </section>`;
-}
-
 function renderUpgrade(): string {
   return `<section class="card">
     <h2>Version upgrade</h2>
@@ -293,8 +276,6 @@ function render(): void {
     body = `<section class="card"><p class="muted">Loading installer…</p></section>`;
   } else if (step === "permissions") {
     body = renderPermissions();
-  } else if (step === "migrate-config") {
-    body = renderMigrateConfig();
   } else if (step === "initialize") {
     body = renderInitialize();
   } else if (step === "database") {
@@ -350,10 +331,6 @@ function bind(): void {
   root.querySelector('[data-action="upgrade-toggle"]')?.addEventListener("change", (ev) => {
     upgradeConfirmChecked = !!(ev.target as HTMLInputElement).checked;
     render();
-  });
-
-  root.querySelector('[data-action="migrate-config"]')?.addEventListener("click", () => {
-    void onMigrateConfig();
   });
 
   root.querySelector('[data-action="upgrade-run"]')?.addEventListener("click", () => {
@@ -456,27 +433,6 @@ async function onDatabase(form: HTMLFormElement): Promise<void> {
     }
   } catch (e) {
     error = e instanceof Error ? e.message : "Database setup failed";
-  } finally {
-    busy = false;
-    render();
-  }
-}
-
-async function onMigrateConfig(): Promise<void> {
-  busy = true;
-  error = null;
-  success = null;
-  render();
-  try {
-    status = await api<InstallStatus>("/migrate-config", {
-      method: "POST",
-      body: JSON.stringify({ confirm: true }),
-    });
-    csrf = status.csrfToken || csrf;
-    success = status.message || "Config file renamed.";
-    log.event("install.migrate-config");
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Config rename failed";
   } finally {
     busy = false;
     render();

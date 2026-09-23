@@ -64,19 +64,6 @@ class InstallService {
             ]);
         }
 
-        // TEMPORARY: remove with LegacyConfigMigration after the lab rename.
-        if (LegacyConfigMigration::needed($this->configPath)) {
-            return array_merge($base, [
-                'step'              => 'migrate-config',
-                'locked'            => false,
-                'configuredVersion' => null,
-                'hasAdminPassword'  => false,
-                'legacyConfigFile'  => LegacyConfigMigration::LEGACY_FILENAME,
-                'configFile'        => LegacyConfigMigration::FILENAME,
-                'message'           => 'Rename config/baikal.yaml to config/configuration.yaml. Settings are not rewritten.',
-            ]);
-        }
-
         $config = $this->loadConfig();
         $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
         $configuredVersion = isset($sys['configured_version']) ? (string) $sys['configured_version'] : '';
@@ -493,27 +480,6 @@ class InstallService {
     /**
      * @return array<string, mixed>
      */
-    /**
-     * TEMPORARY lab rename. Delete with LegacyConfigMigration.
-     *
-     * @return array<string, mixed>
-     */
-    public function migrateConfigFile(bool $confirm): array {
-        $this->assertRateLimit();
-        if (!$confirm) {
-            throw new ApiException('Confirmation required: set confirm to true', 400);
-        }
-        if (!LegacyConfigMigration::needed($this->configPath)) {
-            throw new ApiException('Config rename is not available', 409);
-        }
-        LegacyConfigMigration::rename($this->configPath);
-        $this->registerRateAttempt();
-        $out = $this->status();
-        $out['message'] = 'Renamed baikal.yaml to configuration.yaml. Settings were not changed.';
-
-        return $out;
-    }
-
     public function upgrade(bool $confirm): array {
         $this->assertRateLimit();
         if (!$confirm) {

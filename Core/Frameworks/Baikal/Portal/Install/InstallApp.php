@@ -92,12 +92,6 @@ class InstallApp {
         if ($method === 'POST' && $sub === '/database') {
             return ['data' => $this->service->configureDatabase($this->jsonBody())];
         }
-        if ($method === 'POST' && $sub === '/migrate-config') {
-            $body = $this->jsonBody();
-            $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';
-
-            return ['data' => $this->service->migrateConfigFile($confirm)];
-        }
         if ($method === 'POST' && $sub === '/upgrade') {
             $body = $this->jsonBody();
             $confirm = !empty($body['confirm']) && $body['confirm'] !== '0' && $body['confirm'] !== 'false';

@@ -122,7 +122,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
 
-- `code-analysis` runs **18 named** `php tests/php/*.php` scripts individually, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`.
+- `code-analysis` runs **17 named** `php tests/php/*.php` scripts individually, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 
 It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
@@ -163,7 +163,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | [`docker/`](../docker) | nginx config + ordered entrypoint scripts |
 | [`scripts/`](../scripts) | Vendor patching, push worker, files maintenance, local Docker, PHP built-in-server router |
 | [`patches/`](../patches) | sabre/dav patch applied post-install |
-| [`tests/php/`](../tests/php) | Standalone PHP test scripts (37 files) |
+| [`tests/php/`](../tests/php) | Standalone PHP test scripts (36 files) |
 | [`tests/portal_admin_e2e.py`](../tests/portal_admin_e2e.py) | Live pytest e2e (not CI) |
 | `Specific/` | Runtime state — only named lock/secret/log files are gitignored (see §7) |
 | [`config/configuration.yaml.dist`](../config/configuration.yaml.dist) | Committed YAML template; live `config/configuration.yaml` is gitignored |
@@ -979,7 +979,7 @@ E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib
 
 Recorded as facts, not recommendations:
 
-- CI `code-analysis` runs **18** named PHP scripts and the `tests` job runs **1** more (`FileSchemaDriverTest.php`) → **19 of 37** `tests/php/` files. The other 18 run only via `make php-test`.
+- CI `code-analysis` runs **17** named PHP scripts and the `tests` job runs **1** more (`FileSchemaDriverTest.php`) → **18 of 36** `tests/php/` files. The other 18 run only via `make php-test`.
 - No CI job runs portal `npm test` or `npm run build`; the portal is built only in the Docker `portal` stage.
 - `composer test` does not execute `tests/php`.
 - Portal test files must be added to `package.json` manually — there is no glob. (Today all 17 on-disk tests are registered.)

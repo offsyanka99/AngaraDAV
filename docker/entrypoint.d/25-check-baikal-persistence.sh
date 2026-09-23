@@ -50,8 +50,6 @@ check_mount /var/www/baikal/Specific Specific
 
 if [ -f /var/www/baikal/config/configuration.yaml ]; then
   echo "$ME: info: configuration.yaml is present"
-elif [ -f /var/www/baikal/config/baikal.yaml ]; then
-  echo "$ME: info: legacy baikal.yaml is present; open /portal/install/ once to rename it to configuration.yaml"
 else
   echo "$ME: info: configuration.yaml not present yet (complete /portal/install/ once)"
 fi

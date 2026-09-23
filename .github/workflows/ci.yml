@@ -44,8 +44,6 @@ jobs:
         run: php tests/php/AuthPasswordChangeTest.php
       - name: Config persist keeps settings on upgrade unit test
         run: php tests/php/ConfigPersistUpgradeTest.php
-      - name: Legacy config filename rename unit test
-        run: php tests/php/LegacyConfigMigrationTest.php
       - name: Admin security review unit test
         run: php tests/php/AdminSecurityReviewTest.php
       - name: Nginx CSP headers unit test
