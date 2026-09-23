@@ -40,6 +40,8 @@ jobs:
         run: php tests/php/FileDownloadRateLimiterTest.php
       - name: Portal same-origin unit test
         run: php tests/php/SameOriginTest.php
+      - name: Portal self-service password change unit test
+        run: php tests/php/AuthPasswordChangeTest.php
       - name: Admin security review unit test
         run: php tests/php/AdminSecurityReviewTest.php
       - name: Nginx CSP headers unit test
@@ -48,6 +50,8 @@ jobs:
         run: php tests/php/HealthEndpointTest.php
       - name: Local Docker DX unit test
         run: php tests/php/LocalDockerDxTest.php
+      - name: Files maintenance scheduler unit test
+        run: php tests/php/FilesMaintenanceSchedulerTest.php
       - name: DAV exception logging unit test
         run: php tests/php/ServerExceptionLoggingTest.php
       - name: CalDAV read-only discovery unit test

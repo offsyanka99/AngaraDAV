@@ -4,6 +4,7 @@
  * Steps 1–6: Escape, click, submit, change/input, row keydown, files drop, avatar error.
  * Still post-render: outside menus, indeterminate select-all, holidays initial sync.
  */
+import { api } from "../api";
 import { log } from "../log";
 import {
   dataTransferHasFiles,
@@ -19,8 +20,7 @@ import * as files from "./files";
 import { aboutModalIsOpen, closeAboutModal } from "./about";
 import { backgroundSyncHost, cancelRefreshConfirm } from "./backgroundSync";
 import { unbindDtPickerOutside } from "./shell";
-import { closeUserSettings, persistUserSettings, readUserSettingsFromForm } from "./userSettings";
-import { applyTheme } from "./theme";
+import { closeUserSettings, submitUserSettings } from "./userSettings";
 
 /** Prevent double registration when mountApp runs twice on the same root (e.g. HMR). */
 const boundRoots = new WeakMap<HTMLElement, true>();
@@ -183,23 +183,14 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
     case "admin-database":
       admin.onAdminDatabaseFormSubmit(o.adminHost, form);
       return;
-    case "user-settings": {
-      const next = readUserSettingsFromForm(form);
-      if ("error" in next) {
-        o.state.userSettingsError = next.error;
-        o.render();
-        return;
-      }
-      persistUserSettings(next, o.state.user?.username ?? null);
-      o.state.userSettings = next;
-      o.state.userSettingsOpen = false;
-      o.state.userSettingsError = null;
-      if (o.state.calView === "week") o.state.weekScrollToDayStart = true;
-      applyTheme(next.theme);
-      o.clearFlash();
-      o.render();
+    case "user-settings":
+      void submitUserSettings(o.state, form, {
+        render: () => o.render(),
+        setFlash: o.setFlash,
+        clearFlash: o.clearFlash,
+        changePassword: (body) => api.changePassword(body),
+      });
       return;
-    }
     default:
       log.debug("portalEvents.submit.unknown", { form: kind });
   }
@@ -843,18 +834,18 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
     return;
   }
   // About / info modals stack above other dialogs — close only them first
-  if (state.userSettingsOpen) {
-    closeUserSettings(state);
-    render();
+  const infoModal = o.root.querySelector<HTMLElement>("#info-modal");
+  if (infoModal && !infoModal.hidden) {
+    o.closeInfoModal();
     return;
   }
   if (aboutModalIsOpen(o.root)) {
     closeAboutModal(o.root);
     return;
   }
-  const infoModal = o.root.querySelector<HTMLElement>("#info-modal");
-  if (infoModal && !infoModal.hidden) {
-    o.closeInfoModal();
+  if (state.userSettingsOpen) {
+    closeUserSettings(state);
+    render();
     return;
   }
   if (state.eventDtPicker) {

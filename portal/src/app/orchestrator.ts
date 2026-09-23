@@ -16,6 +16,7 @@ import type { TasksHost } from "./tasks";
 import type { ContactsHost } from "./contacts";
 import type { CalendarEventDetail } from "../api";
 import type { ScrollSnapshot } from "./scroll";
+import type { SectionInfo } from "./sectionInfo";
 
 export type AppOrchestrator = {
   state: AppState;
@@ -132,7 +133,7 @@ export type AppOrchestrator = {
   bindAdminDom: () => void;
 
   saveBlobAsFile: (blob: Blob, filename: string) => Promise<"saved" | "cancelled" | "started">;
-  openInfoModal: (key: string) => void;
+  openInfoModal: (info: SectionInfo) => void;
   closeInfoModal: () => void;
   captureScroll: () => ScrollSnapshot;
   restoreScroll: (s: ScrollSnapshot) => void;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.2 — 2026-09-23
+
+### Portal
+- **User settings → Password.** A signed-in user can change their own DAV password. Leave the fields blank to keep it and save theme or calendar settings only. The new password is used for the portal and for calendar, contacts, and file apps. It must be at least 8 characters, confirmed, and different from the current password. The current password is required. Those rules sit in the **(i)** next to the Password heading, not in the form body.
+- `POST /api/me/password` (session, same-origin, and CSRF). A wrong current password is HTTP 400, so the session stays open. Those failures share the login rate limit. Successful changes are limited to 5 per user per 15 minutes (`Specific/portal_self_password_rate.json`). The response is `{ "ok": true }` and never includes the digest. This does not change the server admin password in `baikal.yaml`.
+- **View password.** Sign in and each User settings password field have an eye control. Click it to show the characters in that field; click again to hide them. The choice is not saved.
+- **Reusable (i).** `infoIconHtml()` in `portal/src/app/sectionInfo.ts` renders the same **(i)** button with its own title and paragraphs, so a new hint does not need a `SECTION_INFO` entry. Registered section **(i)** buttons are unchanged. Escape closes the help dialog before User settings.
+
 ## 2.5.1 — 2026-09-09
 
 ### Portal

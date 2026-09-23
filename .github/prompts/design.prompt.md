@@ -7,7 +7,7 @@ description: >
   coding; designing a cross-cutting concern; producing ADR-backed architecture
   docs; creating an implementation plan from a ticket or description.
 agent: agent
-model: Claude Sonnet 4.6 (copilot)
+model: Claude Sonnet or Grok
 argument-hint: 'app|lib|cross-cutting  <description or ticket>'
 
 ---
@@ -43,7 +43,7 @@ If arguments are missing, ask for them before proceeding.
 7. **Read ALL standards first** — all instruction files in Phase 0.1 before designing
 8. **Stop at uncertainty** — ask the user; do not guess architectural decisions
 9. **C4 zoom-in** — L1→L2→L3 in one file, they tell one continuous story
-10. **Conditional files** — only create `05-api-contract.md` when the feature adds/modifies GraphQL operations
+
 11. **One sequence per use case** — group happy + error + edge under one section
 12. **Cross-document consistency** — reviewer verifies all docs reference each other correctly
 13. **Match real project patterns** — discovered in Phase 0.3; not textbook patterns
@@ -60,9 +60,8 @@ Always read these before designing:
 - [architecture.instructions.md](../instructions/architecture.instructions.md) — workspace structure, module boundaries, component layers
 - [typescript-react.instructions.md](../instructions/typescript-react.instructions.md) — TypeScript, React, and styling conventions
 - [unit-test.instructions.md](../instructions/unit-test.instructions.md) — testing patterns, RenderBuilder, naming (applies to `*.spec.ts(x)` files; use `vi.fn()` or `jest.fn()` per project executor)
-- [fusion.instructions.md](../instructions/fusion.instructions.md) — Fusion Design System usage rules
+
 - [general-coding.instructions.md](../instructions/general-coding.instructions.md) — naming, translations, error handling
-- [nx.instructions.md](../instructions/nx.instructions.md) — Nx workspace conventions
 
 ### 0.2 Read Research (if provided)
 
@@ -80,18 +79,14 @@ Even with a research doc, quickly verify the affected areas:
 
 **For an app feature** (`$ARGUMENTS[1]` == `app`):
 
-- `apps/spade/{audience}/{app}/app/` — existing pages and layouts
-- `apps/spade/{audience}/{app}/components/` — existing components
-- Any co-located hooks (`use*.ts`) and utilities
+- `portal/` — Admin and User portal
+- `Core/` — Framework (Baikal and Baikal Admin) and Resources
 
-**For a lib feature** (`$ARGUMENTS[1]` == `lib`):
+**For a Portal Apps feature** (`$ARGUMENTS[1]` == `lib`):
 
-- `libs/spade/*/src/lib/` — existing exports
-- `project.json` — check if buildable (has `build` target)
+- `portal/src/api/` — Portal API
+- `portal/src/app/` — Portal applications
 
-**For cross-cutting**:
-
-- All of the above plus `libs/shared/graphql-operations/` for any GraphQL changes
 
 Note where ACTUAL patterns differ from the standards. This matters for implementation.
 
@@ -100,8 +95,7 @@ Note where ACTUAL patterns differ from the standards. This matters for implement
 - What user problem does it solve?
 - What are the measurable acceptance criteria?
 - Is it app-local, a new shared lib, or cross-cutting?
-- Does it add/modify GraphQL operations?
-- Does it introduce new Nx library projects?
+
 - Does it require an ADR (significant architectural decision)?
 
 ### 0.5 Decide Which Documents to Create
@@ -114,9 +108,6 @@ Note where ACTUAL patterns differ from the standards. This matters for implement
 - `03-decisions.md` — ADR + risks
 - `04-testing.md` — test strategy + coverage mapping
 
-**Create if applicable (conditional):**
-
-- `05-api-contract.md` — if feature adds/modifies GraphQL schema or operations (exact operation shapes and types)
 
 ---
 
@@ -175,37 +166,13 @@ WHO interacts with the system and WHAT external systems are involved.
 ```mermaid
 flowchart LR
   player(["👤 {User Role}\nBrief description"])
-  webClient["fips-web-client\nNext.js frontend"]
-  graphqlApi(["GraphQL API\nBackend — external"])
   cdn(["CDN / Static Assets\nImages, fonts, locales — external"])
 
   player -->|"Uses via browser (HTTPS)"| webClient
-  webClient -->|"Queries/Mutations (GraphQL over HTTPS)"| graphqlApi
   webClient -->|"Fetches static assets"| cdn
 ```
 
-## C4 Level 2 — Container
-
-WHAT containers/packages are involved and HOW they communicate.
-
-```mermaid
-flowchart LR
-  app["apps/spade/{app}\nNext.js — Feature pages and components"]
-  featureLib["libs/spade/{audience}/feature-{name}\nTypeScript — Feature slice: data-access + logic"]
-  uiLib["libs/spade/{audience}/ui-{name}\nReact — Presentational components"]
-  sharedComponents["libs/spade/shared/components\n@ps/web-spade-components"]
-  graphqlOps["libs/shared/graphql-operations\nGQL documents + codegen types"]
-  fusion["libs/fusion/components\n@ps/web-fusion-components"]
-  api(["GraphQL API\nBackend — external"])
-
-  app -->|Imports| featureLib
-  app -->|Imports| sharedComponents
-  featureLib -->|"Imports typed operations"| graphqlOps
-  featureLib -->|"GraphQL over HTTPS (Apollo)"| api
-  uiLib -->|"Imports Fusion primitives"| fusion
-```
-
-## C4 Level 3 — Component
+## C4 Level 2 — Component
 
 WHAT internal modules handle the feature logic.
 
@@ -215,30 +182,10 @@ flowchart TD
     page["Page (Server Component)\nRoute entry; initial data fetch or suspense boundary"]
   end
 
-  subgraph client["Client Components / Hooks"]
-    featureComp["Feature Component (Client)\nStateful container; orchestrates hooks and UI"]
-    hook["use{Feature} (React Hook)\nApollo queries, local state, derived data"]
-    uiComp["UI Components\nPure presentational; no data-fetching"]
-    fusionComp["Fusion Components\n@ps/web-fusion-components"]
-  end
-
   page -->|Renders| featureComp
   featureComp -->|Calls| hook
   featureComp -->|"Renders with props"| uiComp
   uiComp -->|Composes| fusionComp
-```
-
-## Module Dependency Graph
-
-```mermaid
-flowchart BT
-page["Page\n(apps/spade/{app})"] --> featureComp["Feature Component\n(app-local or feature lib)"]
-featureComp --> hook["use{Feature}\n(data-access lib or co-located)"]
-featureComp --> uiComp["UI Components\n(ui lib or app-local)"]
-hook --> graphql["graphql-operations\n(libs/shared)"]
-uiComp --> fusion["Fusion\n(libs/fusion/components)"]
-graphql -.->|NEVER| featureComp
-fusion -.->|NEVER| hook
 ```
 
 **Rules:**
@@ -246,16 +193,6 @@ fusion -.->|NEVER| hook
 - Dependencies flow **inward** (apps depend on libs, not vice versa).
 - `audience:shared` libs MUST NOT import from `audience:player` or `audience:admin`.
 - No barrel files (`index.ts`) in app component directories.
-
-## Nx Project Tags
-
-| Project                                    | Tags                                              |
-| ------------------------------------------ | ------------------------------------------------- |
-| `apps/spade/{app}`                         | `audience:player` or `audience:admin`, `type:app` |
-| `libs/spade/{audience}/feature-{name}`     | `audience:{...}`, `type:feature`                  |
-| `libs/spade/{audience}/ui-{name}`          | `audience:{...}`, `type:ui`                       |
-| `libs/spade/{audience}/data-access-{name}` | `audience:{...}`, `type:data-access`              |
-| `libs/spade/shared/*`                      | `audience:shared`, `type:{...}`                   |
 ````
 
 ---
@@ -293,16 +230,11 @@ actor Player
 participant Page as Page (Server)
 participant Feature as Feature Component
 participant Hook as use{Feature}
-participant Apollo as Apollo Client
-participant API as GraphQL API
+
 
 Player->>Page: Navigate to route
 Page->>Feature: Render with initial props/params
 Feature->>Hook: call use{Feature}(params)
-Hook->>Apollo: useQuery(GET_{FEATURE})
-Apollo->>API: GraphQL request
-API-->>Apollo: {data}
-Apollo-->>Hook: { data, loading, error }
 Hook-->>Feature: derived state + handlers
 Feature-->>Player: Render UI
 ```
@@ -372,7 +304,7 @@ Use `vi.fn()` for Vitest projects and `jest.fn()` for Jest projects — check th
 
 ## Test Structure
 
-Co-locate test files next to source files:
+Co-locate test files next to source files. Example:
 
 ```
 apps/spade/{app}/components/
@@ -427,54 +359,6 @@ Every business rule, error case, and edge case must trace to a test.
 
 ---
 
-### 05-api-contract.md — GraphQL Contract (CONDITIONAL: only if new/modified operations)
-
-````markdown
-# GraphQL Contract: {Feature Name}
-
-## Location
-
-All documents live in `libs/shared/graphql-operations/src/lib/{domain}/`.
-
-## Operations
-
-### Query: GET\_{FEATURE}
-
-```graphql
-query Get{Feature}($id: ID!) {
-  {featureField}(id: $id) {
-    id
-    # ... all fields with types
-  }
-}
-```
-
-**Variables:** `{ id: string }`
-
-**Response shape:**
-
-```typescript
-type Get{Feature}Query = {
-  {featureField}: {
-    id: string;
-    // ... all fields
-  } | null;
-};
-```
-
-### Mutation: UPDATE\_{FEATURE} (if applicable)
-
-```graphql
-mutation Update{Feature}($input: Update{Feature}Input!) {
-  update{Feature}(input: $input) {
-    id
-    # ...
-  }
-}
-```
-
-**Rule:** Every field name and type must be specified. Codegen generates the TypeScript types.
-````
 
 ---
 
@@ -599,8 +483,6 @@ status: draft
 - [ ] All tests passing (see ../04-testing.md for full test list)
 - [ ] `nx build {lib}` passes for any new/modified buildable libraries
 - [ ] TypeScript errors: zero
-- [ ] Lint: zero new violations
-- [ ] GraphQL contract matches implementation (see ../05-api-contract.md if exists)
 - [ ] All acceptance criteria from ../README.md met
 - [ ] README.md updated if architecture/routes/providers changed
 ```
@@ -654,25 +536,8 @@ Skip for phase-01.]
 **What changes:** [Description]
 **Why:** [Reference design doc section]
 
-## Nx Projects to Scaffold (if applicable)
-
-```bash
-yarn nx g @nx/react:library {name} --directory=libs/spade/{audience}/{name} --tags="audience:{...},type:{...}"
-```
-
-## Buildable Lib Rebuild (if applicable)
-
-After modifying a buildable lib, run:
-
-```bash
-yarn nx build {project-name}
-```
-
 ## Verification
 
-- [ ] `yarn nx typecheck {project}` passes (zero TS errors)
-- [ ] `yarn nx test {project}` passes (all new tests green)
-- [ ] `yarn nx lint {project}` passes (zero new violations)
 - [ ] [Phase-specific check — e.g. "no direct imports from audience:player in audience:shared lib"]
 - [ ] [Phase-specific check — e.g. "'use client' present only in interactive components"]
 ````

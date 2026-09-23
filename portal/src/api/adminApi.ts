@@ -220,4 +220,14 @@ export const adminApi = {
       setCsrfToken("");
     }
   },
+  /** Signed-in DAV password change. Wrong current password is 400 and keeps the session. */
+  changePassword: (body: {
+    currentPassword: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
+    request<{ ok: true }>("/me/password", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

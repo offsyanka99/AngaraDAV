@@ -3847,6 +3847,9 @@ body.info-modal-open {
 }
 
 .user-settings-fieldset legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0 0.35rem;
   font-size: 0.82rem;
   font-weight: 650;
@@ -3855,4 +3858,52 @@ body.info-modal-open {
 
 .user-settings-form {
   gap: 0.85rem;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.password-field > input {
+  padding-right: 2.65rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5rem;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+}
+
+.password-toggle:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.password-toggle[aria-pressed="true"] {
+  color: var(--primary);
+}
+
+.password-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.password-toggle svg {
+  display: block;
+}
+
+.password-toggle svg[hidden] {
+  display: none;
 }

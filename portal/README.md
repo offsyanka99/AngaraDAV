@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.1`
+**Version:** `2.5.2`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -11,7 +11,7 @@ keyboard navigation. Tasks have per-column filters (Status, Due, Calendar, %);
 Status defaults to Open (completed tasks hidden). Create/edit for **Notes** and
 **Tasks** is a modal; lists are full width. Notes rich text matches jtx
 Board Markdown (H1–H3, blockquote, `- [ ]` checkboxes, `~~strike~~`, `` `code` ``, `---`).
-User settings validation errors stay in the settings modal.
+User settings validation errors stay in the settings modal. **Password** (current, new, confirm) changes the signed-in user's DAV password via `POST /api/me/password`. Leave those fields blank to keep the password. The rules are in the **(i)** next to Password. A wrong current password stays in the modal (HTTP 400) and does not sign the user out. Sign in and each of those fields have a **View password** eye; it only shows or hides that field in the browser.
 
 ## Module layout
 
@@ -25,7 +25,7 @@ User settings validation errors stay in the settings modal.
 | `app/events.ts` | Mount-time delegated listeners (click/submit/change/input/keydown/drag) |
 | `app/afterRender.ts` | Post-render hooks (menus, indeterminate, list keyboard focus) |
 | `app/types.ts` | `TabId`, `AdminPageId`, `Flash` |
-| `app/sectionInfo.ts` | `(i)` help copy + title row |
+| `app/sectionInfo.ts` | `(i)` help: registered `SECTION_INFO` copy, title rows, and standalone `infoIconHtml()` |
 | `app/format.ts` | Display formatters, sort headers |
 | `app/paths.ts` | WebDAV storage path join/basename |
 | `app/datetime.ts` | Pure date/time + popover HTML helpers |
@@ -64,7 +64,7 @@ hosts — they do not import `app.ts`.
 | **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete; upload progress dialog; folder item count; quota bar; same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/` |
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database** · **Configuration**. Installer: `/portal/install/`. |
 
-Section help lives under **(i)** info modals. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
+Section help lives under **(i)** info modals. A button from `infoIconHtml()` carries its own title and paragraphs (`data-info-title`, `data-info-paragraphs`). A button with `data-info` still opens a `SECTION_INFO` entry. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
 
 While a user tab is visible, the portal polls collection revisions (`GET /api/sync-status`) and shows a sticky toast when CalDAV/CardDAV/WebDAV clients (or another browser tab) change the open view. **Refresh** reloads that tab in-place. The poll interval is **Administration → System settings → Portal sync poll interval** (default 30s) and does not extend session idle.
 

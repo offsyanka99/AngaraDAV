@@ -1,13 +1,11 @@
 /** Section (i) info modal (Phase 8). */
 import { esc } from "../ui";
-import { SECTION_INFO } from "./sectionInfo";
+import { type SectionInfo } from "./sectionInfo";
 import type { AppOrchestrator } from "./orchestrator";
 
-export function openInfoModal(o: AppOrchestrator, key: string) {
+export function openInfoModal(o: AppOrchestrator, info: SectionInfo) {
   const { root } = o;
-
-  const info = SECTION_INFO[key];
-  if (!info) return;
+  if (!info.paragraphs.length) return;
   const modal = root.querySelector<HTMLElement>("#info-modal");
   const titleEl = root.querySelector<HTMLElement>("#info-modal-title");
   const bodyEl = root.querySelector<HTMLElement>("#info-modal-body");

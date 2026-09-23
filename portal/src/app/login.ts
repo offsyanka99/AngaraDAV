@@ -2,9 +2,10 @@
  * Sign-in screen HTML (Phase 3 extract).
  * Submit handling lives in onLogin (bootstrap/login flow) via app.ts wiring.
  */
-import { esc } from "../ui";
+import { esc } from "../ui.ts";
 import type { AppState } from "./context";
 import type { ShellOpts } from "./shell";
+import { passwordFieldHtml } from "./userSettings.ts";
 
 export function renderLogin(
   root: HTMLElement,
@@ -51,10 +52,15 @@ export function renderLogin(
               Username
               <input type="text" name="username" autocomplete="username" required ${loginDisabled ? "disabled" : ""} />
             </label>
-            <label>
-              Password
-              <input type="password" name="password" autocomplete="current-password" required ${loginDisabled ? "disabled" : ""} />
-            </label>
+            ${passwordFieldHtml({
+              label: "Password",
+              name: "password",
+              autocomplete: "current-password",
+              value: "",
+              visible: false,
+              disabled: loginDisabled,
+              required: true,
+            })}
             <button type="submit" class="btn btn-primary" ${loginDisabled ? "disabled" : ""}>Sign in</button>
           </form>
           <p class="muted small" style="margin-top:1rem">

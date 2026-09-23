@@ -23,6 +23,15 @@ class Auth {
     /** @var int Rate-limit window (seconds) */
     public const RATE_LIMIT_WINDOW = 900;
 
+    /** Minimum length for a self-service DAV password (matches the installer). */
+    public const PASSWORD_MIN_LENGTH = 8;
+
+    /** Max successful self-service password changes per user per window. */
+    public const PASSWORD_CHANGE_MAX = 5;
+
+    /** Self-service password-change window (seconds). */
+    public const PASSWORD_CHANGE_WINDOW = 900;
+
     /** @var \PDO */
     private $pdo;
 
@@ -248,6 +257,49 @@ class Auth {
     }
 
     /**
+     * Change the signed-in user's DAV password (portal login and CalDAV/CardDAV/WebDAV).
+     *
+     * Does not write system.admin_passwordhash. A wrong current password is 400, not 401,
+     * so the SPA does not treat a typo as a lost session. Failures share the login rate limit
+     * via verifyPassword(); successful changes are limited per username.
+     */
+    public function changePassword(string $currentPassword, string $newPassword, string $newPasswordConfirm): void {
+        $username = $this->requireUser();
+        if ($currentPassword === '') {
+            throw new ApiException('Current password is required', 400);
+        }
+        if ($newPassword === '' || $newPasswordConfirm === '') {
+            throw new ApiException('New password and confirmation are required', 400);
+        }
+        if ($newPassword !== $newPasswordConfirm) {
+            throw new ApiException('New password confirmation does not match', 400);
+        }
+        if (strlen($newPassword) < self::PASSWORD_MIN_LENGTH) {
+            throw new ApiException('New password must be at least ' . self::PASSWORD_MIN_LENGTH . ' characters', 400);
+        }
+        if ($this->isPasswordChangeRateLimited($username)) {
+            throw new ApiException('Too many password changes. Please try again later.', 429);
+        }
+        if (!$this->verifyPassword($username, $currentPassword)) {
+            throw new ApiException('Current password is incorrect', 400);
+        }
+        if (strlen($currentPassword) === strlen($newPassword) && hash_equals($currentPassword, $newPassword)) {
+            throw new ApiException('New password must be different from the current password', 400);
+        }
+
+        $hash = md5($username . ':' . $this->authRealm . ':' . $newPassword);
+        $stmt = $this->pdo->prepare('UPDATE users SET digesta1 = ? WHERE username = ?');
+        $stmt->execute([$hash, $username]);
+        if ($stmt->rowCount() < 1) {
+            throw new ApiException('Unable to change password', 500);
+        }
+        $this->registerPasswordChange($username);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+    }
+
+    /**
      * True when LAST_SEEN_KEY is older than sessionMaxAge.
      * Legacy sessions without LOGIN_AT_KEY are not treated as expired (touchSession migrates them).
      */
@@ -371,5 +423,77 @@ class Auth {
             unset($data[$ip]);
             $this->saveRateData($data);
         }
+    }
+
+    private function passwordChangeRatePath(): string {
+        $dir = defined('PROJECT_PATH_SPECIFIC') ? PROJECT_PATH_SPECIFIC : (defined('PROJECT_PATH_ROOT') ? PROJECT_PATH_ROOT . 'Specific/' : sys_get_temp_dir() . '/');
+
+        return rtrim($dir, '/') . '/portal_self_password_rate.json';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadPasswordChangeRateData(): array {
+        $path = $this->passwordChangeRatePath();
+        if (!is_readable($path)) {
+            return [];
+        }
+        $raw = file_get_contents($path);
+        if ($raw === false || trim($raw) === '') {
+            return [];
+        }
+        $data = json_decode($raw, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function savePasswordChangeRateData(array $data): void {
+        $path = $this->passwordChangeRatePath();
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        @file_put_contents($path, $json . "\n", LOCK_EX);
+    }
+
+    private function isPasswordChangeRateLimited(string $username): bool {
+        $data = $this->loadPasswordChangeRateData();
+        $now = time();
+        $row = $data[$username] ?? null;
+        if (!is_array($row)) {
+            return false;
+        }
+        $start = (int) ($row['start'] ?? 0);
+        $count = (int) ($row['count'] ?? 0);
+        if ($start <= 0 || ($now - $start) > self::PASSWORD_CHANGE_WINDOW) {
+            return false;
+        }
+
+        return $count >= self::PASSWORD_CHANGE_MAX;
+    }
+
+    private function registerPasswordChange(string $username): void {
+        $data = $this->loadPasswordChangeRateData();
+        $now = time();
+        $row = $data[$username] ?? null;
+        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > self::PASSWORD_CHANGE_WINDOW) {
+            $data[$username] = ['start' => $now, 'count' => 1];
+        } else {
+            $data[$username]['count'] = (int) ($row['count'] ?? 0) + 1;
+        }
+        foreach ($data as $k => $v) {
+            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > self::PASSWORD_CHANGE_WINDOW * 2) {
+                unset($data[$k]);
+            }
+        }
+        $this->savePasswordChangeRateData($data);
     }
 }

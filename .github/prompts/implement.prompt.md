@@ -7,7 +7,7 @@ description: >
   resuming a partial implementation; implementing a specific phase of a plan.
   Trigger words: implement plan, execute plan, work through phases, implement feature.
 agent: agent
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus or Grok
 argument-hint: 'path/to/plan/README.md  [phase-number]'
 ---
 

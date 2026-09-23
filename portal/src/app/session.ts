@@ -4,6 +4,7 @@
 import { ApiError, type PortalUi } from "../api";
 import { log, setLogLevel } from "../log";
 import type { AppState } from "./context";
+import { EMPTY_PASSWORD_DRAFT, HIDDEN_PASSWORD_VISIBILITY } from "./userSettings";
 import { notify } from "./notify";
 import { clampPollSeconds, DEFAULT_POLL_SECONDS, setBackgroundSyncInterval } from "./backgroundSync";
 import type { TabId } from "./types";
@@ -166,6 +167,9 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.eventModalOpen = false;
   state.userSettingsOpen = false;
   state.userSettingsError = null;
+  state.userSettingsSaving = false;
+  state.userPasswordDraft = { ...EMPTY_PASSWORD_DRAFT };
+  state.userPasswordVisible = { ...HIDDEN_PASSWORD_VISIBILITY };
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];

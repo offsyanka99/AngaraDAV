@@ -26,7 +26,8 @@ Start from the entry point and follow the dependency chain. Use the task-type gu
 
 ### For Architecture research
 
-1. **Runtime bootstrap + DAV infra**: under `Core/Frameworks/Baikal/Core`
+1. Check `docs/architecture-and-conventions.md` for project Architecture and Conventions
+2. **Runtime bootstrap + DAV infra**: under `Core/Frameworks/Baikal/Core`
 2. **Active portal JSON backend**: under `Core/Frameworks/Baikal/Portal`
 3. **Legacy compatibility scaffolding only**: under `Core/Frameworks/BaikalAdmin`
 4. **PHP document root / front controllers**: under `html/`

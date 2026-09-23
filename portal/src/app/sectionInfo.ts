@@ -1,7 +1,7 @@
 /**
  * Section (i) help copy and title row helper (Phase 1 extract from app.ts).
  */
-import { esc } from "../ui";
+import { esc } from "../ui.ts";
 
 export type SectionInfo = { title: string; paragraphs: string[] };
 
@@ -165,6 +165,41 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     ],
   },
 };
+
+/**
+ * Standalone (i) button. The title and paragraphs travel with the button,
+ * so it can sit on any label, legend, or heading without a SECTION_INFO entry.
+ */
+export function infoIconHtml(info: SectionInfo, label?: string): string {
+  const aria = label && label.trim() !== "" ? label : `About ${info.title}`;
+  return `<button type="button" class="info-btn" data-action="info" data-info-title="${esc(info.title)}" data-info-paragraphs="${esc(JSON.stringify(info.paragraphs))}" aria-label="${esc(aria)}" title="${esc(aria)}"><span aria-hidden="true">i</span></button>`;
+}
+
+/** Inline payload wins. Otherwise `data-info` names a SECTION_INFO entry. */
+export function infoFromDataset(dataset: {
+  info?: string;
+  infoTitle?: string;
+  infoParagraphs?: string;
+}): SectionInfo | null {
+  const title = dataset.infoTitle?.trim() ?? "";
+  const raw = dataset.infoParagraphs ?? "";
+  if (title !== "" && raw !== "") {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every((p) => typeof p === "string")
+      ) {
+        return { title, paragraphs: parsed };
+      }
+    } catch {
+      /* fall through to a registered key */
+    }
+  }
+  const key = dataset.info ?? "";
+  return key !== "" && SECTION_INFO[key] ? SECTION_INFO[key] : null;
+}
 
 export function infoTitle(title: string, infoKey: string, tag: "h1" | "h2" = "h2"): string {
   const Tag = tag;

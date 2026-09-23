@@ -36,7 +36,7 @@ import type { FilesPreviewKind } from "./files/previewKind";
 import type { FilesSort, FilesTypeFilter } from "./files/listing";
 import type { AdminPageId, Flash, TabId } from "./types";
 import { DEFAULT_TASK_FILTERS, type TaskColumnFilters } from "./tasks/listing";
-import { readStoredUserSettings, type UserSettings } from "./userSettings";
+import { EMPTY_PASSWORD_DRAFT, HIDDEN_PASSWORD_VISIBILITY, readStoredUserSettings, type PasswordDraft, type PasswordVisibility, type UserSettings } from "./userSettings";
 
 export type { FilesPreviewKind };
 
@@ -206,6 +206,11 @@ export type AppState = {
   userSettings: UserSettings;
   userSettingsOpen: boolean;
   userSettingsError: string | null;
+  userSettingsSaving: boolean;
+  /** In-modal password fields. Cleared on close, success, and logout. Not persisted. */
+  userPasswordDraft: PasswordDraft;
+  /** Which of those fields are revealed. Cleared with the draft. */
+  userPasswordVisible: PasswordVisibility;
   calendars: Calendar[];
   directory: DirectoryUser[];
   holidayCountries: HolidayCountry[];
@@ -404,6 +409,9 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     userSettings: readStoredUserSettings(),
     userSettingsOpen: false,
     userSettingsError: null,
+    userSettingsSaving: false,
+    userPasswordDraft: { ...EMPTY_PASSWORD_DRAFT },
+    userPasswordVisible: { ...HIDDEN_PASSWORD_VISIBILITY },
     calendars: [],
     directory: [],
     holidayCountries: [],

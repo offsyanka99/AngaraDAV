@@ -7,7 +7,7 @@ description: >
   cross-cutting concerns such as auth, data-fetching, state management, or
   component patterns.
 agent: agent
-model: Claude Sonnet 4.6 (copilot)
+model: Claude Sonnet or Grok
 argument-hint: "Research question or area of interest (e.g. 'how does auth work in spade-admin?')"
 ---
 

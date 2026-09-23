@@ -575,6 +575,24 @@ class App {
 
         $username = $this->auth->requireUser();
 
+        // Self-service DAV password. Same-origin + CSRF already ran. Body password is never logged.
+        if ($method === 'POST' && $path === '/me/password') {
+            $body = $this->http->jsonBody();
+            foreach (['digesta1', 'password_hash', 'passwordhash', 'hash'] as $forbidden) {
+                if (array_key_exists($forbidden, $body)) {
+                    throw new ApiException('Refusing to accept secret field "' . $forbidden . '" in request body', 400);
+                }
+            }
+            $this->auth->changePassword(
+                (string) ($body['currentPassword'] ?? $body['current_password'] ?? ''),
+                (string) ($body['password'] ?? ''),
+                (string) ($body['passwordConfirm'] ?? $body['password_confirm'] ?? '')
+            );
+            $this->portalServerLog('password changed user=' . $username, 'info');
+
+            return ['ok' => true];
+        }
+
         $calendarRoutes = $this->calendarRoutes->dispatch($method, $path, $username);
         if ($calendarRoutes !== null) {
             return $calendarRoutes;

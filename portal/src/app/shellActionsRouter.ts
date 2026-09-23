@@ -17,7 +17,8 @@ import { parseTabId } from "./routing";
 import * as contacts from "./contacts";
 import * as notes from "./notes";
 import { applyTheme, parseTheme } from "./theme";
-import { closeUserSettings } from "./userSettings";
+import { infoFromDataset } from "./sectionInfo";
+import { closeUserSettings, openUserSettings, togglePasswordField } from "./userSettings";
 /**
  * Handle shell-level actions. Returns true if the action was recognized
  * (even when it is a no-op, e.g. close-import-progress while import is running).
@@ -238,8 +239,8 @@ export async function handleShellAction(
   }
 
   if (action === "info") {
-    const key = t.dataset.info ?? "";
-    o.openInfoModal(key);
+    const info = infoFromDataset(t.dataset);
+    if (info) o.openInfoModal(info);
     return true;
   }
 
@@ -268,8 +269,7 @@ export async function handleShellAction(
 
   if (action === "user-settings-open") {
     state.userMenuOpen = false;
-    state.userSettingsOpen = true;
-    state.userSettingsError = null;
+    openUserSettings(state);
     render();
     return true;
   }
@@ -280,7 +280,15 @@ export async function handleShellAction(
     return true;
   }
 
+  if (action === "toggle-password") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    togglePasswordField(state, t);
+    return true;
+  }
+
   if (action === "set-theme") {
+    if (state.userSettingsSaving) return true;
     const theme = parseTheme(t.dataset.theme);
     if (theme) {
       applyTheme(theme);
