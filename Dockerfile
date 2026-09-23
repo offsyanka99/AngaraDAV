@@ -114,7 +114,7 @@ RUN SHORT="$(printf '%s' "${GIT_SHA}" | tr -cd '0-9a-fA-F' | cut -c1-7)"; \
       '<?php' \
       '// Generated at image build — do not edit.' \
     "define('ANGARA_BUILD_GIT', '${SHORT}');" \
-      "define('BAIKAL_BUILD_TIME', '${BUILD_TIME}');" \
+      "define('ANGARA_BUILD_TIME', '${BUILD_TIME}');" \
       > /var/www/baikal/Core/BuildInfo.php \
     && chown nginx:nginx /var/www/baikal/Core/BuildInfo.php
 

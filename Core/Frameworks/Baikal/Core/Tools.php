@@ -85,18 +85,18 @@ class Tools {
         #}
 
         # Asserting config file exists
-        if (!file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-            throw new \Exception("config/baikal.yaml does not exist. Please use the Install tool to create it or duplicate baikal.yaml.dist.");
+        if (!file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+            throw new \Exception("config/configuration.yaml does not exist. Please use the Install tool to create it or duplicate configuration.yaml.dist.");
         }
 
         # Asserting config file is readable
-        if (!is_readable(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-            throw new \Exception("config/baikal.yaml is not readable. Please give read permissions to httpd user on file 'config/baikal.yaml'.");
+        if (!is_readable(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+            throw new \Exception("config/configuration.yaml is not readable. Please give read permissions to httpd user on file 'config/configuration.yaml'.");
         }
 
         # Asserting config file is writable
-        if (!is_writable(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-            throw new \Exception("config/baikal.yaml is not writable. Please give write permissions to httpd user on file 'config/baikal.yaml'.");
+        if (!is_writable(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+            throw new \Exception("config/configuration.yaml is not writable. Please give write permissions to httpd user on file 'config/configuration.yaml'.");
         }
     }
 
@@ -129,8 +129,8 @@ class Tools {
         $tasks = true;
         $notes = false;
         try {
-            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
                 if (isset($config["system"]["tasks_enabled"])) {
                     $tasks = (bool) $config["system"]["tasks_enabled"];
                 }
@@ -158,8 +158,8 @@ class Tools {
      */
     static function tasksEnabled() {
         try {
-            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
                 if (isset($config["system"]["tasks_enabled"])) {
                     return (bool) $config["system"]["tasks_enabled"];
                 }
@@ -177,8 +177,8 @@ class Tools {
      */
     static function notesEnabled() {
         try {
-            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
-                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            if (defined("PROJECT_PATH_CONFIG") && file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
+                $config = \Symfony\Component\Yaml\Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
                 if (isset($config["system"]["notes_enabled"])) {
                     return (bool) $config["system"]["notes_enabled"];
                 }

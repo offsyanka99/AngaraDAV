@@ -6,7 +6,7 @@ use Baikal\Portal\ApiException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Read/write system settings from baikal.yaml (Standard config section).
+ * Read/write system settings from configuration.yaml (Standard config section).
  * Database section: read always; write requires body.confirm === "CONFIRM" (Phase 8.2).
  *
  * Never returns admin_passwordhash — only hasAdminPassword.
@@ -66,7 +66,7 @@ class AdminSettingsService {
         'portal_admin_ui_enabled',
     ];
 
-    /** @var string Absolute path to baikal.yaml */
+    /** @var string Absolute path to configuration.yaml */
     private $configPath;
 
     /**
@@ -139,8 +139,8 @@ class AdminSettingsService {
      * Factory-reset: wipe config, database, DAV data, and file homes so
      * /portal/install/ starts clean.
      *
-     * Removes (after backing up baikal.yaml only):
-     *   - config/baikal.yaml
+     * Removes (after backing up configuration.yaml only):
+     *   - config/configuration.yaml
      *   - Specific/INSTALL_DISABLED
      *   - SQLite DB file (or all tables for PostgreSQL)
      *   - WebDAV file storage + quarantine
@@ -184,13 +184,13 @@ class AdminSettingsService {
             }
             $backupPath = $this->configPath . '.bak.' . date('Ymd-His') . '.' . bin2hex(random_bytes(3));
             if (!@copy($this->configPath, $backupPath)) {
-                throw new ApiException('Unable to backup baikal.yaml before reset', 500);
+                throw new ApiException('Unable to backup configuration.yaml before reset', 500);
             }
             @chmod($backupPath, 0600);
             if (!@unlink($this->configPath)) {
-                throw new ApiException('Unable to remove baikal.yaml', 500);
+                throw new ApiException('Unable to remove configuration.yaml', 500);
             }
-            $wiped[] = 'baikal.yaml';
+            $wiped[] = 'configuration.yaml';
         }
 
         // 5) Install lock
@@ -832,7 +832,7 @@ class AdminSettingsService {
         try {
             $parsed = Yaml::parseFile($this->configPath);
         } catch (\Throwable $e) {
-            throw new ApiException('Invalid baikal.yaml: ' . $e->getMessage(), 500);
+            throw new ApiException('Invalid configuration.yaml: ' . $e->getMessage(), 500);
         }
         if (!is_array($parsed)) {
             return ['system' => []];

@@ -169,7 +169,7 @@ export const adminApi = {
         confirm: !!opts.confirm,
       }),
     }),
-  /** Factory reset: remove baikal.yaml + INSTALL_DISABLED; then open installer. Requires current password. */
+  /** Factory reset: remove configuration.yaml + INSTALL_DISABLED; then open installer. Requires current password. */
   adminResetToDefault: (confirm = true, password = "") =>
     request<{ ok: boolean; redirectUrl: string; backupPath?: string | null }>(
       "/admin/settings/reset-to-default",

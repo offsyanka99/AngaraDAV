@@ -5,9 +5,9 @@ system:
     cal_enabled: true
     # Private per-user WebDAV file homes under /dav.php/files/{username}/.
     files_enabled: false
-    # Empty uses Specific/files. Env: BAIKAL_FILES_STORAGE_PATH.
+    # Empty uses Specific/files. Env: ANGARA_FILES_STORAGE_PATH.
     files_storage_path: ''
-    # Env overrides: BAIKAL_FILES_MAX_UPLOAD_MB / BAIKAL_FILES_QUOTA_MB.
+    # Env overrides: ANGARA_FILES_MAX_UPLOAD_MB / ANGARA_FILES_QUOTA_MB.
     files_max_upload_mb: 1024
     files_quota_mb: 10240
     files_quarantine_days: 30
@@ -40,7 +40,7 @@ system:
     push_worker_poll_ms: 2000
     push_max_delivery_attempts: 5
     # WebDAV-Push debug logging -> Specific/push_debug.log. Env overrides YAML:
-    #   PUSH_LOG_LEVEL / BAIKAL_PUSH_LOG_LEVEL = off|error|warn|info|debug
+    #   ANGARA_PUSH_LOG_LEVEL / PUSH_LOG_LEVEL = off|error|warn|info|debug
     push_log_level: 'off'
     # Portal SPA locale. Set in Admin → System settings (env is ignored).
     #   portal_time_format: auto|12h|24h
@@ -48,10 +48,10 @@ system:
     portal_time_format: 'auto'
     portal_week_start: 'auto'
     # Portal debug logging (browser console + Docker/PHP error_log). Env:
-    #   PORTAL_LOG_LEVEL / BAIKAL_PORTAL_LOG_LEVEL = off|error|warn|info|debug
+    #   ANGARA_PORTAL_LOG_LEVEL / PORTAL_LOG_LEVEL = off|error|warn|info|debug
     portal_log_level: 'off'
     # DAV usernames with the portal Admin role (Administration section in /portal).
-    # Env: PORTAL_ADMIN_USERS / BAIKAL_PORTAL_ADMIN_USERS (comma-separated).
+    # Env: ANGARA_PORTAL_ADMIN_USERS / PORTAL_ADMIN_USERS (comma-separated).
     # When empty/unset, a DAV user named "admin" is treated as Admin.
     # portal_admin_users: []
 database:
@@ -59,6 +59,6 @@ database:
     backend: 'pgsql'
     sqlite_file: "absolute/path/to/Specific/db/db.sqlite"
     pgsql_host: 'localhost'
-    pgsql_dbname: 'baikal'
-    pgsql_username: 'baikal'
-    pgsql_password: 'baikal'
+    pgsql_dbname: 'angaradav'
+    pgsql_username: 'angaradav'
+    pgsql_password: 'angaradav'

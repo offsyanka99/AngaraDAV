@@ -25,7 +25,7 @@ if (is_readable($root . 'Core/Distrib.php')) {
 $vendorOk = is_dir($root . 'vendor/sabre');
 $configDir = $root . 'config';
 $specificDir = $root . 'Specific';
-$configPath = $configDir . '/baikal.yaml';
+$configPath = $configDir . '/configuration.yaml';
 $configured = is_readable($configPath);
 $installLocked = is_file($specificDir . '/INSTALL_DISABLED');
 $configWritable = (is_dir($configDir) && is_writable($configDir))

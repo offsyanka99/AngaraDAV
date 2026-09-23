@@ -9,7 +9,6 @@ use Symfony\Component\Yaml\Yaml;
 
 $root = dirname(__DIR__) . '/';
 define('ANGARA_CONTEXT', true);
-define('BAIKAL_CONTEXT', true);
 define('PROJECT_CONTEXT_BASEURI', '/');
 define('PROJECT_PATH_ROOT', $root);
 
@@ -24,7 +23,7 @@ require $root . 'vendor/autoload.php';
 \Baikal\Core\Bootstrap::bootstrap();
 \Baikal\Framework::bootstrap();
 
-$config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+$config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
 $fileConfig = new FileStorageConfig($config);
 $fileConfig->prepareStorage();
 $pdo = \Baikal\Core\Bootstrap::pdo();

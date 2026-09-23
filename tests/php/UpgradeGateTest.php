@@ -79,7 +79,7 @@ $config = [
         'encryption_key'  => bin2hex(random_bytes(16)),
     ],
 ];
-file_put_contents($configDir . '/baikal.yaml', Yaml::dump($config));
+file_put_contents($configDir . '/configuration.yaml', Yaml::dump($config));
 
 // Create empty sqlite so assertBaikalIsOk is not reached for upgrade path
 @mkdir($specific, 0700, true);

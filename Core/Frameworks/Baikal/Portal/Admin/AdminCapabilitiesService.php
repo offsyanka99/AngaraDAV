@@ -21,7 +21,7 @@ class AdminCapabilitiesService {
     private $config;
 
     /**
-     * @param array<string, mixed> $config Full baikal.yaml array (or test fixture)
+     * @param array<string, mixed> $config Full configuration.yaml array (or test fixture)
      */
     public function __construct(array $config) {
         $this->config = $config;
@@ -64,7 +64,7 @@ class AdminCapabilitiesService {
                 'available'   => true,
                 'portalUrl'   => '/portal/#admin/settings',
                 'portalLabel' => 'System settings',
-                'summary'     => 'Edit system flags and admin password; writes baikal.yaml atomically.',
+                'summary'     => 'Edit system flags and admin password; writes configuration.yaml atomically.',
             ],
             [
                 'id'          => 'users',

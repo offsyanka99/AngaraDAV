@@ -34,7 +34,7 @@ This repository does not currently use Nx. Its primary configuration surfaces ar
 ### Runtime And Deployment
 
 - For container behavior, inspect [Dockerfile](../../../Dockerfile), [compose.yaml](../../../compose.yaml), [docker/nginx.conf](../../../docker/nginx.conf), and [docs/local.compose.yaml](../../../docs/local.compose.yaml).
-- Treat [config/baikal.yaml.dist](../../../config/baikal.yaml.dist) as the versioned configuration template. The live `config/baikal.yaml` and [Specific/](../../../Specific/) are runtime state, not application source.
+- Treat [config/configuration.yaml.dist](../../../config/configuration.yaml.dist) as the versioned configuration template. The live `config/configuration.yaml` and [Specific/](../../../Specific/) are runtime state, not application source.
 - Check [patches/README.md](../../../patches/README.md) before changing Composer/SabreDAV dependencies; vendor patches are applied by [scripts/apply-vendor-patches.sh](../../../scripts/apply-vendor-patches.sh).
 
 ## Identify Targets And Dependencies

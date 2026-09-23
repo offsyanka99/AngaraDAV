@@ -1,5 +1,5 @@
 /**
- * Portal console logger. Level comes from baikal.yaml / env via /api/ui or /api/me.
+ * Portal console logger. Level comes from configuration.yaml / env via /api/ui or /api/me.
  * Levels: off | error | warn | info | debug (default off).
  */
 

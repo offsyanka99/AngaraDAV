@@ -18,7 +18,7 @@ class AdminBackupService {
     private const MAX_BYTES = 256 * 1024;
     private const MAX_KEYS = 200;
 
-    /** Max restores per admin username per window (abuse guard on baikal.yaml churn). */
+    /** Max restores per admin username per window (abuse guard on configuration.yaml churn). */
     private const RESTORE_RATE_MAX = 10;
     private const RESTORE_RATE_WINDOW = 900;
 

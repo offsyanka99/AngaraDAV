@@ -42,7 +42,7 @@ function assert_throws(callable $fn, string $message): void {
 
 $dir = sys_get_temp_dir() . '/baikal-backup-test-' . bin2hex(random_bytes(4));
 @mkdir($dir, 0700, true);
-$path = $dir . '/baikal.yaml';
+$path = $dir . '/configuration.yaml';
 
 $initial = [
     'system' => [
@@ -84,7 +84,7 @@ $mtimeBefore = filemtime($path);
 clearstatcache();
 $backup->preview($doc);
 clearstatcache();
-assert_true(filemtime($path) === $mtimeBefore, 'preview does not touch baikal.yaml');
+assert_true(filemtime($path) === $mtimeBefore, 'preview does not touch configuration.yaml');
 
 // A changed value is reported and (on restore) applied
 $doc2 = $doc;

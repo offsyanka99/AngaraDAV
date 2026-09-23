@@ -8,7 +8,7 @@ Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](.
 
 ## 1. System overview
 
-AngaraDAV is a self-hosted CalDAV / CardDAV / WebDAV server derived from Baïkal and powered by SabreDAV, plus a TypeScript SPA (“portal”) that talks to a hand-rolled PHP JSON API. Both HTTP surfaces share **one database** and **one** [`config/baikal.yaml`](../config/baikal.yaml.dist).
+AngaraDAV is a self-hosted CalDAV / CardDAV / WebDAV server derived from Baïkal and powered by SabreDAV, plus a TypeScript SPA (“portal”) that talks to a hand-rolled PHP JSON API. Both HTTP surfaces share **one database** and **one** [`config/configuration.yaml`](../config/configuration.yaml.dist).
 
 ```mermaid
 flowchart TB
@@ -37,7 +37,7 @@ flowchart TB
   end
 
   subgraph state [Persistent state]
-    YAML[config/baikal.yaml]
+    YAML[config/configuration.yaml]
     DB[(SQLite or PostgreSQL)]
     SPEC[Specific/ runtime + file homes]
   end
@@ -115,14 +115,14 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | `local-up` | `sh scripts/local-docker.sh up` — recreate `angaradav-local` on `:31088` |
 | `local-down` | Stop the local container |
 | `local-logs` | Follow local container logs |
-| `clean` | Removes `config/baikal.yaml`, `Specific/db/db.sqlite`, `Specific/INSTALL_DISABLED` |
+| `clean` | Removes `config/configuration.yaml`, `Specific/db/db.sqlite`, `Specific/INSTALL_DISABLED` |
 | `vendor/autoload.php` | `composer install --no-interaction` when `composer.lock` is newer |
 
 ### CI
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
 
-- `code-analysis` runs **17 named** `php tests/php/*.php` scripts individually, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`.
+- `code-analysis` runs **18 named** `php tests/php/*.php` scripts individually, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 
 It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
@@ -149,7 +149,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | Path | Role |
 |---|---|
 | [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.2`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
-| `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and leftover `BAIKAL_BUILD_TIME` |
+| `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
 | [`Core/Frameworks/Baikal/Model`](../Core/Frameworks/Baikal/Model) | YAML config models (`system`, `database`) |
@@ -163,10 +163,10 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | [`docker/`](../docker) | nginx config + ordered entrypoint scripts |
 | [`scripts/`](../scripts) | Vendor patching, push worker, files maintenance, local Docker, PHP built-in-server router |
 | [`patches/`](../patches) | sabre/dav patch applied post-install |
-| [`tests/php/`](../tests/php) | Standalone PHP test scripts (36 files) |
+| [`tests/php/`](../tests/php) | Standalone PHP test scripts (37 files) |
 | [`tests/portal_admin_e2e.py`](../tests/portal_admin_e2e.py) | Live pytest e2e (not CI) |
 | `Specific/` | Runtime state — only named lock/secret/log files are gitignored (see §7) |
-| [`config/baikal.yaml.dist`](../config/baikal.yaml.dist) | Committed YAML template; live `config/baikal.yaml` is gitignored |
+| [`config/configuration.yaml.dist`](../config/configuration.yaml.dist) | Committed YAML template; live `config/configuration.yaml` is gitignored |
 | [`docs/`](../docs) | Architecture, compose templates, local/gitignored plans |
 | [`.github/workflows`](../.github/workflows) | `ci.yml`, `docker.yml` |
 | [`.github/agents`](../.github/agents) | Copilot/agent personas (`test-engineer`, `researcher`) |
@@ -212,7 +212,7 @@ Every DAV/API entry defines `PROJECT_PATH_ROOT`, then:
 - Defines `PROJECT_PATH_CORE`, `PROJECT_PATH_CONFIG`, `PROJECT_PATH_SPECIFIC`, `PROJECT_PATH_DOCUMENTROOT`, base URI.
 - Config dir: env `ANGARA_PATH_CONFIG` else `config/`.
 - Runtime dir: env `ANGARA_PATH_SPECIFIC` else `Specific/`.
-- Requires `Distrib.php`; starts a session (non-CLI) and seeds `$_SESSION['CSRF_TOKEN']` (20-byte hex). **This is not** the portal CSRF key (`baikal_portal_csrf` in `Auth`).
+- Requires `Distrib.php`; starts a session (non-CLI) and seeds `$_SESSION['CSRF_TOKEN']` (20-byte hex). **This is not** the portal CSRF key (`angara_portal_csrf` in `Auth`).
 - `initDb()`: `database.backend === 'pgsql'` vs SQLite; `ERRMODE_EXCEPTION`; skipped during install. PDO singleton also mirrored into `$GLOBALS['pdo']`.
 
 **[`Framework.php`](../Core/Frameworks/Baikal/Framework.php)**
@@ -288,7 +288,7 @@ Worker env log level: `ANGARA_PUSH_LOG_LEVEL` then unprefixed `PUSH_LOG_LEVEL` t
 | `Config\Standard` | [`Config/Standard.php`](../Core/Frameworks/Baikal/Model/Config/Standard.php) | `system` section (service flags, files limits, auth realm, session age, push, `admin_passwordhash`). Clamps numeric ranges. Password getters return `""` so hashes are never echoed. |
 | `Config\Database` | [`Config/Database.php`](../Core/Frameworks/Baikal/Model/Config/Database.php) | `database` section |
 
-The **only** portal writer of live YAML is [`AdminSettingsService`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) (plus the installer). Do not hand-edit or commit `config/baikal.yaml`.
+The **only** portal writer of live YAML is [`AdminSettingsService`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) (plus the installer). Do not hand-edit or commit `config/configuration.yaml`.
 
 ### Other Core classes
 
@@ -410,7 +410,7 @@ Seven focused types (six services + audit). Routed only from `dispatchAdminRoute
 | `AdminCapabilitiesService` | [`AdminCapabilitiesService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminCapabilitiesService.php) | `uiEnabled` + admin page URLs; API stays available when UI is hidden |
 | `AdminUserService` | [`AdminUserService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserService.php) | User CRUD in one transaction (principal + user + default calendar + default address book); never returns `digesta1`; refuses deleting last user or last admin; quarantines file home before cascade; password changes IP rate-limited |
 | `AdminUserResourceService` | [`AdminUserResourceService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserResourceService.php) | Per-user calendars / address books, scoped by the **target** principal |
-| `AdminSettingsService` | [`AdminSettingsService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) | Only portal writer of `baikal.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS`; atomic write + verify; `push_enabled` requires `https://` external URL; factory reset honours install lock |
+| `AdminSettingsService` | [`AdminSettingsService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) | Only portal writer of `configuration.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS`; atomic write + verify; `push_enabled` requires `https://` external URL; factory reset honours install lock |
 | `AdminBackupService` | [`AdminBackupService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminBackupService.php) | Settings export / preview / restore; checksummed, size/key capped; restore re-uses `updateSystemSettings()` |
 
 Admin routes:
@@ -441,11 +441,11 @@ Admin routes:
 
 | Contract | Value |
 |---|---|
-| Session name | `BAIKALPORTAL` |
-| User key | `baikal_portal_user` |
-| CSRF key | `baikal_portal_csrf` |
-| Last-seen | `baikal_portal_last` |
-| Login-at | `baikal_portal_login_at` |
+| Session name | `ANGARAPORTAL` |
+| User key | `angara_portal_user` |
+| CSRF key | `angara_portal_csrf` |
+| Last-seen | `angara_portal_last` |
+| Login-at | `angara_portal_login_at` |
 | Idle default | `DEFAULT_SESSION_MAX_AGE` 900 s (`session_max_age_minutes`) |
 | Cookie | `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS; strict mode; `session_regenerate_id(true)` on login |
 | Login rate | 20 failures / 900 s per IP in `Specific/portal_login_rate.json`; Fail2Ban-friendly `error_log` line |
@@ -500,7 +500,7 @@ Unauthenticated router at `/api/install/*`. Shares `SameOrigin` + session start 
 
 Mutations: SameOrigin + CSRF from `X-CSRF-Token` / `X-Baikal-CSRF` **or** JSON `csrfToken`/`csrf`. `InstallService::status()` step order: `permissions` → `initialize` → `upgrade` → `locked` → `done` → `database`.
 
-Lock: marker `Specific/INSTALL_DISABLED`; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (strict `'1'`). Session keys: `baikal_install_csrf`, `baikal_install_admin_password`.
+Lock: marker `Specific/INSTALL_DISABLED`; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (strict `'1'`). Session keys: `angara_install_csrf`, `angara_install_admin_password`.
 
 ---
 
@@ -688,7 +688,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 | Location | Contents | Gitignored? |
 |---|---|---|
-| `config/baikal.yaml` | Live `system` + `database` | **Yes** |
+| `config/configuration.yaml` | Live `system` + `database` | **Yes** |
 | `Specific/INSTALL_DISABLED` | Install lock marker | **Yes** |
 | `Specific/push_vapid.json` | VAPID private key | **Yes** — never commit |
 | `Specific/push_debug.log` (+ `.1`) | Push logs | **Yes** |
@@ -727,7 +727,7 @@ Generated [`Core/BuildInfo.php`](../Dockerfile):
 
 ```php
 define('ANGARA_BUILD_GIT', '<7-char sha>');
-define('BAIKAL_BUILD_TIME', '<BUILD_TIME>');
+define('ANGARA_BUILD_TIME', '<BUILD_TIME>');
 ```
 
 App path in the image: **`/var/www/baikal`**. Volumes: `/var/www/baikal/config`, `/var/www/baikal/Specific`. Expose 80. No `CMD` override — stock nginx entrypoint runs `/docker-entrypoint.d/*`.
@@ -757,9 +757,9 @@ Lexical order (three `40-` scripts share a prefix). **10 scripts** on disk:
 | Order | Script | Purpose | Env |
 |---|---|---|---|
 | 25 | [`25-check-baikal-persistence.sh`](../docker/entrypoint.d/25-check-baikal-persistence.sh) | Warn-only: `config` / `Specific` should be real bind mounts | — |
-| 26 | [`26-check-skip-chown-writable.sh`](../docker/entrypoint.d/26-check-skip-chown-writable.sh) | If skip-chown is on, **fails hard** unless dirs exist, uid 101, writable | `ANGARA_SKIP_CHOWN` then `BAIKAL_SKIP_CHOWN`. Truthy: `1\|true\|TRUE\|yes\|YES\|on\|ON` |
+| 26 | [`26-check-skip-chown-writable.sh`](../docker/entrypoint.d/26-check-skip-chown-writable.sh) | If skip-chown is on, **fails hard** unless dirs exist, uid 101, writable | `ANGARA_SKIP_CHOWN`. Truthy: `1\|true\|TRUE\|yes\|YES\|on\|ON` |
 | 30 | [`30-create-baikal-database-folder.sh`](../docker/entrypoint.d/30-create-baikal-database-folder.sh) | `mkdir -p Specific/db` | — |
-| 35 | [`35-configure-nginx-dav-upload-limit.sh`](../docker/entrypoint.d/35-configure-nginx-dav-upload-limit.sh) | Size `^[1-9][0-9]*[kKmMgG]?$` (`256MB` invalid, `256M` valid); rewrites marked `client_max_body_size` | `ANGARA_DAV_MAX_BODY_SIZE` (legacy `BAIKAL_DAV_MAX_BODY_SIZE`), default `1G` |
+| 35 | [`35-configure-nginx-dav-upload-limit.sh`](../docker/entrypoint.d/35-configure-nginx-dav-upload-limit.sh) | Size `^[1-9][0-9]*[kKmMgG]?$` (`256MB` invalid, `256M` valid); rewrites marked `client_max_body_size` | `ANGARA_DAV_MAX_BODY_SIZE`, default `1G` |
 | 40 | [`40-disable-nginx-ipv6-if-unsupported.sh`](../docker/entrypoint.d/40-disable-nginx-ipv6-if-unsupported.sh) | Comments `listen [::]:80` if IPv6 missing | — |
 | 40 | [`40-fix-baikal-file-permissions.sh`](../docker/entrypoint.d/40-fix-baikal-file-permissions.sh) | Bounded chown/chmod (not fully recursive over file homes) | `ANGARA_SKIP_CHOWN` |
 | 40 | [`40-php-fpm.sh`](../docker/entrypoint.d/40-php-fpm.sh) | Starts PHP-FPM | `PHP_VERSION` (default 8.5) |
@@ -777,7 +777,7 @@ Lexical order (three `40-` scripts share a prefix). **10 scripts** on disk:
 | [`docs/truenas-scale-postgres.compose.yaml`](truenas-scale-postgres.compose.yaml) | Same + PostgreSQL |
 | [`scripts/local-docker.sh`](../scripts/local-docker.sh) | Falls back to `docker build`/`run` when Compose plugin is absent; polls health ~60 s |
 | [`scripts/apply-vendor-patches.sh`](../scripts/apply-vendor-patches.sh) | Idempotent; “already applied” if `resolveCalendarTimeZone` exists in sabre CalDAV Plugin |
-| [`scripts/push-worker.php`](../scripts/push-worker.php) | Push delivery; `flock`; exit 2 = permanent failure. Also defines unused `BAIKAL_CONTEXT`. |
+| [`scripts/push-worker.php`](../scripts/push-worker.php) | Push delivery; `flock`; exit 2 = permanent failure. Defines `ANGARA_CONTEXT`. |
 | [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) | Quarantine purge + temp cleanup; self-locks; no-ops if Files unprovisioned. Invoked by entrypoint 46. |
 | [`scripts/dev-server-router.php`](../scripts/dev-server-router.php) | Router for `php -S` |
 
@@ -800,12 +800,12 @@ These are **contracts**. Changing them breaks live installs, stored hashes, or r
 | Contract | Where |
 |---|---|
 | PHP namespaces `Baikal\*`, `BaikalAdmin\*` | PSR-0 map in [`composer.json`](../composer.json) — directory ↔ namespace must stay aligned |
-| `config/baikal.yaml` filename and schema | Bootstrap, models, services |
+| `config/configuration.yaml` filename and schema | Bootstrap, models, services |
 | Docker path `/var/www/baikal` | Image layout, volumes, all compose templates |
 | Digest realm `BaikalDAV` | Stored `digesta1` is `md5(user:realm:password)` — changing the realm invalidates every DAV password |
 | DAV endpoints `/dav.php/`, `/cal.php/`, `/card.php/` | Configured in every client |
 | vCard property `X-BAIKAL-CUSTOM` | Persisted inside user data ([`VCardMapper.php`](../Core/Frameworks/Baikal/Portal/VCardMapper.php)) |
-| Session keys `baikal_portal_*`, session name `BAIKALPORTAL`, install keys `baikal_install_*` | Renaming logs out every session |
+| Session keys `angara_portal_*`, session name `ANGARAPORTAL`, install keys `angara_install_*` | Renaming logs out every session |
 | Header fallback `X-Baikal-CSRF` | Accepted alongside `X-CSRF-Token` |
 | Global functions `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` | Called across `Core/` and `html/` |
 | nginx marker `# BAIKAL_DAV_UPLOAD_LIMIT` | Entrypoint 35 rewrites by this exact comment |
@@ -829,20 +829,15 @@ As of **2.5.0**, `BAIKAL_*` aliases for product/build constants, context/path co
 | `ANGARA_LOCK_INSTALL`, `ANGARA_ALLOW_REINSTALL` | Installer hard lock (`=== '1'`) |
 | `TZ` | Default timezone in installer / Standard model |
 
-**Docker/nginx still accept legacy `BAIKAL_*`:**
-
-| Canonical | Legacy alias |
-|---|---|
-| `ANGARA_SKIP_CHOWN` | `BAIKAL_SKIP_CHOWN` |
-| `ANGARA_DAV_MAX_BODY_SIZE` | `BAIKAL_DAV_MAX_BODY_SIZE` |
+**Docker/nginx read `ANGARA_SKIP_CHOWN` and `ANGARA_DAV_MAX_BODY_SIZE` only.** The nginx `sed` marker comment remains `# BAIKAL_DAV_UPLOAD_LIMIT` so script 35 can find the `client_max_body_size` lines. That comment is not an environment variable.
 
 **Test-harness only:** `BAIKAL_TEST_PGSQL_DSN` / `_USER` / `_PASSWORD`, `BAIKAL_BASE_URL`, `PORTAL_TEST_ADMIN_PASSWORD`, `PORTAL_E2E`.
 
-**Not read by PHP anymore** (comments in [`baikal.yaml.dist`](../config/baikal.yaml.dist) still mention some of them): `BAIKAL_FILES_*`, `BAIKAL_PORTAL_LOG_LEVEL`, `BAIKAL_PORTAL_ADMIN_USERS`, `BAIKAL_PUSH_*`, `BAIKAL_LOCK_INSTALL`, `BAIKAL_ALLOW_REINSTALL`, `BAIKAL_CONTEXT*`, `BAIKAL_PATH_*`, `BAIKAL_VERSION*`.
+**Not read anymore:** `BAIKAL_FILES_*`, `BAIKAL_PORTAL_LOG_LEVEL`, `BAIKAL_PORTAL_ADMIN_USERS`, `BAIKAL_PUSH_*`, `BAIKAL_LOCK_INSTALL`, `BAIKAL_ALLOW_REINSTALL`, `BAIKAL_SKIP_CHOWN`, `BAIKAL_DAV_MAX_BODY_SIZE`, `BAIKAL_CONTEXT*`, `BAIKAL_PATH_*`, `BAIKAL_VERSION*`, `BAIKAL_BUILD_TIME`.
 
 Precedence used throughout: **`ANGARA_*` → existing unprefixed variable (if any) → YAML → default**. Never reorder; only prepend `ANGARA_*`.
 
-`scripts/push-worker.php` and `scripts/files-maintenance.php` still `define('BAIKAL_CONTEXT', true)` but [`Tools.php`](../Core/Frameworks/Baikal/Core/Tools.php) only checks `ANGARA_CONTEXT`.
+`scripts/push-worker.php` and `scripts/files-maintenance.php` define `ANGARA_CONTEXT` only. [`Tools.php`](../Core/Frameworks/Baikal/Core/Tools.php) checks that constant.
 
 ### Layered upload-limit formula
 
@@ -984,18 +979,18 @@ E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib
 
 Recorded as facts, not recommendations:
 
-- CI `code-analysis` runs **17** named PHP scripts and the `tests` job runs **1** more (`FileSchemaDriverTest.php`) → **18 of 36** `tests/php/` files. The other 18 run only via `make php-test`.
+- CI `code-analysis` runs **18** named PHP scripts and the `tests` job runs **1** more (`FileSchemaDriverTest.php`) → **19 of 37** `tests/php/` files. The other 18 run only via `make php-test`.
 - No CI job runs portal `npm test` or `npm run build`; the portal is built only in the Docker `portal` stage.
 - `composer test` does not execute `tests/php`.
 - Portal test files must be added to `package.json` manually — there is no glob. (Today all 17 on-disk tests are registered.)
 - [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) **is** invoked by [`docker/entrypoint.d/46-webdav-files-maintenance.sh`](../docker/entrypoint.d/46-webdav-files-maintenance.sh) on a timer. It is unused on non-Docker installs (no cron unit ships in the zip).
-- [`Dockerfile`](../Dockerfile) still emits `BAIKAL_BUILD_TIME` alongside `ANGARA_BUILD_GIT`. PHP does not read `BAIKAL_BUILD_TIME`.
+- [`Dockerfile`](../Dockerfile) emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - [`esc()`](../portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.
 - [`admin/meta.ts`](../portal/src/app/admin/meta.ts) re-declares `parseAdminPageId` already exported from [`routing.ts`](../portal/src/app/routing.ts).
 - `AppContext` is constructed in `mountApp` and immediately discarded via `void ctx`.
 - `ApiException::getPayload()` extras are merged in [`html/api/index.php`](../html/api/index.php), not in `App::handle()`.
-- [`baikal.yaml.dist`](../config/baikal.yaml.dist) comments still document `BAIKAL_FILES_*` / `BAIKAL_PORTAL_*` env names that PHP no longer reads.
-- `scripts/push-worker.php` and `scripts/files-maintenance.php` still `define('BAIKAL_CONTEXT', true)` though `Tools` only checks `ANGARA_CONTEXT`.
+- [`configuration.yaml.dist`](../config/configuration.yaml.dist) comments still document `BAIKAL_FILES_*` / `BAIKAL_PORTAL_*` env names that PHP no longer reads.
+- `scripts/push-worker.php` and `scripts/files-maintenance.php` define `ANGARA_CONTEXT` only.
 - [`App.php`](../Core/Frameworks/Baikal/Portal/App.php) documents `TIME_FORMAT` / `BAIKAL_PORTAL_TIME_FORMAT` / `BAIKAL_PORTAL_WEEK_START` as **ignored**; locale comes from YAML `portal_time_format` / `portal_week_start` only ([`PortalUiSettingsTest.php`](../tests/php/PortalUiSettingsTest.php)).
 - Session login/me/logout and `POST /me/password` live in [`adminApi.ts`](../portal/src/api/adminApi.ts), not `sessionApi.ts` (which is public `/ui` + `/install/status` only).
 - `layout-admin` is toggled on `<body>` but has no CSS rules.
@@ -1004,6 +999,6 @@ Recorded as facts, not recommendations:
 - Image PHP default is **8.5** while Composer requires `^8.4` and `make dist` pins platform 8.4.
 - PHPStan level **0** analyses only `Core` and `html` (not `tests/`, not `scripts/`).
 - General coding instructions under [`.github/instructions`](../.github/instructions) still mention Nx/Storybook/spec.tsx patterns that this repo does not use; portal tests are `*.test.ts` + `node:test`.
-- [`SECURITY.md`](SECURITY.md) still mentions `BAIKAL_LOCK_INSTALL=1`; PHP reads `ANGARA_LOCK_INSTALL` only.
+- [`SECURITY.md`](SECURITY.md) tells operators to set `ANGARA_LOCK_INSTALL=1`. PHP reads that name only.
 - WebDAV Basic auth is per-IP rate-limited in `PDOBasicAuth`; portal login (`Auth`) and admin password changes (`AdminUserService`) are rate-limited too. Self-service password changes (`Auth::changePassword`) allow 5 successes / 900 s per username (`Specific/portal_self_password_rate.json`). A wrong current password shares the login limiter and returns **400**. File download/view uses the same 20/900 s ceiling.
 - [ARCHITECTURE.md](ARCHITECTURE.md) is a shorter overview of the same ground. Stale counts there (CI “14 of 31” PHP tests; `Specific/` described as wholly gitignored) are superseded by this file.

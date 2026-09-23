@@ -27,7 +27,7 @@ $timezone = null;
 $configured = false;
 $filesConfigured = false;
 
-$configPath = $root . 'config/baikal.yaml';
+$configPath = $root . 'config/configuration.yaml';
 if (is_readable($configPath) && is_readable($root . 'vendor/autoload.php')) {
     require_once $root . 'vendor/autoload.php';
     try {

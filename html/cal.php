@@ -53,7 +53,7 @@ require PROJECT_PATH_ROOT . 'vendor/autoload.php';
 \Baikal\Framework::bootstrap();
 
 try {
-    $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+    $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
 } catch (\Exception $e) {
     exit('<h1>Incomplete installation</h1><p>Ba&iuml;kal is missing its configuration file, or its configuration file is unreadable.');
 }

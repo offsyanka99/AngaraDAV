@@ -194,7 +194,7 @@ class ChangeNotifier {
             return false;
         }
         try {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
         } catch (\Throwable $e) {
             return false;
         }
@@ -210,7 +210,7 @@ class ChangeNotifier {
         $level = null;
         if (defined('PROJECT_PATH_CONFIG')) {
             try {
-                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
                 $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
                 $level = isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : null;
             } catch (\Throwable $e) {

@@ -35,7 +35,7 @@ $specific = $dir . '/Specific';
 @mkdir($configDir, 0700, true);
 @mkdir($specific, 0700, true);
 @mkdir($specific . '/db', 0700, true);
-$path = $configDir . '/baikal.yaml';
+$path = $configDir . '/configuration.yaml';
 
 // Config models persist via PROJECT_PATH_* constants (must match test dirs)
 if (!defined('PROJECT_PATH_ROOT')) {
@@ -97,7 +97,7 @@ try {
         'admin_password_confirm'   => 'test-admin-pass',
     ]);
     assert_true(($st2['step'] ?? '') === 'database', 'after initialize → database');
-    assert_true(is_file($path), 'baikal.yaml created');
+    assert_true(is_file($path), 'configuration.yaml created');
     $raw = Yaml::parseFile($path);
     assert_true(!empty($raw['system']['admin_passwordhash']), 'admin hash set');
     assert_true(!empty($raw['database']['encryption_key']), 'encryption key set');

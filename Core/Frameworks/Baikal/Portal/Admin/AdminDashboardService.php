@@ -16,7 +16,7 @@ class AdminDashboardService {
     private $config;
 
     /**
-     * @param array<string, mixed> $config Full baikal.yaml array (or test fixture)
+     * @param array<string, mixed> $config Full configuration.yaml array (or test fixture)
      */
     public function __construct(\PDO $pdo, array $config) {
         $this->pdo = $pdo;

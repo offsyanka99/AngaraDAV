@@ -30,7 +30,7 @@ function assert_true(bool $condition, string $message): void {
 
 $dir = sys_get_temp_dir() . '/baikal-settings-test-' . bin2hex(random_bytes(4));
 @mkdir($dir, 0700, true);
-$path = $dir . '/baikal.yaml';
+$path = $dir . '/configuration.yaml';
 
 $initial = [
     'system' => [
@@ -279,7 +279,7 @@ try {
     $result = $svcReset->resetToDefault(true);
     assert_true($result['ok'] === true, 'reset ok');
     assert_true(($result['redirectUrl'] ?? '') === '/portal/install/', 'redirect to portal installer');
-    assert_true(!is_file($path), 'baikal.yaml removed');
+    assert_true(!is_file($path), 'configuration.yaml removed');
     assert_true(!is_file($installDisabled), 'INSTALL_DISABLED removed');
     assert_true(!is_file($sqlitePath), 'sqlite db removed');
     assert_true(!is_file($specific . '/files/user1/note.txt'), 'webdav files removed');

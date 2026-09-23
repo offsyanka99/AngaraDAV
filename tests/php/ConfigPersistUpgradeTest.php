@@ -39,7 +39,7 @@ if (!defined('PROJECT_PATH_SPECIFIC')) {
 }
 $_SERVER['SERVER_NAME'] = 'localhost';
 
-$yamlPath = PROJECT_PATH_CONFIG . 'baikal.yaml';
+$yamlPath = PROJECT_PATH_CONFIG . 'configuration.yaml';
 $before = [
     'system' => [
         'configured_version'  => '2.5.1',

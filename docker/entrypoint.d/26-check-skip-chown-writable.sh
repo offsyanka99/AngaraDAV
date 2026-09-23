@@ -1,12 +1,12 @@
 #!/bin/sh
-# If ANGARA_SKIP_CHOWN (or legacy BAIKAL_SKIP_CHOWN) is set, config/ and Specific/
+# If ANGARA_SKIP_CHOWN is set, config/ and Specific/
 # must already be writable by nginx (uid 101). Warn-only used to leave the
 # installer as the only hint; fail here so the container does not come up
-# unable to save baikal.yaml.
+# unable to save configuration.yaml.
 set -e
 
 ME=$(basename "$0")
-SKIP_CHOWN=${ANGARA_SKIP_CHOWN:-${BAIKAL_SKIP_CHOWN:-}}
+SKIP_CHOWN=${ANGARA_SKIP_CHOWN:-}
 
 # Only 1/true/yes/on skip chown. Unset, empty, 0, false, no → chown as usual.
 case "$SKIP_CHOWN" in

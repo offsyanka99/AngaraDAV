@@ -23,7 +23,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.2`, `sha-…`) · linux/
 | **Administration** — users, system settings, database, settings backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
 | **WebDAV-Push** (optional) — near-real-time CalDAV/CardDAV change notices (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
 
-Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `baikal.yaml`. Tabs follow Admin **DAV services** toggles.
+Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `configuration.yaml`. Tabs follow Admin **DAV services** toggles.
 
 Optional **WebDAV-Push** wakes CalDAV/CardDAV clients instead of waiting for the next poll (shared calendars included; portal writes enqueue the same jobs as `/dav.php/`). Enable it in **Administration → AngaraDAV Settings → Enable WebDAV-Push** and set the canonical HTTPS DAV base (`push_external_url` or `ANGARA_PUSH_EXTERNAL_URL`, typically `https://your-host/dav.php/`). Push is not advertised until that URL is valid HTTPS. It does **not** cover WebDAV file homes.
 
@@ -73,7 +73,7 @@ Then **http://127.0.0.1:31088/portal/install/**. Data lives in gitignored `.loca
 | Port | `31088` | Release `docker run` examples often use `8080` |
 | Compose | `docs/local.compose.yaml` (also `compose.yaml` include) | `make local-up` force-recreates so a new `nginx.conf` is picked up |
 
-Ubuntu `docker.io` has no Compose plugin — `make local-up` falls back to `docker build`/`docker run` (`sudo apt install docker-compose-v2` if you want Compose). Leave `BAIKAL_SKIP_CHOWN` unset locally so the entrypoint can chown bind dirs Docker created as **root**. If you set `BAIKAL_SKIP_CHOWN=1` without `chown -R 101:101 .local-run`, the container **exits** (PHP cannot write `baikal.yaml`). Empty/`0`/`false` does **not** skip chown.
+Ubuntu `docker.io` has no Compose plugin — `make local-up` falls back to `docker build`/`docker run` (`sudo apt install docker-compose-v2` if you want Compose). Leave `ANGARA_SKIP_CHOWN` unset locally so the entrypoint can chown bind dirs Docker created as **root**. If you set `ANGARA_SKIP_CHOWN=1` without `chown -R 101:101 .local-run`, the container **exits** (PHP cannot write `configuration.yaml`). Empty/`0`/`false` does **not** skip chown.
 
 `docker compose restart` does **not** apply a rebuilt image or `nginx.conf` — use `make local-up` (or `up -d --build --force-recreate`).
 
@@ -81,7 +81,7 @@ Portal Vite (`npm run dev` in `portal/`) proxies `/api` to `:31088`. For a conta
 
 Put **HTTPS** in front for anything beyond a laptop. Do not expose port 80 to the internet.
 
-**TrueNAS SCALE:** [docs/truenas-scale.compose.yaml](docs/truenas-scale.compose.yaml) (SQLite) or [postgres variant](docs/truenas-scale-postgres.compose.yaml). After host `chown -R 101:101` on the datasets, set `BAIKAL_SKIP_CHOWN=1`. Recreate the Custom App / container to pick up a new image (`nginx.conf` is not applied by a process restart).
+**TrueNAS SCALE:** [docs/truenas-scale.compose.yaml](docs/truenas-scale.compose.yaml) (SQLite) or [postgres variant](docs/truenas-scale-postgres.compose.yaml). After host `chown -R 101:101` on the datasets, set `ANGARA_SKIP_CHOWN=1`. Recreate the Custom App / container to pick up a new image (`nginx.conf` is not applied by a process restart).
 
 ---
 
@@ -115,7 +115,7 @@ More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/loc
 
 ## Compatibility
 
-Upgrades keep existing data. Confirming an upgrade updates `configured_version` and leaves the rest of `baikal.yaml` in place, including **Portal log level**, **Time format**, and **Week starts on**. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `baikal.yaml`, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_SKIP_CHOWN`/`BAIKAL_DAV_MAX_BODY_SIZE` forms indefinitely (Docker/nginx runtime knobs, not this program's scope). Databases: **SQLite** or **PostgreSQL** only.
+Upgrades keep existing data. Confirming an upgrade updates `configured_version` and leaves the rest of `configuration.yaml` in place, including **Portal log level**, **Time format**, and **Week starts on**. The live config file is `config/configuration.yaml`. A lab copy still named `config/baikal.yaml` is renamed from `/portal/install/` (**Rename config file**); that step does not rewrite settings and can be removed after the lab has run it. These paths and names are **contracts**, not the product brand: `Baikal\*` PHP namespaces, `/var/www/baikal`, Digest realm `BaikalDAV`, `/dav.php/`. Docker reads `ANGARA_SKIP_CHOWN` and `ANGARA_DAV_MAX_BODY_SIZE` only. The portal session cookie is `ANGARAPORTAL`. Databases: **SQLite** or **PostgreSQL** only.
 
 Product/build globals use `ANGARA_VERSION_BASE`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`, `ANGARA_BUILD_GIT`, and `ANGARA_GIT_SHA`. As of **2.5.0**, the `BAIKAL_*` compatibility aliases for these (and for the runtime env vars migrated in Phases 1-4: context/path constants, files storage, WebDAV-Push, portal admin/log-level, and installer lock/reinstall) have been removed; only `ANGARA_*` (and any previously-supported unprefixed variable) is read. Rebuild images so `Core/BuildInfo.php` defines `ANGARA_BUILD_GIT` — old images stamping only `BAIKAL_BUILD_GIT` no longer resolve a build SHA.
 

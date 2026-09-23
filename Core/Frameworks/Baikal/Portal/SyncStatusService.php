@@ -13,7 +13,7 @@ class SyncStatusService {
     public const MAX_POLL_SECONDS = 300;
 
     /**
-     * @param array<string, mixed> $config Full baikal.yaml document
+     * @param array<string, mixed> $config Full configuration.yaml document
      */
     public function __construct(
         private \PDO $pdo,
@@ -25,7 +25,7 @@ class SyncStatusService {
     /**
      * Clamp system.portal_sync_poll_seconds (default 30, bounds 10–300).
      *
-     * @param array<string, mixed> $config Full baikal.yaml document
+     * @param array<string, mixed> $config Full configuration.yaml document
      */
     public static function pollSecondsFromConfig(array $config): int {
         $sys = is_array($config['system'] ?? null) ? $config['system'] : [];

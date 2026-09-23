@@ -13,7 +13,7 @@ class AdminPassword {
     public const DEFAULT_SESSION_MAX_AGE = 900;
 
     /**
-     * Hash an admin password for storage in baikal.yaml (system.admin_passwordhash).
+     * Hash an admin password for storage in configuration.yaml (system.admin_passwordhash).
      *
      * @param string $sPassword
      * @param string $sAuthRealm unused (legacy Digest-era parameter)
@@ -57,8 +57,8 @@ class AdminPassword {
     public static function configureSession(): void {
         $maxAge = self::DEFAULT_SESSION_MAX_AGE;
         try {
-            if (defined('PROJECT_PATH_CONFIG') && file_exists(PROJECT_PATH_CONFIG . 'baikal.yaml')) {
-                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+            if (defined('PROJECT_PATH_CONFIG') && file_exists(PROJECT_PATH_CONFIG . 'configuration.yaml')) {
+                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
                 if (is_array($config)
                     && isset($config['system']['session_max_age_minutes'])
                     && is_numeric($config['system']['session_max_age_minutes'])

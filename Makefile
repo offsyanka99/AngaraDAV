@@ -70,4 +70,4 @@ vendor/autoload.php: composer.lock
 
 clean:
 	# Wipe local install data (not .local-run Docker binds)
-	rm -f config/baikal.yaml Specific/db/db.sqlite Specific/INSTALL_DISABLED
+	rm -f config/configuration.yaml config/baikal.yaml Specific/db/db.sqlite Specific/INSTALL_DISABLED

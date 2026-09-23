@@ -21,7 +21,7 @@ if (file_exists(getcwd() . '/Core')) {
 $target = '/portal/';
 
 // Prefer installer when config is missing or version skew needs the wizard
-$configPath = PROJECT_PATH_ROOT . 'config/baikal.yaml';
+$configPath = PROJECT_PATH_ROOT . 'config/configuration.yaml';
 if (!is_readable($configPath)) {
     $target = '/portal/install/';
 } else {

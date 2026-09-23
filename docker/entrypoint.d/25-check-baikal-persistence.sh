@@ -1,7 +1,7 @@
 #!/bin/sh
 # Warn when config/Specific are not bind-mounted from the host.
 # Anonymous Docker volumes look "fine" until the app is recreated — then
-# baikal.yaml and the SQLite DB disappear and settings reset to defaults.
+# configuration.yaml and the SQLite DB disappear and settings reset to defaults.
 
 ME=$(basename "$0")
 
@@ -37,21 +37,23 @@ check_mount() {
       echo "$ME:          On TrueNAS Custom App, set Host Path volumes for both:"
       echo "$ME:            config  → /var/www/baikal/config"
       echo "$ME:            Specific → /var/www/baikal/Specific"
-      echo "$ME:          After install, the host should contain baikal.yaml and Specific/db/."
+      echo "$ME:          After install, the host should contain configuration.yaml and Specific/db/."
       ;;
   esac
 
-  # Ownership/writability when BAIKAL_SKIP_CHOWN is set is fatal in
+  # Ownership/writability when ANGARA_SKIP_CHOWN is set is fatal in
   # 26-check-skip-chown-writable.sh (root can always -w these dirs).
 }
 
 check_mount /var/www/baikal/config config
 check_mount /var/www/baikal/Specific Specific
 
-if [ -f /var/www/baikal/config/baikal.yaml ]; then
-  echo "$ME: info: baikal.yaml is present"
+if [ -f /var/www/baikal/config/configuration.yaml ]; then
+  echo "$ME: info: configuration.yaml is present"
+elif [ -f /var/www/baikal/config/baikal.yaml ]; then
+  echo "$ME: info: legacy baikal.yaml is present; open /portal/install/ once to rename it to configuration.yaml"
 else
-  echo "$ME: info: baikal.yaml not present yet (complete /portal/install/ once)"
+  echo "$ME: info: configuration.yaml not present yet (complete /portal/install/ once)"
 fi
 
 if [ -f /var/www/baikal/Specific/INSTALL_DISABLED ]; then

@@ -28,7 +28,7 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
         ${meta ? `<span class="badge ${adminStatusBadgeClass(host, meta.status)}">${esc(adminStatusLabel(host, meta.status))}</span>` : ""}
       </div>
       <p class="muted small">
-        Download a JSON snapshot of the current system settings (<span class="mono">config/baikal.yaml</span>).
+        Download a JSON snapshot of the current system settings (<span class="mono">config/configuration.yaml</span>).
         It never contains passwords, secrets, or user/DAV data — only the settings shown on
         the System settings page.
       </p>
@@ -72,7 +72,7 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
       <p class="muted small">
         <strong>Reset to Default</strong> is a full factory wipe: config, database (all users and data),
         WebDAV files, and install lock. A timestamped backup of
-        <span class="mono">baikal.yaml</span> is kept next to config; <strong>back up volumes first</strong>
+        <span class="mono">configuration.yaml</span> is kept next to config; <strong>back up volumes first</strong>
         if you need data recovery. Everything else is deleted, then the installer opens.
       </p>
       <div class="form-actions-row" style="margin-top:0.75rem">
@@ -138,7 +138,7 @@ export function renderAdminResetModal(host: AdminHost): string {
     body: `
         <p>This permanently wipes this AngaraDAV instance and opens the installer.</p>
         <ul class="admin-feature-list muted">
-          <li>Deletes <span class="mono">config/baikal.yaml</span> (timestamped backup only)</li>
+          <li>Deletes <span class="mono">config/configuration.yaml</span> (timestamped backup only)</li>
           <li>Deletes the database (all DAV users, calendars, contacts, events)</li>
           <li>Deletes WebDAV file homes and quarantine</li>
           <li>Removes <span class="mono">INSTALL_DISABLED</span> so install can run</li>

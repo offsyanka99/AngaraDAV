@@ -32,7 +32,7 @@ function assert_true(bool $condition, string $message): void {
 // --- Settings: forbid secret mass-assignment ---
 $dir = sys_get_temp_dir() . '/baikal-sec-' . bin2hex(random_bytes(4));
 @mkdir($dir, 0700, true);
-$path = $dir . '/baikal.yaml';
+$path = $dir . '/configuration.yaml';
 file_put_contents($path, Yaml::dump([
     'system' => [
         'timezone'                => 'UTC',

@@ -20,7 +20,7 @@ class AdminAuth {
     private $config;
 
     /**
-     * @param array<string, mixed> $config Full baikal.yaml array (or test fixture)
+     * @param array<string, mixed> $config Full configuration.yaml array (or test fixture)
      */
     public function __construct(Auth $auth, array $config) {
         $this->auth = $auth;
@@ -37,7 +37,7 @@ class AdminAuth {
     /**
      * Pure helper for tests and call sites without an Auth instance.
      *
-     * @param array<string, mixed> $config Full baikal.yaml array (or test fixture)
+     * @param array<string, mixed> $config Full configuration.yaml array (or test fixture)
      */
     public static function userIsAdmin(string $username, array $config): bool {
         if ($username === '') {

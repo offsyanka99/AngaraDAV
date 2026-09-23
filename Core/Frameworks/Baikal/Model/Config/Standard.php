@@ -71,7 +71,7 @@ class Standard extends \Baikal\Model\Config {
 
         // Seed the installer default from the container's TZ env var (Docker/TrueNAS),
         // so admins do not have to re-pick a timezone that already matches the host.
-        // Only applies when system.timezone is not yet set in baikal.yaml.
+        // Only applies when system.timezone is not yet set in configuration.yaml.
         $tz = getenv('TZ');
         if ($tz !== false && $tz !== '' && in_array($tz, \DateTimeZone::listIdentifiers(), true)) {
             $this->aData["timezone"] = $tz;

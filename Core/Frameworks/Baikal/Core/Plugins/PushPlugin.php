@@ -91,7 +91,7 @@ class PushPlugin extends ServerPlugin {
     protected $shutdownRegistered = false;
 
     /**
-     * @param array<string, mixed> $config parsed baikal.yaml (expects 'system')
+     * @param array<string, mixed> $config parsed configuration.yaml (expects 'system')
      */
     public function __construct(\PDO $pdo, array $config) {
         $this->pdo = $pdo;

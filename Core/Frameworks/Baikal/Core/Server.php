@@ -135,9 +135,9 @@ class Server {
     protected function initServer() {
         $config = [];
         try {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
         } catch (\Exception $e) {
-            error_log('Error reading baikal.yaml file : ' . $e->getMessage());
+            error_log('Error reading configuration.yaml file : ' . $e->getMessage());
         }
 
         if ($this->authType === 'Basic') {

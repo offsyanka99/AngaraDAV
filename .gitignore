@@ -6,6 +6,7 @@ logs
 
 # Specific
 config/baikal.yaml
+config/configuration.yaml
 config/.htaccess
 Specific/INSTALL_DISABLED
 # WebDAV-Push runtime state — the VAPID private key must never be committed

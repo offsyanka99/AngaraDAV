@@ -8,7 +8,7 @@ Companion docs: [docs/architecture-and-conventions.md](docs/architecture-and-con
 
 ## 1. System overview
 
-AngaraDAV is a self-hosted CalDAV/CardDAV/WebDAV server derived from Baïkal and powered by SabreDAV, plus a dependency-free TypeScript SPA ("portal") that talks to a hand-rolled PHP JSON API. Both halves share one database and one `config/baikal.yaml`.
+AngaraDAV is a self-hosted CalDAV/CardDAV/WebDAV server derived from Baïkal and powered by SabreDAV, plus a dependency-free TypeScript SPA ("portal") that talks to a hand-rolled PHP JSON API. Both halves share one database and one `config/configuration.yaml`.
 
 ```mermaid
 flowchart TB
@@ -37,7 +37,7 @@ flowchart TB
   end
 
   subgraph state [Persistent state]
-    YAML[config/baikal.yaml]
+    YAML[config/configuration.yaml]
     DB[(SQLite or PostgreSQL)]
     SPEC[Specific/ runtime state + file homes]
   end
@@ -98,7 +98,7 @@ Two independent HTTP surfaces sit on the same data:
 | `portal` | Guards against root-owned `node_modules`, then `npm test && npm run build` |
 | `php-test` | `set -e` loop running every `tests/php/*.php` |
 | `local-build` / `local-up` / `local-down` / `local-logs` | Delegate to [scripts/local-docker.sh](scripts/local-docker.sh) |
-| `clean` | Removes `config/baikal.yaml`, `Specific/db/db.sqlite`, `Specific/INSTALL_DISABLED` |
+| `clean` | Removes `config/configuration.yaml`, `Specific/db/db.sqlite`, `Specific/INSTALL_DISABLED` |
 
 ### CI
 
@@ -127,7 +127,7 @@ Two independent HTTP surfaces sit on the same data:
 | [patches/](patches) | sabre/dav patch applied post-install |
 | [tests/php/](tests/php) | Standalone PHP test scripts |
 | `Specific/` | Runtime state (gitignored) — DB, install lock, file homes, push state, logs |
-| `config/` | `baikal.yaml.dist` committed; live `baikal.yaml` gitignored/generated |
+| `config/` | `configuration.yaml.dist` committed; live `configuration.yaml` gitignored/generated |
 
 ---
 
@@ -232,14 +232,14 @@ Routed by `App::dispatchAdminRoutes()`. Coverage: `/admin/ping`, `/admin/dashboa
 | `AdminCapabilitiesService` | `uiEnabled` + admin page list; API stays available even when the UI is hidden |
 | `AdminUserService` | User CRUD in one transaction (principal + user + default calendar + default address book); never returns `digesta1`; refuses to delete the last user or the last admin; quarantines the file home before cascade; password changes IP rate-limited |
 | `AdminUserResourceService` | Per-user calendars/address books, scoped by the *target* user's principal |
-| `AdminSettingsService` | Only portal writer of `baikal.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS` allow-list; atomic write + verify; `push_enabled` requires an `https://` external URL; factory reset honours install lock |
+| `AdminSettingsService` | Only portal writer of `configuration.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS` allow-list; atomic write + verify; `push_enabled` requires an `https://` external URL; factory reset honours install lock |
 | `AdminBackupService` | Settings export/preview/restore; checksummed, size/key capped; restore re-uses `updateSystemSettings()` so it is never a weaker path than PATCH |
 
 Admin conventions: every mutation is wrapped `try { … audit 'ok' } catch (ApiException $e) { audit 'error:'.$status; throw; }`; destructive operations require an explicit `confirm` (database writes require the literal string `CONFIRM`); secrets surface only as `has*` booleans; unmatched `/admin/*` returns **404, not 403**, so missing features are obvious.
 
 ### Auth
 
-**[Auth.php](Core/Frameworks/Baikal/Portal/Auth.php)** — session keys `baikal_portal_user`, `baikal_portal_csrf`, `baikal_portal_last`, `baikal_portal_login_at`; session name `BAIKALPORTAL`. Cookie is `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS; strict mode; `session_regenerate_id(true)` on login and after a successful self-service password change. Idle timeout via last-seen. Login rate limit 20 failures / 900 s per IP in `Specific/portal_login_rate.json`; failures also `error_log` a Fail2Ban-friendly line. `changePassword()` (`POST /me/password`) verifies the current password, writes `users.digesta1` only (not `system.admin_passwordhash`), requires 8+ characters, and limits successful changes to 5 / 900 s per username in `Specific/portal_self_password_rate.json`. A wrong current password is **400**, not 401.
+**[Auth.php](Core/Frameworks/Baikal/Portal/Auth.php)** — session keys `angara_portal_user`, `angara_portal_csrf`, `angara_portal_last`, `angara_portal_login_at`; session name `ANGARAPORTAL`. Cookie is `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS; strict mode; `session_regenerate_id(true)` on login and after a successful self-service password change. Idle timeout via last-seen. Login rate limit 20 failures / 900 s per IP in `Specific/portal_login_rate.json`; failures also `error_log` a Fail2Ban-friendly line. `changePassword()` (`POST /me/password`) verifies the current password, writes `users.digesta1` only (not `system.admin_passwordhash`), requires 8+ characters, and limits successful changes to 5 / 900 s per username in `Specific/portal_self_password_rate.json`. A wrong current password is **400**, not 401.
 
 **[AdminAuth.php](Core/Frameworks/Baikal/Portal/AdminAuth.php)** — admin role precedence, first match wins:
 1. env `ANGARA_PORTAL_ADMIN_USERS`
@@ -264,7 +264,7 @@ Admin conventions: every mutation is wrapped `try { … audit 'ok' } catch (ApiE
 
 ### Installer — [Core/Frameworks/Baikal/Portal/Install](Core/Frameworks/Baikal/Portal/Install)
 
-`InstallApp` is a separate unauthenticated router mounted at `/api/install/*`, sharing only `SameOrigin` and session start with the main app. `InstallService::status()` resolves the step in fixed order: `permissions` → `initialize` → `upgrade` → `locked` → `done` → `database`. Lock semantics: `Specific/INSTALL_DISABLED` marker; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (both compared strictly against `'1'`). `SchemaUpgrade::run()` never throws — it returns `{ok, errors, success}`. The version bump calls `Config::persist()`, which merges the settings model onto the existing `system` section, so keys the model does not own (`portal_log_level`, `portal_time_format`, `portal_week_start`, `portal_admin_users`, and the rest) are not reset.
+`InstallApp` is a separate unauthenticated router mounted at `/api/install/*`, sharing only `SameOrigin` and session start with the main app. `InstallService::status()` resolves the step in fixed order: `permissions` → `migrate-config` (temporary: `config/baikal.yaml` present and `config/configuration.yaml` absent) → `initialize` → `upgrade` → `locked` → `done` → `database`. The rename step does not rewrite YAML. Delete `LegacyConfigMigration` and that step after the lab has run it. Lock semantics: `Specific/INSTALL_DISABLED` marker; env hard lock when `ANGARA_LOCK_INSTALL=1` and not `ANGARA_ALLOW_REINSTALL=1` (both compared strictly against `'1'`). `SchemaUpgrade::run()` never throws — it returns `{ok, errors, success}`. The version bump calls `Config::persist()`, which merges the settings model onto the existing `system` section, so keys the model does not own (`portal_log_level`, `portal_time_format`, `portal_week_start`, `portal_admin_users`, and the rest) are not reset.
 
 ---
 
@@ -341,7 +341,7 @@ Deliberately standalone: its own state, its own `api()` helper against `/api/ins
 
 | Location | Contents | Notes |
 |---|---|---|
-| `config/baikal.yaml` | `system` + `database` sections | Gitignored, generated by installer/admin. Template: [config/baikal.yaml.dist](config/baikal.yaml.dist). Written atomically, `chmod 0600`. |
+| `config/configuration.yaml` | `system` + `database` sections | Gitignored, generated by installer/admin. Template: [config/configuration.yaml.dist](config/configuration.yaml.dist). Written atomically, `chmod 0600`. |
 | `Specific/db/db.sqlite` | SQLite database | Default backend |
 | `Specific/INSTALL_DISABLED` | Install lock marker | |
 | `Specific/portal_meta.json` | Per-calendar-instance read-only / holiday flags | |
@@ -371,9 +371,9 @@ The trailing marker `# BAIKAL_DAV_UPLOAD_LIMIT` on `client_max_body_size` lines 
 | Order | Script | Purpose | Env |
 |---|---|---|---|
 | 25 | `25-check-baikal-persistence.sh` | Warn-only: verifies `config`/`Specific` are real bind mounts | — |
-| 26 | `26-check-skip-chown-writable.sh` | When skip-chown is on, **fails hard** unless dirs exist, are uid 101, and are writable | `ANGARA_SKIP_CHOWN` (legacy `BAIKAL_SKIP_CHOWN`) |
+| 26 | `26-check-skip-chown-writable.sh` | When skip-chown is on, **fails hard** unless dirs exist, are uid 101, and are writable | `ANGARA_SKIP_CHOWN` |
 | 30 | `30-create-baikal-database-folder.sh` | `mkdir -p Specific/db` | — |
-| 35 | `35-configure-nginx-dav-upload-limit.sh` | Validates size against `^[1-9][0-9]*[kKmMgG]?$` (so `256MB` is invalid, `256M` is valid) and rewrites every marked `client_max_body_size` | `ANGARA_DAV_MAX_BODY_SIZE` (legacy `BAIKAL_DAV_MAX_BODY_SIZE`), default `1G` |
+| 35 | `35-configure-nginx-dav-upload-limit.sh` | Validates size against `^[1-9][0-9]*[kKmMgG]?$` (so `256MB` is invalid, `256M` is valid) and rewrites every marked `client_max_body_size` | `ANGARA_DAV_MAX_BODY_SIZE`, default `1G` |
 | 40 | `40-disable-nginx-ipv6-if-unsupported.sh` | Comments out `listen [::]:80` when IPv6 is unavailable | — |
 | 40 | `40-fix-baikal-file-permissions.sh` | Bounded chown/chmod (deliberately not fully recursive over file homes) | `ANGARA_SKIP_CHOWN` |
 | 40 | `40-php-fpm.sh` | Starts PHP-FPM | `PHP_VERSION` |
@@ -413,12 +413,12 @@ These are **contracts**, not branding. Changing them breaks live installs, store
 | Contract | Where |
 |---|---|
 | PHP namespaces `Baikal\*`, `BaikalAdmin\*` | PSR-0 map in [composer.json](composer.json) — directory ↔ namespace must stay aligned |
-| `config/baikal.yaml` filename and schema | Read by bootstrap, models, services |
+| `config/configuration.yaml` filename and schema | Read by bootstrap, models, services |
 | Docker path `/var/www/baikal` | Image layout, volumes, all deployment templates |
 | Digest realm `BaikalDAV` | Stored `digesta1` hashes are `md5(user:realm:password)` — changing the realm invalidates every DAV password |
 | DAV endpoints `/dav.php/`, `/cal.php/`, `/card.php/` | Configured in every client |
 | vCard property `X-BAIKAL-CUSTOM` | Persisted inside user data |
-| Session keys `baikal_portal_*`, session name `BAIKALPORTAL`, install keys `baikal_install_*` | Renaming logs out every active session |
+| Session keys `angara_portal_*`, session name `ANGARAPORTAL`, install keys `angara_install_*` | Renaming logs out every active session |
 | Header fallback `X-Baikal-CSRF` | Accepted alongside `X-CSRF-Token` |
 | Global functions `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` | Called across `Core/` and `html/` |
 | nginx marker `# BAIKAL_DAV_UPLOAD_LIMIT` | Entrypoint 35 rewrites by this exact comment |
@@ -505,11 +505,11 @@ Wire plugins in [Core/Frameworks/Baikal/Core/Server.php](Core/Frameworks/Baikal/
 
 Recorded as facts, not recommendations:
 
-- CI runs 18 of the 36 `tests/php/` scripts (17 named in `code-analysis`, plus `FileSchemaDriverTest.php`); the rest run only via `make php-test`.
+- CI runs 19 of the 37 `tests/php/` scripts (18 named in `code-analysis`, plus `FileSchemaDriverTest.php`); the rest run only via `make php-test`.
 - No CI job runs the portal `npm test` or `npm run build`; the portal is built only inside the Docker image stage.
 - `composer test` does not execute `tests/php`.
 - Portal test files must be added to `package.json` manually — there is no glob.
-- `Dockerfile` still emits an unrelated `BAIKAL_BUILD_TIME` define alongside `ANGARA_BUILD_GIT`.
+- `Dockerfile` emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` into gitignored `Core/BuildInfo.php`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - `esc()` in [portal/src/ui.ts](portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.
 - [portal/src/app/admin/meta.ts](portal/src/app/admin/meta.ts) re-declares a local `parseAdminPageId` that duplicates the exported one in [portal/src/app/routing.ts](portal/src/app/routing.ts).
 - `AppContext` is constructed in `mountApp` and immediately discarded via `void ctx`.

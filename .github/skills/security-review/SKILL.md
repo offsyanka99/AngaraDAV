@@ -26,7 +26,7 @@ Use this skill to review a defined change or surface for concrete security regre
 ## Deployment, Secrets, And Dependencies
 
 1. Review [docker/nginx.conf](../../../docker/nginx.conf) and [docker/nginx-security-headers.inc](../../../docker/nginx-security-headers.inc) when changing routes, headers, upload limits, or FastCGI behavior. Locations with their own `add_header` directives must re-include the security-header file.
-2. Treat [config/baikal.yaml.dist](../../../config/baikal.yaml.dist) as a secret-free template. Never commit live `config/baikal.yaml`, [Specific/](../../../Specific/), password hashes, database credentials, or encryption keys.
+2. Treat [config/configuration.yaml.dist](../../../config/configuration.yaml.dist) as a secret-free template. Never commit live `config/configuration.yaml`, [Specific/](../../../Specific/), password hashes, database credentials, or encryption keys.
 3. When changing Composer/SabreDAV dependencies, check [patches/README.md](../../../patches/README.md) and verify the automatic patch step in [scripts/apply-vendor-patches.sh](../../../scripts/apply-vendor-patches.sh).
 
 ## Validate The Reviewed Surface

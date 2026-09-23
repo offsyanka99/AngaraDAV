@@ -51,7 +51,7 @@ export function renderAdminSettingsShell(host: AdminHost): string {
         </div>
       </div>
       <p class="muted small">
-        Writes <span class="mono">config/baikal.yaml</span> atomically. Changing
+        Writes <span class="mono">config/configuration.yaml</span> atomically. Changing
         <strong>session timeout</strong> affects portal idle sessions.
         ${s.writable === false ? '<span class="flash flash-error">Config is not writable by PHP.</span>' : ""}
       </p>
@@ -161,7 +161,7 @@ export function renderAdminSettingsShell(host: AdminHost): string {
 
         <h3 class="admin-subsection-title">Server admin password</h3>
         <p class="muted small">
-          Stored in <span class="mono">baikal.yaml</span> for install recovery.
+          Stored in <span class="mono">configuration.yaml</span> for install recovery.
           Portal login uses each DAV user’s own password (e.g. user <span class="mono">admin</span> created at install).
           ${s.hasAdminPassword ? "Leave blank to keep the current server admin password." : "No server admin password set yet."}
         </p>

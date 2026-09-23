@@ -29,7 +29,7 @@ class AdminUserService {
     private $config;
 
     /**
-     * @param array<string, mixed> $config Full baikal.yaml (or test fixture)
+     * @param array<string, mixed> $config Full configuration.yaml (or test fixture)
      */
     public function __construct(\PDO $pdo, array $config = []) {
         $this->pdo = $pdo;

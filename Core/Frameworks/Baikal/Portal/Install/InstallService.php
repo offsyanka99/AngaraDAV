@@ -14,9 +14,9 @@ use Symfony\Component\Yaml\Yaml;
 class InstallService {
     private const RATE_MAX = 30;
     private const RATE_WINDOW = 900;
-    private const CSRF_SESSION_KEY = 'baikal_install_csrf';
+    private const CSRF_SESSION_KEY = 'angara_install_csrf';
     /** Held only for the install wizard session until database step creates the DAV user. */
-    private const ADMIN_PASSWORD_SESSION_KEY = 'baikal_install_admin_password';
+    private const ADMIN_PASSWORD_SESSION_KEY = 'angara_install_admin_password';
     private const PORTAL_ADMIN_USERNAME = 'admin';
 
     /** @var string */
@@ -29,7 +29,7 @@ class InstallService {
         $this->configPath = $configPath !== null && $configPath !== ''
             ? $configPath
             : (defined('PROJECT_PATH_CONFIG')
-                ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/baikal.yaml'
+                ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/configuration.yaml'
                 : '');
         $this->specificDir = $specificDir !== null && $specificDir !== ''
             ? rtrim($specificDir, '/')
@@ -61,6 +61,19 @@ class InstallService {
                 'step'    => 'permissions',
                 'locked'  => false,
                 'message' => 'Config and Specific directories must be writable by the PHP process.',
+            ]);
+        }
+
+        // TEMPORARY: remove with LegacyConfigMigration after the lab rename.
+        if (LegacyConfigMigration::needed($this->configPath)) {
+            return array_merge($base, [
+                'step'              => 'migrate-config',
+                'locked'            => false,
+                'configuredVersion' => null,
+                'hasAdminPassword'  => false,
+                'legacyConfigFile'  => LegacyConfigMigration::LEGACY_FILENAME,
+                'configFile'        => LegacyConfigMigration::FILENAME,
+                'message'           => 'Rename config/baikal.yaml to config/configuration.yaml. Settings are not rewritten.',
             ]);
         }
 
@@ -480,6 +493,27 @@ class InstallService {
     /**
      * @return array<string, mixed>
      */
+    /**
+     * TEMPORARY lab rename. Delete with LegacyConfigMigration.
+     *
+     * @return array<string, mixed>
+     */
+    public function migrateConfigFile(bool $confirm): array {
+        $this->assertRateLimit();
+        if (!$confirm) {
+            throw new ApiException('Confirmation required: set confirm to true', 400);
+        }
+        if (!LegacyConfigMigration::needed($this->configPath)) {
+            throw new ApiException('Config rename is not available', 409);
+        }
+        LegacyConfigMigration::rename($this->configPath);
+        $this->registerRateAttempt();
+        $out = $this->status();
+        $out['message'] = 'Renamed baikal.yaml to configuration.yaml. Settings were not changed.';
+
+        return $out;
+    }
+
     public function upgrade(bool $confirm): array {
         $this->assertRateLimit();
         if (!$confirm) {
@@ -580,7 +614,7 @@ class InstallService {
         try {
             $parsed = Yaml::parseFile($this->configPath);
         } catch (\Throwable $e) {
-            throw new ApiException('Invalid baikal.yaml: ' . $e->getMessage(), 500);
+            throw new ApiException('Invalid configuration.yaml: ' . $e->getMessage(), 500);
         }
 
         return is_array($parsed) ? $parsed : null;

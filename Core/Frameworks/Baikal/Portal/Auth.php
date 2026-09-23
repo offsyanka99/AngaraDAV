@@ -8,11 +8,11 @@ namespace Baikal\Portal;
  * Includes idle timeout, login rate limiting, CSRF token, and full logout.
  */
 class Auth {
-    public const SESSION_KEY = 'baikal_portal_user';
-    public const SESSION_NAME = 'BAIKALPORTAL';
-    public const CSRF_KEY = 'baikal_portal_csrf';
-    public const LAST_SEEN_KEY = 'baikal_portal_last';
-    public const LOGIN_AT_KEY = 'baikal_portal_login_at';
+    public const SESSION_KEY = 'angara_portal_user';
+    public const SESSION_NAME = 'ANGARAPORTAL';
+    public const CSRF_KEY = 'angara_portal_csrf';
+    public const LAST_SEEN_KEY = 'angara_portal_last';
+    public const LOGIN_AT_KEY = 'angara_portal_login_at';
 
     /** @var int Default idle timeout (seconds) — matches admin default (15 min) */
     public const DEFAULT_SESSION_MAX_AGE = 900;

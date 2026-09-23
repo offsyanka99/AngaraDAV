@@ -65,7 +65,7 @@ class App {
         $this->adminUsers = new AdminUserService($pdo, $config);
         $this->adminResources = new AdminUserResourceService($pdo, $config);
         $configPath = defined('PROJECT_PATH_CONFIG')
-            ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/baikal.yaml'
+            ? rtrim((string) PROJECT_PATH_CONFIG, '/') . '/configuration.yaml'
             : '';
         $this->adminSettings = new AdminSettingsService(
             $configPath !== '' ? $configPath : (sys_get_temp_dir() . '/baikal-admin-settings.yaml'),
@@ -130,9 +130,9 @@ class App {
 
     /**
      * Instance portal time format from Admin YAML (`system.portal_time_format`).
-     * Env (`TIME_FORMAT`, `BAIKAL_PORTAL_TIME_FORMAT`) is ignored.
+     * Env is ignored. Set this in Admin → System settings.
      *
-     * @param array<string, mixed> $sys system section of baikal.yaml
+     * @param array<string, mixed> $sys system section of configuration.yaml
      */
     public static function portalTimeFormatFromSystem(array $sys): string {
         $time = strtolower(trim((string) ($sys['portal_time_format'] ?? 'auto')));
@@ -142,9 +142,9 @@ class App {
 
     /**
      * Instance portal week start from Admin YAML (`system.portal_week_start`).
-     * Env (`BAIKAL_PORTAL_WEEK_START`) is ignored.
+     * Env is ignored. Set this in Admin → System settings.
      *
-     * @param array<string, mixed> $sys system section of baikal.yaml
+     * @param array<string, mixed> $sys system section of configuration.yaml
      */
     public static function portalWeekStartFromSystem(array $sys): string {
         $week = strtolower(trim((string) ($sys['portal_week_start'] ?? 'auto')));
@@ -296,7 +296,7 @@ class App {
         \Baikal\Core\Bootstrap::bootstrap();
         \Baikal\Framework::bootstrap();
 
-        $configPath = PROJECT_PATH_CONFIG . 'baikal.yaml';
+        $configPath = PROJECT_PATH_CONFIG . 'configuration.yaml';
         if (!is_readable($configPath)) {
             throw new ApiException('AngaraDAV is not configured yet', 503);
         }
@@ -728,7 +728,7 @@ class App {
             }
         }
 
-        // Factory reset → installer (removes baikal.yaml + INSTALL_DISABLED)
+        // Factory reset → installer (removes configuration.yaml + INSTALL_DISABLED)
         if ($adminPath === '/admin/settings/reset-to-default' || $adminPath === '/admin/settings/reset-to-default/') {
             if ($method === 'POST') {
                 $body = $this->http->jsonBody();

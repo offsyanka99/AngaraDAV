@@ -6,7 +6,7 @@ namespace Baikal\Core\Plugins\Push;
  * Persists the server's VAPID (RFC 8292) key pair used for Web Push.
  *
  * Stored as JSON in Specific/push_vapid.json (like portal_meta.json) rather than
- * baikal.yaml, so it can be generated lazily on first use without rewriting the
+ * configuration.yaml, so it can be generated lazily on first use without rewriting the
  * main config file. The key pair is server-wide (the same for every resource,
  * as recommended by the spec).
  *

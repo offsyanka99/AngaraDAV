@@ -120,7 +120,7 @@ class Bootstrap {
         $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
 
         try {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
             if (isset($config['system']['base_uri']) && $config['system']['base_uri'] !== '') {
                 if (!defined('PROJECT_BASEURI')) {
                     define('PROJECT_BASEURI', self::prependSlash(self::appendSlash((string) $config['system']['base_uri'])));
@@ -172,9 +172,9 @@ class Bootstrap {
 
     private static function initDb(): void {
         try {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'baikal.yaml');
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
         } catch (\Exception $e) {
-            error_log('Error reading baikal.yaml file : ' . $e->getMessage());
+            error_log('Error reading configuration.yaml file : ' . $e->getMessage());
 
             return;
         }
@@ -241,11 +241,11 @@ class Bootstrap {
         $password = $config['database']['pgsql_password'] ?? null;
 
         if (!$host) {
-            exit('<h3>The constant PROJECT_DB_PGSQL_HOST, containing the PostgreSQL host name, is not set.<br />You should set it in config/baikal.yaml</h3>');
+            exit('<h3>The constant PROJECT_DB_PGSQL_HOST, containing the PostgreSQL host name, is not set.<br />You should set it in config/configuration.yaml</h3>');
         }
 
         if (!$dbname) {
-            exit('<h3>The constant PROJECT_DB_PGSQL_DBNAME, containing the PostgreSQL database name, is not set.<br />You should set it in config/baikal.yaml</h3>');
+            exit('<h3>The constant PROJECT_DB_PGSQL_DBNAME, containing the PostgreSQL database name, is not set.<br />You should set it in config/configuration.yaml</h3>');
         }
 
         try {
@@ -258,13 +258,13 @@ class Bootstrap {
             $pdo->exec("SET NAMES 'UTF8'");
             self::setPdo($pdo);
         } catch (\Exception $e) {
-            $message = 'AngaraDAV was not able to establish a connection to the configured PostgreSQL database (as configured in config/baikal.yaml).';
+            $message = 'AngaraDAV was not able to establish a connection to the configured PostgreSQL database (as configured in config/configuration.yaml).';
             if (!$username) {
-                exit('<h3>' . $message . ' Note: The constant PROJECT_DB_PGSQL_USERNAME, containing the PostgreSQL database username, is not set. If your database requires a username you should set it in config/baikal.yaml.</h3>');
+                exit('<h3>' . $message . ' Note: The constant PROJECT_DB_PGSQL_USERNAME, containing the PostgreSQL database username, is not set. If your database requires a username you should set it in config/configuration.yaml.</h3>');
             }
 
             if ($password === null) {
-                exit('<h3>' . $message . ' Note: The constant PROJECT_DB_PGSQL_PASSWORD, containing the PostgreSQL database password, is not set. If your database requires a password you should set it in config/baikal.yaml.</h3>');
+                exit('<h3>' . $message . ' Note: The constant PROJECT_DB_PGSQL_PASSWORD, containing the PostgreSQL database password, is not set. If your database requires a password you should set it in config/configuration.yaml.</h3>');
             }
 
             exit('<h3>' . $message . '</h3>');

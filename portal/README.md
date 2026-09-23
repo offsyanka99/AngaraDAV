@@ -70,7 +70,7 @@ While a user tab is visible, the portal polls collection revisions (`GET /api/sy
 
 ### Administration (Admin role)
 
-Primary admin UI is the **portal** (same DB + `baikal.yaml`). Auth is a **DAV user session** plus the Admin role.
+Primary admin UI is the **portal** (same DB + `configuration.yaml`). Auth is a **DAV user session** plus the Admin role.
 
 #### Granting the Admin role
 
@@ -87,7 +87,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 - Opened from the **user menu → Administration** (hidden for non-admins).
 - Hash routes: `#admin` (Overview), `#admin/settings`, `#admin/users`, `#admin/users/{username}`, `#admin/database`, `#admin/configuration`.
 - **Overview:** stats + service On/Off + version/releases links.
-- **System settings:** form writes `baikal.yaml` (services, files, push, session, admin password); timezone select.
+- **System settings:** form writes `configuration.yaml` (services, files, push, session, admin password); timezone select.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
 - **Configuration:** download/restore a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`), preview shows a changed/unknown/invalid diff before applying. **Reset to Default** (full factory wipe + reopen installer) lives here, not on System settings.
@@ -110,7 +110,7 @@ Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → se
 
 ### Debug logging
 
-Set log level in `baikal.yaml` or env (env wins):
+Set log level in `configuration.yaml` or env (env wins):
 
 | Source | Key | Values |
 |--------|-----|--------|

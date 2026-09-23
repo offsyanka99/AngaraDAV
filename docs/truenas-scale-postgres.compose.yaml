@@ -22,11 +22,11 @@
 #
 # CRITICAL — persistence (settings / DB survive restart only if these are
 # real Host Path binds, not anonymous Docker volumes):
-#   config/   → baikal.yaml (all Admin system settings + admin password hash)
+#   config/   → configuration.yaml (all Admin system settings + admin password hash)
 #   Specific/ → INSTALL_DISABLED, portal meta, file homes, push keys (no SQLite DB here)
 #   pgdata/   → the PostgreSQL 18 data directory (the actual calendar/contact DB)
 # After first install, on the NAS host you MUST see:
-#   ls /mnt/tank/apps/angaradav/config/baikal.yaml
+#   ls /mnt/tank/apps/angaradav/config/configuration.yaml
 #   ls /mnt/tank/apps/angaradav/Specific/INSTALL_DISABLED
 #   ls /mnt/tank/apps/angaradav/pgdata/PG_VERSION
 # If those files only exist inside the container, TrueNAS did not apply the
@@ -54,13 +54,13 @@
 # 5. Health / Info:      /health.php · /info.php
 #
 # Portal Administration (Admin-role DAV users): user menu → Administration.
-#   Grant: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
+#   Grant: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in configuration.yaml
 #   Default if unset: DAV user "admin". Classic /admin/ only redirects to /portal/.
 #   Database credential writes: portal Administration → Database (type CONFIRM).
 #   See docs/DEPLOYMENT.md → Portal Administration
 #
 # Backup regularly (all three mounts):
-#   config/   → baikal.yaml (admin hash, auth, feature flags)
+#   config/   → configuration.yaml (admin hash, auth, feature flags)
 #   Specific/ → INSTALL_DISABLED, rate-limit file, portal_meta.json, private
 #               WebDAV file homes/quarantine, WebDAV-Push VAPID identity,
 #               queue lock, and sanitized diagnostic logs
@@ -77,7 +77,6 @@
 # PORTAL_ADMIN_USERS (or ANGARA_PORTAL_ADMIN_USERS) — portal Admin role DAV users,
 # ANGARA_PUSH_EXTERNAL_URL, PUSH_LOG_LEVEL, ANGARA_FILES_STORAGE_PATH,
 # ANGARA_FILES_MAX_UPLOAD_MB, ANGARA_FILES_QUOTA_MB, ANGARA_DAV_MAX_BODY_SIZE.
-# (Legacy BAIKAL_* aliases still work but are deprecated; see docs/DEPLOYMENT.md.)
 # Time format and week start: Admin → System settings (not compose env).
 #
 # Docs: https://github.com/offsyanka99/AngaraDAV/tree/main/docs
@@ -146,7 +145,7 @@ services:
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
       # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):
       # PORTAL_ADMIN_USERS: "alice,bob"  # or ANGARA_PORTAL_ADMIN_USERS; default DAV user "admin"
-      # Required only after enabling WebDAV-Push in baikal.yaml/admin:
+      # Required only after enabling WebDAV-Push in configuration.yaml/admin:
       # ANGARA_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only
       # Generic WebDAV files are disabled by default. Enable in Admin settings.

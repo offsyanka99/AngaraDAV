@@ -76,10 +76,10 @@ class Framework {
         \Baikal\Core\Tools::configureEnvironment();
 
         # Check that a config file exists
-        if (!file_exists(PROJECT_PATH_CONFIG . "baikal.yaml")) {
+        if (!file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
             self::installTool('not_configured');
         } else {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
             date_default_timezone_set($config['system']['timezone']);
 
             # Check that Baïkal is already configured

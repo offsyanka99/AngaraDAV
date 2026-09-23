@@ -19,10 +19,10 @@
 #
 # CRITICAL — persistence (settings / DB survive restart only if these are
 # real Host Path binds, not anonymous Docker volumes):
-#   config/   → baikal.yaml (all Admin system settings + admin password hash)
+#   config/   → configuration.yaml (all Admin system settings + admin password hash)
 #   Specific/ → SQLite DB, INSTALL_DISABLED, portal meta, file homes, push keys
 # After first install, on the NAS host you MUST see:
-#   ls /mnt/tank/apps/angaradav/config/baikal.yaml
+#   ls /mnt/tank/apps/angaradav/config/configuration.yaml
 #   ls /mnt/tank/apps/angaradav/Specific/INSTALL_DISABLED
 # If those files only exist inside the container, TrueNAS did not apply the
 # host path mounts — fix the Custom App storage section and re-deploy.
@@ -46,7 +46,7 @@
 #   2. user1 opens /portal/ and signs in with DAV username and password
 #   3. Calendar / Contacts / Tasks / Notes / Files as usual
 #   4. Portal Administration (Admin-role DAV users only): user menu → Administration
-#      Grant Admin: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in baikal.yaml
+#      Grant Admin: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in configuration.yaml
 #      Default if unset: DAV user named "admin".
 #      Classic /admin/ only redirects to /portal/ (no separate Formal UI).
 #      See docs/DEPLOYMENT.md → Portal Administration
@@ -65,7 +65,7 @@
 #   No APPLY_HOME_ASSISTANT_FIX env needed (built-in; see docs/DEPLOYMENT.md).
 #
 # Backup regularly (both mounts):
-#   config/   → baikal.yaml (admin hash, auth, feature flags)
+#   config/   → configuration.yaml (admin hash, auth, feature flags)
 #   Specific/ → SQLite DB (Specific/db), INSTALL_DISABLED, rate-limit file,
 #               portal_meta.json (read-only / holidays flags), private WebDAV
 #               file homes/quarantine, WebDAV-Push VAPID identity, queue lock,
@@ -77,23 +77,23 @@
 #   Admin password uses password_hash(); legacy SHA-256 upgrades on login.
 #
 # Optional env:
-#   ANGARA_LOCK_INSTALL=1     — refuse installer reopen after deploy (legacy: BAIKAL_LOCK_INSTALL)
-#   ANGARA_ALLOW_REINSTALL=1  — re-open installer intentionally (legacy: BAIKAL_ALLOW_REINSTALL)
+#   ANGARA_LOCK_INSTALL=1     — refuse installer reopen after deploy
+#   ANGARA_ALLOW_REINSTALL=1  — re-open installer intentionally
 #   PORTAL_LOG_LEVEL=debug    — browser console + Specific/portal_debug.log only
 #                              (not docker/nginx; old images wrongly used error_log)
 #   PORTAL_ADMIN_USERS=alice,bob
 #                              — DAV usernames with portal Admin role (/api/admin/*)
-#                                Alias: ANGARA_PORTAL_ADMIN_USERS (legacy: BAIKAL_PORTAL_ADMIN_USERS)
-#                                Overrides system.portal_admin_users in baikal.yaml
+#                                Alias: ANGARA_PORTAL_ADMIN_USERS
+#                                Overrides system.portal_admin_users in configuration.yaml
 #                                If unset and YAML empty: DAV user "admin" is Admin
 #   Time format / week start — Admin → System settings (not compose env)
 #   ANGARA_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
 #                              — required canonical HTTPS URL when WebDAV-Push
-#                                is enabled in Admin -> AngaraDAV Settings (legacy: BAIKAL_PUSH_EXTERNAL_URL)
+#                                is enabled in Admin -> AngaraDAV Settings
 #   PUSH_LOG_LEVEL=debug       — temporary Push diagnostics in
 #                                Specific/push_debug.log (default off)
 #   ANGARA_FILES_STORAGE_PATH=/var/lib/baikal-files
-#                              — optional separately mounted file-home dataset (legacy: BAIKAL_FILES_STORAGE_PATH)
+#                              — optional separately mounted file-home dataset
 #   ANGARA_FILES_MAX_UPLOAD_MB=1024
 #   ANGARA_FILES_QUOTA_MB=10240
 #   ANGARA_DAV_MAX_BODY_SIZE=1G — nginx PUT request ceiling
@@ -135,7 +135,7 @@ services:
 
     environment:
       # Also seeds the installer's default Server Time zone (Admin -> AngaraDAV
-      # Settings) when baikal.yaml has no timezone yet. One-time default only;
+      # Settings) when configuration.yaml has no timezone yet. One-time default only;
       # change it in Admin afterward if you need to override it.
       TZ: "America/Toronto"
       # Time format and week start: Admin → System settings (not env).
@@ -143,7 +143,7 @@ services:
       # PORTAL_LOG_LEVEL: "debug"        # off|error|warn|info|debug
       # Portal Admin role (DAV usernames for /portal/ Administration + /api/admin/*):
       # PORTAL_ADMIN_USERS: "alice,bob"  # or ANGARA_PORTAL_ADMIN_USERS; default DAV user "admin"
-      # Required only after enabling WebDAV-Push in baikal.yaml/admin:
+      # Required only after enabling WebDAV-Push in configuration.yaml/admin:
       # ANGARA_PUSH_EXTERNAL_URL: "https://dav.example.com/dav.php/"
       # PUSH_LOG_LEVEL: "debug"          # temporary troubleshooting only
       # Generic WebDAV files are disabled by default. Enable in Admin settings.

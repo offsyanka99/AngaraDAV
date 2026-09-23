@@ -331,7 +331,7 @@ SQL
         }
 
         if (version_compare($sVersionFrom, '0.10.0', '<')) {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "baikal.yaml");
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
 
             $oConfig = new \Baikal\Model\Config\Database();
             // Legacy boolean 'mysql' flag is guarded off in render(); anything reaching
@@ -356,7 +356,7 @@ SQL
         # Parsing the config also makes sure that it is not malformed
         $oConfig = new \Baikal\Model\Config\Standard();
         if ($oConfig->writable() === false) {
-            throw new \Exception(PROJECT_PATH_CONFIG . "baikal.yaml is not writable");
+            throw new \Exception(PROJECT_PATH_CONFIG . "configuration.yaml is not writable");
         }
     }
 }
