@@ -19,7 +19,7 @@ Use this workflow for client-facing DAV behavior. Begin with [AGENTS.md](../../.
 
 1. Use SabreDAV exception semantics for protocol errors. Expected DAV 4xx responses are intentionally handled differently from server faults.
 2. Keep discovery, ACL, and mutability metadata aligned with request enforcement. For example, inspect [ReadOnlyPlugin.php](../../../Core/Frameworks/Baikal/Core/Plugins/ReadOnlyPlugin.php) alongside [ReadOnlyCalendarBackend.php](../../../Core/Frameworks/Baikal/Core/ReadOnlyCalendarBackend.php).
-3. Do not rename DAV endpoint paths, change base URIs, or alter documented `BAIKAL_*` environment-variable contracts without an explicit compatibility decision.
+3. Do not rename DAV endpoint paths, change base URIs, or alter documented `ANGARA_*` environment-variable contracts without an explicit compatibility decision.
 4. Before modifying SabreDAV dependencies or vendor behavior, read [patches/README.md](../../../patches/README.md). Composer automatically applies the required patch through [scripts/apply-vendor-patches.sh](../../../scripts/apply-vendor-patches.sh).
 
 ## Test And Verify

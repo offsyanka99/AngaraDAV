@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) is published again as an operator-only guide (Docker, TrueNAS, env vars, backup, file storage, WebDAV-Push, troubleshooting), updated for `configuration.yaml` and the 2.5.0 `BAIKAL_*` removal.
+- Architecture docs: fixed broken links and stale counts; documented `/api/sync-status`.
+
 ## 2.5.2 — 2026-09-23
 
 ### Portal
@@ -26,7 +32,7 @@
 - Out of scope: PHP namespaces (`Baikal\*`), `config/baikal.yaml`, Docker path `/var/www/baikal`, Digest realm `BaikalDAV`, and the `X-BAIKAL-CUSTOM` vCard property are unchanged and have no removal plan. `ANGARA_SKIP_CHOWN`/`ANGARA_DAV_MAX_BODY_SIZE` still accept their legacy `BAIKAL_*` forms indefinitely.
 
 ### Breaking Changes
-- **Removed the `BAIKAL_*` compatibility aliases** for product/build constants (`BAIKAL_VERSION_BASE`, `BAIKAL_VERSION`, `BAIKAL_HOMEPAGE`, `BAIKAL_BUILD_GIT`, `BAIKAL_GIT_SHA`), bootstrap/context constants (`BAIKAL_CONTEXT`, `BAIKAL_CONTEXT_INSTALL`, `BAIKAL_CONTEXT_PORTAL_API`), path overrides (`BAIKAL_PATH_CONFIG`, `BAIKAL_PATH_SPECIFIC`, `BAIKAL_PATH_FRAMEWORKROOT`), file storage settings (`BAIKAL_FILES_STORAGE_PATH`, `BAIKAL_FILES_MAX_UPLOAD_MB`/`_BYTES`, `BAIKAL_FILES_QUOTA_MB`/`_BYTES`), push/portal settings (`BAIKAL_PUSH_EXTERNAL_URL`, `BAIKAL_PUSH_LOG_LEVEL`, `BAIKAL_PORTAL_LOG_LEVEL`, `BAIKAL_PORTAL_ADMIN_USERS`), and installer lock controls (`BAIKAL_LOCK_INSTALL`, `BAIKAL_ALLOW_REINSTALL`). Only `ANGARA_*` (and any previously-supported unprefixed variable) is read now — rebuild Docker images and update deployments still setting only a `BAIKAL_*` form for these. See [docs/baikal-to-angara-migration-plan.md](docs/baikal-to-angara-migration-plan.md) for the full removal record.
+- **Removed the `BAIKAL_*` compatibility aliases** for product/build constants (`BAIKAL_VERSION_BASE`, `BAIKAL_VERSION`, `BAIKAL_HOMEPAGE`, `BAIKAL_BUILD_GIT`, `BAIKAL_GIT_SHA`), bootstrap/context constants (`BAIKAL_CONTEXT`, `BAIKAL_CONTEXT_INSTALL`, `BAIKAL_CONTEXT_PORTAL_API`), path overrides (`BAIKAL_PATH_CONFIG`, `BAIKAL_PATH_SPECIFIC`, `BAIKAL_PATH_FRAMEWORKROOT`), file storage settings (`BAIKAL_FILES_STORAGE_PATH`, `BAIKAL_FILES_MAX_UPLOAD_MB`/`_BYTES`, `BAIKAL_FILES_QUOTA_MB`/`_BYTES`), push/portal settings (`BAIKAL_PUSH_EXTERNAL_URL`, `BAIKAL_PUSH_LOG_LEVEL`, `BAIKAL_PORTAL_LOG_LEVEL`, `BAIKAL_PORTAL_ADMIN_USERS`), and installer lock controls (`BAIKAL_LOCK_INSTALL`, `BAIKAL_ALLOW_REINSTALL`). Only `ANGARA_*` (and any previously-supported unprefixed variable) is read now — rebuild Docker images and update deployments still setting only a `BAIKAL_*` form for these.
 
 ## 2.4.5 — 2026-09-01
 
@@ -108,8 +114,8 @@ Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
 - Vite `/api` proxy defaults to `:31088`; `make portal` refuses a root-owned `portal/node_modules`.
 
 ### Docs
-- [Upgrade path](docs/upgrade-path.md) (Wave 7 PSR-4 / PHPStan 2 still optional).
-- [Admin-only settings / slim YAML](docs/admin-settings-yaml.md) (plan, not implemented).
+- Upgrade path (Wave 7 PSR-4 / PHPStan 2 still optional).
+- Admin-only settings / slim YAML (plan, not implemented).
 
 Digest realm `BaikalDAV` and Docker path `/var/www/baikal` are unchanged.
 

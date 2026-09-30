@@ -2,7 +2,7 @@
 
 Inspected snapshot of the repository as it exists on disk (product version `2.5.2` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
-Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [baikal-to-angara-migration-plan.md](baikal-to-angara-migration-plan.md). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
+Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
 
 ---
 
@@ -98,7 +98,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | Dev deps | `typescript ^6.0.3`, `vite ^8.2.2` | [`portal/package.json`](../portal/package.json) |
 | TS config | ES2022, `moduleResolution: bundler`, `strict`, `noEmit`, `noUnusedLocals` / `noUnusedParameters`; `src/**/*.test.ts` excluded from typecheck | [`portal/tsconfig.json`](../portal/tsconfig.json) |
 | Vite | `base: "/portal/"`, `outDir: "../html/portal"`, `emptyOutDir`, `sourcemap: false`; dev proxy `/api` → `ANGARADAV_API` or `http://127.0.0.1:31088` | [`portal/vite.config.ts`](../portal/vite.config.ts) |
-| Tests | Node built-in `node:test` via `--experimental-strip-types`; **14 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
+| Tests | Node built-in `node:test` via `--experimental-strip-types`; **17 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
 
 ### Make targets — [`Makefile`](../Makefile)
 
@@ -167,7 +167,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | [`tests/portal_admin_e2e.py`](../tests/portal_admin_e2e.py) | Live pytest e2e (not CI) |
 | `Specific/` | Runtime state — only named lock/secret/log files are gitignored (see §7) |
 | [`config/configuration.yaml.dist`](../config/configuration.yaml.dist) | Committed YAML template; live `config/configuration.yaml` is gitignored |
-| [`docs/`](../docs) | Architecture, compose templates, local/gitignored plans |
+| [`docs/`](../docs) | Operator guide ([`DEPLOYMENT.md`](DEPLOYMENT.md)), architecture, security, compose templates, local/gitignored plans |
 | [`.github/workflows`](../.github/workflows) | `ci.yml`, `docker.yml` |
 | [`.github/agents`](../.github/agents) | Copilot/agent personas (`test-engineer`, `researcher`) |
 | [`.github/instructions`](../.github/instructions) | Shared coding instructions |
@@ -320,8 +320,9 @@ Inside `App::handle()` / `dispatch()`:
 4. **State-changing gate** for `POST|PUT|PATCH|DELETE`: `assertSameOrigin()` → session check (401) → `assertCsrf()`. GET never CSRF-checks. `/logout` is special-cased here.
 5. `GET /me` (or `GET /`) — HTTP **200** with `user: null` when anonymous (avoids a spurious 401 on first paint).
 6. **Admin gate:** path `/admin` or `/admin/*` → `AdminAuth::requireAdmin()` → `dispatchAdminRoutes()`. This is the only admin entry.
-7. `Auth::requireUser()`. `POST /me/password` changes that user's DAV digest (`Auth::changePassword`) and returns `{"ok":true}`. Then route modules in order: **calendars → contacts → files → items**.
-8. Fallthrough → `ApiException('Not found', 404)`.
+7. `GET /sync-status` → `SyncStatusService::get()`. Uses `Auth::peekUser()` (does **not** extend the idle timeout) and releases the session lock first. Query `includeFiles`, `path`.
+8. `Auth::requireUser()`. `POST /me/password` changes that user's DAV digest (`Auth::changePassword`) and returns `{"ok":true}`. Then route modules in order: **calendars → contacts → files → items**.
+9. Fallthrough → `ApiException('Not found', 404)`.
 
 **Pattern:** all three `Http/*Routes` modules share `dispatch(string $method, string $path, string $username): array|list|null`. `null` means “not mine”. **No module touches auth or CSRF** — that already happened in `App::dispatch()`.
 
@@ -480,6 +481,7 @@ Admin routes:
 | `PortalMeta` | [`PortalMeta.php`](../Core/Frameworks/Baikal/Portal/PortalMeta.php) | Per-instance `readOnly` / `holidaysCountry` in `Specific/portal_meta.json`; also enforced by `ReadOnlyPlugin` for DAV |
 | `Holidays` | [`Holidays.php`](../Core/Frameworks/Baikal/Portal/Holidays.php) | Holiday country list + import |
 | `NoteDescriptionFormat` | [`NoteDescriptionFormat.php`](../Core/Frameworks/Baikal/Portal/NoteDescriptionFormat.php) | VJOURNAL HTML ↔ Markdown (jtx Board) |
+| `SyncStatusService` | [`SyncStatusService.php`](../Core/Frameworks/Baikal/Portal/SyncStatusService.php) | Cheap revision snapshot (calendar/address book `synctoken`s, optional files fingerprint) for the portal background-sync poller; poll interval `portal_sync_poll_seconds` (default 30, clamped 10–300) |
 
 ### Installer — [`Core/Frameworks/Baikal/Portal/Install`](../Core/Frameworks/Baikal/Portal/Install)
 
@@ -534,6 +536,7 @@ user event → events.ts (delegated) → onAction.ts → domain *ActionsRouter
 | [`contactsApi.ts`](../portal/src/api/contactsApi.ts) | address books, contacts, VCF |
 | [`itemsApi.ts`](../portal/src/api/itemsApi.ts) | tasks + notes |
 | [`filesApi.ts`](../portal/src/api/filesApi.ts) | files; uploads via XHR (progress) using CSRF helpers directly |
+| [`syncApi.ts`](../portal/src/api/syncApi.ts) | `/sync-status` poll. `client.ts` treats it as idle-exempt (does not extend the client idle timer) |
 | [`../api.ts`](../portal/src/api.ts) | Barrel: spreads domain objects into one flat `api` |
 
 **Pattern:** each domain client is `export const <domain>Api = { … }` of arrow functions returning `request<T>()` with an inline generic. Callers write `api.tasks()`, `api.filesList()`, `api.adminUsers()`. Never `fetch()` from feature code.
@@ -575,7 +578,7 @@ Unused host parameters are prefixed `_` (`noUnusedParameters`).
 
 ### Domain inventories
 
-Source file counts (excluding `*.test.ts`): **calendars 17**, **files 17**, **admin 13**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
+Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **admin 13**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
 
 **Admin** [`portal/src/app/admin/`](../portal/src/app/admin) — Overview / Settings / Users / Database / Configuration.
 
@@ -605,7 +608,7 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 17**, **ad
 
 **Notes** [`portal/src/app/notes/`](../portal/src/app/notes) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `editor.ts`, `html.ts` (`sanitizeNoteHtml`).
 
-**Files** [`portal/src/app/files/`](../portal/src/app/files) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `listing.ts`, `transfer.ts`, `upload.ts`, `preview.ts`, `previewKind.ts`, `itemMenu.ts`, `itemMenuModel.ts`, `officePreview.ts`, `officeXml.ts`, `zip.ts`, `bind.ts`.
+**Files** [`portal/src/app/files/`](../portal/src/app/files) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `listing.ts`, `transfer.ts`, `upload.ts`, `preview.ts`, `previewKind.ts`, `itemMenu.ts`, `itemMenuModel.ts`, `officePreview.ts`, `officeXml.ts`, `zip.ts`, `bind.ts`, `stateReset.ts`.
 
 ### Top-level `portal/src/app/*.ts`
 
@@ -622,6 +625,9 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 17**, **ad
 | [`routing.ts`](../portal/src/app/routing.ts) | Hash `#admin`, `#admin/{page}`, `#admin/users/{user}` |
 | [`navigation.ts`](../portal/src/app/navigation.ts) | `loadHome` / `activateTab` / `normalizeActiveTab` |
 | [`bootstrap.ts`](../portal/src/app/bootstrap.ts) | `/api/install/status` → `/api/ui` → `/api/me` |
+| [`backgroundSync.ts`](../portal/src/app/backgroundSync.ts) | Polls `/api/sync-status` while a tab is visible; toasts when the active domain changed out-of-band (never auto-refreshes) |
+| [`backgroundSyncDiff.ts`](../portal/src/app/backgroundSyncDiff.ts) | Pure compare/clamp helpers for background sync (unit-tested) |
+| [`confirmRefresh.ts`](../portal/src/app/confirmRefresh.ts) | Confirm before Refresh discards an open editor |
 | [`home.ts`](../portal/src/app/home.ts) | Signed-in shell; `layout-*` + `cal-modal-open` body classes |
 | [`shell.ts`](../portal/src/app/shell.ts) | Topnav / tabs / footer |
 | [`shellActionsRouter.ts`](../portal/src/app/shellActionsRouter.ts) | Chrome actions |
@@ -655,9 +661,9 @@ All list/tab HTML is template literals with `esc()` on interpolated values. Even
 | File:line | Site |
 |---|---|
 | [`home.ts:107`](../portal/src/app/home.ts) | Page chrome + tab |
-| [`overlays.ts:76`](../portal/src/app/overlays.ts) | Overlay slot |
-| [`login.ts:43`](../portal/src/app/login.ts) | Login shell |
-| [`infoModal.ts:16`](../portal/src/app/infoModal.ts) | Help paragraphs |
+| [`overlays.ts:79`](../portal/src/app/overlays.ts) | Overlay slot |
+| [`login.ts:44`](../portal/src/app/login.ts) | Login shell |
+| [`infoModal.ts:14`](../portal/src/app/infoModal.ts) | Help paragraphs |
 | [`notes/editor.ts:165`](../portal/src/app/notes/editor.ts) | Note editor list-item unwrap |
 
 Note editor content is sanitized (`sanitizeNoteHtml`). Reads of `editor.innerHTML` in notes actions/html are not chrome writes.
@@ -703,7 +709,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 `Specific/` as a directory is **not** gitignored wholesale — only the named lock/secret/log files above. Portal logging never uses `error_log()` (php-fpm would tag `[error]`).
 
-**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, push block (`push_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
+**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
 
 **YAML `database` keys:** `encryption_key`, `backend` (`sqlite` \| `pgsql`), `sqlite_file`, `pgsql_host`, `pgsql_dbname`, `pgsql_username`, `pgsql_password`.
 
@@ -858,7 +864,7 @@ effective max = min(
 - [`html/portal/`](../html/portal) is generated — `make portal`, never hand-edit.
 - `Core/BuildInfo.php` is generated at image build and gitignored.
 - [`BaikalAdmin`](../Core/Frameworks/BaikalAdmin) is legacy; Formal web admin was removed.
-- [`docs/portal-*-plan.md`](portal-admin-configuration-plan.md), `docs/DEPLOYMENT.md`, `docs/IMPROVEMENTS.md` are gitignored local docs (see [`.gitignore`](../.gitignore)).
+- `docs/portal-*-plan.md` and `docs/IMPROVEMENTS.md` are gitignored local docs (see [`.gitignore`](../.gitignore)). [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) is the tracked operator guide.
 
 ---
 
@@ -912,7 +918,7 @@ Wire plugins in [`Server.php`](../Core/Frameworks/Baikal/Core/Server.php). Keep 
 |---|---|---|
 | PHP | `make php-test`, or `php tests/php/<File>.php` | Standalone scripts, **not** PHPUnit |
 | Static | `composer phpstan`, `composer cs-fixer` | `composer test` = these two only |
-| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 14 files listed in `package.json` |
+| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 17 files listed in `package.json` |
 | E2E | `pytest tests/portal_admin_e2e.py -v` | Live instance only; `make local-up` first |
 
 ### Standalone PHP test convention
@@ -930,7 +936,7 @@ Observed in every `tests/php/*.php` file (canonical: [`AdminSettingsServiceTest.
 
 Do **not** introduce PHPUnit/Pest or a shared test base class.
 
-### PHP test files (32)
+### PHP test files (36)
 
 | File | Covers |
 |---|---|
@@ -946,8 +952,11 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `AdminUserServiceTest.php` | User CRUD |
 | `AngaraEnvPrecedenceTest.php` | `ANGARA_*` vs YAML |
 | `ApiExceptionTest.php` | Status + payload |
+| `AuthPasswordChangeTest.php` | Self-service `POST /me/password` |
+| `AuthSessionIdleTest.php` | `peekUser` does not extend idle; expired idle → 401 |
 | `CalendarItemServiceTest.php` | Tasks/notes |
 | `CalendarTimeZoneResolveTest.php` | Patched timezone helper |
+| `ConfigPersistUpgradeTest.php` | Upgrade keeps unmodelled `system` keys |
 | `ContactServiceTest.php` | Contacts + `X-BAIKAL-CUSTOM` |
 | `FileDownloadRateLimiterTest.php` | Download limiter |
 | `FileHomeStorageTest.php` | HomeStorage safety |
@@ -964,12 +973,13 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `ReadOnlyPluginTest.php` | CalDAV read-only |
 | `SameOriginTest.php` | Origin/Referer gate |
 | `ServerExceptionLoggingTest.php` | DAV exception logger |
+| `SyncStatusServiceTest.php` | Background-sync revision snapshot |
 | `UpgradeGateTest.php` | Framework install/upgrade gate |
 | `VersionCompareTest.php` | `baikal_needs_upgrade` |
 
 ### Portal tests vs `package.json`
 
-All **14** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
+All **17** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
 
 E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib `urllib` + `CookieJar` and synthesizes `Origin`/`Referer` plus `X-CSRF-Token`. Env: `BAIKAL_BASE_URL`, `PORTAL_TEST_ADMIN_PASSWORD`. Skips when no server or `PORTAL_E2E=0`. Disposable local instances only.
 

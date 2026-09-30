@@ -49,14 +49,7 @@
 #      Grant Admin: PORTAL_ADMIN_USERS=alice,bob  or  system.portal_admin_users in configuration.yaml
 #      Default if unset: DAV user named "admin".
 #      Classic /admin/ only redirects to /portal/ (no separate Formal UI).
-#      See docs/DEPLOYMENT.md → Portal Administration
-#
-# Bug fixes in 0.11.1-fork.4 (summary): shared calendars selectable; import progress
-#   no longer aborts at start or 5m timeout; skip-chown startup; fast bulk import;
-#   no duplicate import banners under modal Import/export (progress dialog + top flash only);
-#   idle session timeout returns to Sign in (no leftover dashboard data).
-#   Full list: docs/DEPLOYMENT.md → Release notes → 0.11.1-fork.4
-#   Classic backup UI: /dav.php/
+#      See docs/DEPLOYMENT.md → Administration
 #
 # Home Assistant CalDAV:
 #   URL:  http://NAS-IP:31088/dav.php/  (prefer HTTPS via reverse proxy)
@@ -89,7 +82,7 @@
 #   Time format / week start — Admin → System settings (not compose env)
 #   ANGARA_PUSH_EXTERNAL_URL=https://dav.example.com/dav.php/
 #                              — required canonical HTTPS URL when WebDAV-Push
-#                                is enabled in Admin -> AngaraDAV Settings
+#                                is enabled in Admin -> System settings
 #   PUSH_LOG_LEVEL=debug       — temporary Push diagnostics in
 #                                Specific/push_debug.log (default off)
 #   ANGARA_FILES_STORAGE_PATH=/var/lib/baikal-files
