@@ -6,6 +6,9 @@
 - **Administration → Subscriptions** is shown only while WebDAV-Push is on. It lists each subscription (user, kind, resource, a short endpoint hint, triggers, created, and expires) and does not show the endpoint URL, registration token, or keys. Remove deletes the chosen rows after confirmation, which stops notifications to those devices. The device registers again the next time it sets up WebDAV-Push. Remove expired clears rows that are already past their expiry. Turning WebDAV-Push off hides the tab, and the API answers 404.
 - Created and Expires on that tab follow the System settings clock (12-hour, 24-hour, or automatic). Resource and Endpoint stay in their own columns, and the checkbox column is narrow.
 
+### Docs
+- Removed `docs/ARCHITECTURE.md`. The path-level inventory is [docs/architecture-and-conventions.md](docs/architecture-and-conventions.md).
+
 ## 2.5.5 — 2026-10-01
 
 ### WebDAV-Push

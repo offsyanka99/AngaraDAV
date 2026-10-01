@@ -109,7 +109,7 @@ make php-test      # tests/php/*.php
 
 Portal SPA: `portal/` (Vite). PHP API: `Core/Frameworks/Baikal/Portal/`. Keep `portal/node_modules` owned by your user (root-owned trees break Vite with EACCES on `.vite-temp`).
 
-More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/local.compose.yaml) · [Architecture](docs/ARCHITECTURE.md) · [Architecture and conventions](docs/architecture-and-conventions.md)
+More: [portal/README.md](portal/README.md) · [docs/local.compose.yaml](docs/local.compose.yaml) · [Architecture and conventions](docs/architecture-and-conventions.md)
 
 ---
 

@@ -2,7 +2,7 @@
 
 Inspected snapshot of the repository as it exists on disk (product version `2.5.6` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
-Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
+Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
 ---
 
@@ -1031,4 +1031,3 @@ Recorded as facts, not recommendations:
 - General coding instructions under [`.github/instructions`](../.github/instructions) still mention Nx/Storybook/spec.tsx patterns that this repo does not use; portal tests are `*.test.ts` + `node:test`.
 - [`SECURITY.md`](SECURITY.md) tells operators to set `ANGARA_LOCK_INSTALL=1`. PHP reads that name only.
 - WebDAV Basic auth is per-IP rate-limited in `PDOBasicAuth`; portal login (`Auth`) and admin password changes (`AdminUserService`) are rate-limited too. Self-service password changes (`Auth::changePassword`) allow 5 successes / 900 s per username (`Specific/portal_self_password_rate.json`). A wrong current password shares the login limiter and returns **400**. File download/view uses the same 20/900 s ceiling.
-- [ARCHITECTURE.md](ARCHITECTURE.md) is a shorter overview of the same ground. Stale counts there (CI “14 of 31” PHP tests; `Specific/` described as wholly gitignored) are superseded by this file.
