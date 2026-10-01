@@ -7,6 +7,7 @@ import { esc } from "../../ui";
 import { timezoneSelectOptions } from "../../timezones";
 import { infoIconHtml, infoTitle } from "../sectionInfo";
 import { clampPollSeconds, setBackgroundSyncInterval } from "../backgroundSync";
+import { canEnableFilesPush } from "./filesPushToggle";
 import type { AdminHost } from "./host";
 import {
   adminComingSoonBanner,
@@ -33,8 +34,9 @@ export function renderAdminSettingsShell(host: AdminHost): string {
   if (!s) {
     return `<section class="card"><p class="muted">No settings loaded.</p></section>`;
   }
-  const check = (name: string, on: boolean, label: string) =>
-    `<label class="check-row"><input type="checkbox" name="${esc(name)}" ${on ? "checked" : ""} ${host.state.busy || s.writable === false ? "disabled" : ""} /> ${esc(label)}</label>`;
+  const check = (name: string, on: boolean, label: string, unavailable = false) =>
+    `<label class="check-row"><input type="checkbox" name="${esc(name)}" ${on ? "checked" : ""} ${host.state.busy || s.writable === false || unavailable ? "disabled" : ""} /> ${esc(label)}</label>`;
+  const filesPushAvailable = canEnableFilesPush(!!s.push_enabled, !!s.files_enabled);
   const num = (name: string, val: number | undefined, label: string, help = "", attrs = "") =>
     `<label>${esc(label)}
       <input type="number" name="${esc(name)}" value="${esc(String(val ?? 0))}" ${attrs} ${host.state.busy || s.writable === false ? "disabled" : ""} />
@@ -143,22 +145,22 @@ export function renderAdminSettingsShell(host: AdminHost): string {
             ${host.state.busy || s.writable === false ? "disabled" : ""} />
         </label>
 
-        <h3 class="admin-subsection-title">WebDAV-Push</h3>
+        <h3 class="admin-subsection-title">WebDAV-Push ${infoIconHtml(
+          {
+            title: "WebDAV-Push for files",
+            paragraphs: [
+              "Notifies subscribed devices when files or folders change in a user's WebDAV file home, whether the change came from a DAV client or this portal.",
+              "Takes effect only while WebDAV-Push and WebDAV file storage are both enabled. A device subscribes to a folder and hears about changes anywhere below it.",
+              "Changes are grouped: one notification about 5 seconds after a burst of changes ends, and at most one every 30 seconds per folder while changes continue.",
+            ],
+          },
+          "About WebDAV-Push for files",
+        )}</h3>
         ${check("push_enabled", !!s.push_enabled, "Enable WebDAV-Push")}
-        <div style="display:flex;align-items:center;gap:0.5rem">
-          ${check("push_files_enabled", !!s.push_files_enabled, "Enable WebDAV-Push for file storage")}
-          ${infoIconHtml(
-            {
-              title: "WebDAV-Push for files",
-              paragraphs: [
-                "Notifies subscribed devices when files or folders change in a user's WebDAV file home, whether the change came from a DAV client or this portal.",
-                "Takes effect only while WebDAV-Push and WebDAV file storage are both enabled. A device subscribes to a folder and hears about changes anywhere below it.",
-                "Changes are grouped: one notification about 5 seconds after a burst of changes ends, and at most one every 30 seconds per folder while changes continue.",
-              ],
-            },
-            "About WebDAV-Push for files",
-          )}
-        </div>
+        ${check("push_files_enabled", !!s.push_files_enabled, "Enable WebDAV-Push for file storage", !filesPushAvailable)}
+        <p class="muted small" data-files-push-hint ${filesPushAvailable ? "hidden" : ""}>
+          Turn on <strong>Enable WebDAV-Push</strong> and <strong>Enable WebDAV file storage</strong> to use this.
+        </p>
         ${num(
           "push_max_subscriptions_per_principal",
           s.push_max_subscriptions_per_principal ?? 50,
@@ -211,7 +213,6 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     notes_enabled: bool("notes_enabled"),
     files_enabled: bool("files_enabled"),
     push_enabled: bool("push_enabled"),
-    push_files_enabled: bool("push_files_enabled"),
     portal_admin_ui_enabled: bool("portal_admin_ui_enabled"),
     timezone: String(fd.get("timezone") ?? "").trim(),
     invite_from: String(fd.get("invite_from") ?? "").trim(),
@@ -232,6 +233,11 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
   };
   const pw = String(fd.get("admin_password") ?? "");
   const pwc = String(fd.get("admin_password_confirm") ?? "");
+  // A disabled file-push checkbox is left out, so the server keeps the stored choice.
+  const filesPush = form.querySelector<HTMLInputElement>('input[name="push_files_enabled"]');
+  if (filesPush && !filesPush.disabled) {
+    body.push_files_enabled = filesPush.checked;
+  }
   if (pw !== "" || pwc !== "") {
     body.admin_password = pw;
     body.admin_password_confirm = pwc;

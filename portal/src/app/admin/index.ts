@@ -38,6 +38,7 @@ export {
   renderAdminSettingsShell,
   onAdminSettingsSave,
 } from "./settings";
+export { syncFilesPushToggle } from "./filesPushToggle";
 export {
   renderAdminConfigurationShell,
   renderAdminResetModal,

@@ -2,6 +2,9 @@
 
 ## 2.5.3 — 2026-09-30
 
+### Portal
+- **System settings:** *Enable WebDAV-Push for file storage* is greyed out until both *Enable WebDAV-Push* and *Enable WebDAV file storage* are checked, with a hint saying so. It becomes available as soon as both are checked, before saving. While it is greyed out, saving keeps its stored value.
+
 ### WebDAV-Push
 - **Push for file storage (opt-in).** Admin → System settings → *Enable WebDAV-Push for file storage*. Works only while WebDAV-Push and WebDAV file storage are both on. A device subscribes to a folder under `/dav.php/files/{user}/` and is notified about changes anywhere below it, made through DAV clients or the portal. Notifications are grouped: about 5 seconds after a burst ends, at most one every 30 seconds per folder.
 - **Max push subscriptions per user** is now editable in System settings. The default for new installs is 50 (was 20); existing installs keep the value in their `configuration.yaml`.

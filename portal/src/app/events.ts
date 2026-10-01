@@ -221,6 +221,15 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     return;
   }
 
+  if (
+    el instanceof HTMLInputElement &&
+    (el.name === "push_enabled" || el.name === "files_enabled") &&
+    el.form?.dataset.form === "admin-settings"
+  ) {
+    admin.syncFilesPushToggle(el.form);
+    return;
+  }
+
   if (action === "admin-restore-file" && el instanceof HTMLInputElement) {
     const file = el.files?.[0] ?? null;
     el.value = "";
