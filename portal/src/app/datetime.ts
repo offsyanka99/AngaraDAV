@@ -152,6 +152,23 @@ export function timeFormatOpts(timeFormat: TimeFormatPref): Intl.DateTimeFormatO
     : { hour: "2-digit", minute: "2-digit", hour12: false };
 }
 
+/** Unix seconds as a local date plus the System settings clock (12h, 24h, or auto). */
+export function formatUnixDateTime(ts: number, timeFormat: TimeFormatPref): string {
+  if (!ts) return "—";
+  try {
+    const d = new Date(ts * 1000);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      ...timeFormatOpts(timeFormat),
+    });
+  } catch {
+    return "—";
+  }
+}
+
 /** Locale first day of week: 0=Sunday … 6=Saturday (Date.getDay() style). */
 export function localeWeekStart(weekStart: WeekStartPref): number {
   if (weekStart === "monday") return 1;

@@ -2,7 +2,7 @@
  * Administration → Subscriptions. Shown only while WebDAV-Push is on.
  */
 import { esc } from "../../ui";
-import { formatMtime } from "../format";
+import { formatUnixDateTime } from "../datetime";
 import { infoIconHtml } from "../sectionInfo";
 import type { AdminHost } from "./host";
 import { adminPageMeta, adminStatusBadgeClass, adminStatusLabel } from "./meta";
@@ -19,6 +19,7 @@ export function renderAdminSubscriptionsShell(host: AdminHost): string {
   const rows = data?.subscriptions ?? [];
   const error = host.state.adminSubscriptionsError;
   const showExpired = host.state.adminSubscriptionsShowExpired;
+  const timeFormat = host.state.portalUi.timeFormat;
   const selected = new Set(host.state.adminSubscriptionSelection);
   const busy = host.state.busy;
   const allChecked = rows.length > 0 && rows.every((row) => selected.has(row.id));
@@ -40,17 +41,17 @@ export function renderAdminSubscriptionsShell(host: AdminHost): string {
             .map((row) => {
               const checked = selected.has(row.id) ? " checked" : "";
               return `<tr class="${row.expired ? "admin-subscription-expired" : ""}">
-                <td>
+                <td class="admin-sub-check">
                   <input type="checkbox" name="admin-subscription-check" data-id="${row.id}"${checked}
                     aria-label="Select subscription for ${esc(row.username)}" ${busy ? "disabled" : ""} />
                 </td>
                 <td class="mono">${esc(row.username)}</td>
                 <td>${esc(subscriptionKindLabel(row.kind))}</td>
-                <td class="mono">${esc(row.resourceUri)}</td>
-                <td class="mono">${esc(endpointDisplay(row.endpointHost, row.endpointHint))}</td>
+                <td class="mono admin-sub-clip">${esc(row.resourceUri)}</td>
+                <td class="mono admin-sub-clip">${esc(endpointDisplay(row.endpointHost, row.endpointHint))}</td>
                 <td class="hide-sm">${esc(triggerDisplay(row.contentDepth, row.propertyDepth))}</td>
-                <td class="hide-sm">${esc(formatMtime(row.created))}</td>
-                <td class="hide-sm">${esc(formatMtime(row.expires))}</td>
+                <td class="hide-sm">${esc(formatUnixDateTime(row.created, timeFormat))}</td>
+                <td class="hide-sm">${esc(formatUnixDateTime(row.expires, timeFormat))}</td>
                 <td>
                   <button type="button" class="btn btn-ghost btn-small btn-danger-text"
                     data-action="admin-subscription-delete" data-id="${row.id}" ${busy ? "disabled" : ""}>Remove</button>
@@ -87,10 +88,10 @@ export function renderAdminSubscriptionsShell(host: AdminHost): string {
         <span class="muted small">${esc(String(rows.length))} subscription${rows.length === 1 ? "" : "s"}${selected.size > 0 ? `, ${selected.size} selected` : ""}</span>
       </div>
       <div class="contacts-table-wrap admin-table-placeholder">
-        <table class="contacts-table">
+        <table class="contacts-table admin-subscriptions-table">
           <thead>
             <tr>
-              <th>
+              <th class="admin-sub-check">
                 <input type="checkbox" name="admin-subscription-select-all" ${allChecked ? "checked" : ""}
                   aria-label="Select all subscriptions" ${busy || rows.length === 0 ? "disabled" : ""} />
               </th>
