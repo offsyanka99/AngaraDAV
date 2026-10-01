@@ -42,8 +42,12 @@ function assert_true(bool $cond, string $msg): void {
     ++$failures;
 }
 
-class NullSapi extends \Sabre\HTTP\Sapi {
+class RecordingSapi extends \Sabre\HTTP\Sapi {
+    /** @var ResponseInterface|null */
+    public static $sent;
+
     public static function sendResponse(ResponseInterface $response) {
+        self::$sent = $response;
     }
 }
 
@@ -111,7 +115,7 @@ $subscriptions = new SubscriptionStorage($pdo, new SecretCipher(ENCRYPTION_KEY))
  *
  * @param array<string, string> $headers
  *
- * @return array{0: Response, 1: FilesPushPluginProbe}
+ * @return array{0: Response, 1: FilesPushPluginProbe, 2: ResponseInterface|null} [2] is what the client received
  */
 function dav(
     string $user,
@@ -127,7 +131,7 @@ function dav(
     $server = new \Sabre\DAV\Server([
         new \Sabre\CalDAV\Principal\Collection($principalBackend),
         new HomeCollection($principalBackend, new HomeRepository($pdo, $fileConfig), $fileConfig),
-    ], new NullSapi());
+    ], new RecordingSapi());
     $server->setBaseUri('/dav.php/');
     $server->addPlugin(new \Sabre\DAV\Auth\Plugin(
         new \Sabre\DAV\Auth\Backend\BasicCallBack(static fn (string $u, string $p): bool => true)
@@ -150,10 +154,14 @@ function dav(
     $url = '/dav.php/' . implode('/', array_map('rawurlencode', explode('/', $path)));
     $server->httpRequest = new Request($method, $url, $headers, $body);
     $server->httpResponse = new Response();
+    RecordingSapi::$sent = null;
     $server->start();
     $plugin->flush();
+    if (RecordingSapi::$sent === null) {
+        assert_true(false, "$method $path sends a response to the client");
+    }
 
-    return [$server->httpResponse, $plugin];
+    return [$server->httpResponse, $plugin, RecordingSapi::$sent];
 }
 
 function status(string $user, string $method, string $path, array $headers = [], ?string $body = null): int {
@@ -218,8 +226,24 @@ function register_body(string $endpoint): string {
         . '</push-register>';
 }
 
-function register(string $user, string $path, string $endpoint, bool $filesEnabled = true): Response {
-    return dav($user, 'POST', $path, ['Content-Type' => 'application/xml'], register_body($endpoint), $filesEnabled)[0];
+function register(string $user, string $path, string $endpoint, bool $filesEnabled = true): ?ResponseInterface {
+    return dav($user, 'POST', $path, ['Content-Type' => 'application/xml'], register_body($endpoint), $filesEnabled)[2];
+}
+
+function post_register(string $user, string $path, string $body): ?ResponseInterface {
+    return dav($user, 'POST', $path, ['Content-Type' => 'application/xml'], $body)[2];
+}
+
+function unregister(string $user, string $token): ?ResponseInterface {
+    return dav($user, 'DELETE', PushPlugin::REG_PREFIX . $token)[2];
+}
+
+function registration_token(?ResponseInterface $response): string {
+    $location = (string) $response?->getHeader('Location');
+
+    return str_starts_with($location, EXTERNAL_URL . PushPlugin::REG_PREFIX)
+        ? substr($location, strlen(EXTERNAL_URL . PushPlugin::REG_PREFIX))
+        : '';
 }
 
 function lock_body(): string {
@@ -299,12 +323,17 @@ try {
     assert_true(push_prop('files/', 'topic') === null, 'the files/ root is not push-capable');
     assert_true(push_prop('files/alice/Sync', 'topic', false) === null, 'directories are not push-capable while files push is off');
 
-    // --- Registration ---
+    // --- Registration (asserts on what the client receives, not on $server->httpResponse) ---
     $registered = register('alice', 'files/alice/Sync', 'sync-1');
-    assert_true((int) $registered->getStatus() === 204, 'register on a directory returns 204');
+    assert_true((int) $registered?->getStatus() === 204, 'register on a directory returns 204');
+    $syncToken = registration_token($registered);
     assert_true(
-        str_starts_with((string) $registered->getHeader('Location'), EXTERNAL_URL . PushPlugin::REG_PREFIX),
-        'register returns an absolute registration URL'
+        (bool) preg_match('#^[A-Za-z0-9_-]{43}$#', $syncToken),
+        'register returns an absolute registration URL ending in a 43-char token'
+    );
+    assert_true(
+        (int) strtotime((string) $registered?->getHeader('Expires')) > time(),
+        'register returns a future Expires header'
     );
     $active = $subscriptions->findActiveByResource('files/alice/Sync');
     assert_true(count($active) === 1, 'registration is stored on the decoded directory path');
@@ -313,24 +342,67 @@ try {
         'depth infinity is kept for directories'
     );
     assert_true($active[0]['topic'] === $topics->forPath('files/alice/Sync'), 'stored topic matches the advertised topic');
+    $renewed = register('alice', 'files/alice/Sync', 'sync-1');
+    assert_true(
+        (int) $renewed?->getStatus() === 204 && registration_token($renewed) === $syncToken,
+        're-registering the same push resource returns 204 and the same registration URL'
+    );
 
     $onFile = register('alice', 'files/alice/Sync/a.txt', 'file-1');
     assert_true(
-        (int) $onFile->getStatus() === 403 && str_contains($onFile->getBodyAsString(), 'push-not-available'),
+        (int) $onFile?->getStatus() === 403 && str_contains((string) $onFile?->getBodyAsString(), 'push-not-available'),
         'register on a file returns 403 push-not-available'
     );
+    $noSecret = post_register('alice', 'files/alice/Sync', (string) preg_replace('#<auth-secret>.*?</auth-secret>#', '', register_body('no-secret')));
+    assert_true(
+        (int) $noSecret?->getStatus() === 403 && str_contains((string) $noSecret?->getBodyAsString(), 'invalid-subscription'),
+        'register without an auth secret returns 403 invalid-subscription'
+    );
+    $contentOnly = str_replace('<property-update><D:depth>0</D:depth></property-update>', '', register_body('principal-1'));
+    $noTrigger = post_register('alice', 'principals/alice', $contentOnly);
+    assert_true(
+        (int) $noTrigger?->getStatus() === 403 && str_contains((string) $noTrigger?->getBodyAsString(), 'no-trigger-supported'),
+        'content-update on a principal returns 403 no-trigger-supported'
+    );
     $foreign = register('bob', 'files/alice/Sync', 'bob-1');
-    assert_true((int) $foreign->getStatus() === 403, "register on another user's directory returns 403");
+    assert_true((int) $foreign?->getStatus() === 403, "register on another user's directory returns 403");
     $bobRows = $pdo->query("SELECT COUNT(*) FROM push_subscriptions WHERE principaluri = 'principals/bob'")->fetchColumn();
     assert_true((int) $bobRows === 0, "no subscription is stored for another user's directory");
     $disabled = register('alice', 'files/alice/Sync', 'off-1', false);
     assert_true(
-        (int) $disabled->getStatus() === 403 && str_contains($disabled->getBodyAsString(), 'push-not-available'),
+        (int) $disabled?->getStatus() === 403 && str_contains((string) $disabled?->getBodyAsString(), 'push-not-available'),
         'register returns push-not-available while files push is off'
     );
+    for ($i = 0; $i < 50; ++$i) {
+        $subscriptions->upsert([
+            'principaluri'     => 'principals/bob',
+            'resource_uri'     => 'files/bob',
+            'topic'            => $topics->forPath('files/bob'),
+            'push_resource'    => 'https://push.example.test/quota-' . $i,
+            'content_encoding' => 'aes128gcm',
+            'pubkey'           => 'PUB',
+            'auth_secret'      => 'SECRET',
+            'triggers'         => json_encode(['content' => 'infinity', 'property' => '0']),
+            'expires'          => time() + 3600,
+        ]);
+    }
+    $overQuota = register('bob', 'files/bob', 'quota-new');
+    assert_true(
+        (int) $overQuota?->getStatus() === 429 && $overQuota?->getHeader('Retry-After') === '3600',
+        'register over the per-user quota returns 429 with Retry-After 3600'
+    );
+    $pdo->exec("DELETE FROM push_subscriptions WHERE principaluri = 'principals/bob'");
     $lock = dav('alice', 'LOCK', 'files/alice/Locked', ['Content-Type' => 'application/xml', 'Depth' => 'infinity'], lock_body())[0];
     assert_true((int) $lock->getStatus() === 200, 'LOCK on a directory succeeds');
-    assert_true((int) register('alice', 'files/alice/Locked', 'locked-1')->getStatus() === 204, 'register on a locked directory succeeds');
+    assert_true((int) register('alice', 'files/alice/Locked', 'locked-1')?->getStatus() === 204, 'register on a locked directory succeeds');
+
+    // --- Unregistration ---
+    assert_true((int) unregister('alice', str_repeat('Z', 43))?->getStatus() === 404, 'DELETE of an unknown registration returns 404');
+    assert_true((int) unregister('bob', $syncToken)?->getStatus() === 404, "DELETE of another user's registration returns 404");
+    assert_true($subscriptions->findByToken($syncToken) !== null, "another user's DELETE keeps the registration");
+    assert_true((int) unregister('alice', $syncToken)?->getStatus() === 204, 'DELETE of own registration returns 204');
+    assert_true($subscriptions->findByToken($syncToken) === null, 'DELETE of own registration removes it');
+    assert_true((int) unregister('alice', $syncToken)?->getStatus() === 404, 'DELETE of an already removed registration returns 404');
 
     // --- Change capture for each DAV method (plan section 6) ---
     $pdo->exec('DELETE FROM push_subscriptions');

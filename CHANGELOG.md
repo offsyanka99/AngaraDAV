@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.4 — 2026-10-01
+
+### WebDAV-Push
+- Push registration and unregistration responses (`Location`, `Expires`, error bodies, `Retry-After`) now reach the client. Before, clients got an empty `200` even when the server stored or removed the subscription, so DAVx⁵ could not renew or unregister in place and WebDAV-sync rejected the registration. Clients pick up working registrations on their next push setup; orphan subscriptions from before expire on their own.
+
 ## 2.5.3 — 2026-09-30
 
 ### Portal

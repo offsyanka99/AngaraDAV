@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.3`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.4`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 

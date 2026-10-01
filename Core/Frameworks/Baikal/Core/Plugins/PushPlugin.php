@@ -144,7 +144,8 @@ class PushPlugin extends ServerPlugin {
 
         // Registration/removal routes: run right after auth (priority 10), before
         // ACL/CalDAV so our synthetic push-subscriptions/* URLs aren't 404'd by
-        // node resolution. Returning false short-circuits the request.
+        // node resolution. Handlers send the response themselves, then return
+        // false to short-circuit the request.
         $server->on('beforeMethod:POST', [$this, 'onBeforePost'], 11);
         $server->on('beforeMethod:DELETE', [$this, 'onBeforeDelete'], 11);
 
@@ -242,7 +243,7 @@ class PushPlugin extends ServerPlugin {
         }
         $this->handleRegister($request, $response, $parsed);
 
-        return false;
+        return $this->handled($response);
     }
 
     /**
@@ -261,18 +262,27 @@ class PushPlugin extends ServerPlugin {
             $response->setStatus(404);
             $this->logger->info('unregister: unknown subscription');
 
-            return false;
+            return $this->handled($response);
         }
         if ($principal === null || (string) $sub['principaluri'] !== $principal) {
             // Deliberately indistinguishable from an unknown opaque token.
             $response->setStatus(404);
             $this->logger->warn('unregister: owner mismatch');
 
-            return false;
+            return $this->handled($response);
         }
         $this->storage->delete((int) $sub['id'], $principal);
         $response->setStatus(204);
         $this->logger->info('subscription removed', ['id' => (int) $sub['id']]);
+
+        return $this->handled($response);
+    }
+
+    /**
+     * Sabre does not send the response when a beforeMethod listener returns false.
+     */
+    protected function handled(ResponseInterface $response): bool {
+        $this->server->sapi->sendResponse($response);
 
         return false;
     }
