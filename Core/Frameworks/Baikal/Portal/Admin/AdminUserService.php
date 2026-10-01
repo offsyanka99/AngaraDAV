@@ -5,6 +5,7 @@ namespace Baikal\Portal\Admin;
 use Baikal\Core\Files\FileStorageConfig;
 use Baikal\Core\Files\HomeRepository;
 use Baikal\Core\Files\SchemaManager;
+use Baikal\Core\Plugins\Push\SubscriptionStorage;
 use Baikal\Portal\AdminAuth;
 use Baikal\Portal\ApiException;
 
@@ -385,6 +386,9 @@ class AdminUserService {
         $calendarPath = 'calendars/' . $username;
         $addressBookPath = 'addressbooks/' . $username;
         $filePath = 'files/' . $username;
+        // Probed before the transaction: on PostgreSQL a failing statement aborts the whole transaction.
+        $hasPushTables = $this->tableExists('push_subscriptions') && $this->tableExists('push_queue');
+        $hasFileHomes = $this->tableExists('file_homes');
 
         try {
             $this->pdo->beginTransaction();
@@ -432,6 +436,15 @@ class AdminUserService {
             $this->deleteDavPathPrefix('propertystorage', 'path', $principal);
             $this->deleteDavPathPrefix('locks', 'uri', $filePath);
 
+            if ($hasPushTables) {
+                // Also other principals' subscriptions on this user's collections, so a reused username inherits none.
+                (new SubscriptionStorage($this->pdo))->deleteByPrincipal($principal);
+                foreach ([$calendarPath, $addressBookPath, $filePath, $principal] as $prefix) {
+                    $this->deleteDavPathPrefix('push_subscriptions', 'resource_uri', $prefix);
+                    $this->deleteDavPathPrefix('push_queue', 'resource_uri', $prefix);
+                }
+            }
+
             $principalId = 0;
             try {
                 $pid = $this->pdo->prepare('SELECT id FROM principals WHERE uri = ?');
@@ -451,7 +464,7 @@ class AdminUserService {
             $this->pdo->prepare('DELETE FROM users WHERE username = ?')->execute([$username]);
 
             // Best-effort file home revoke when schema exists
-            if ($userId > 0) {
+            if ($userId > 0 && $hasFileHomes) {
                 $this->tryExec(
                     "UPDATE file_homes SET user_id = NULL, status = 'quarantined', quarantined_at = ? WHERE user_id = ?",
                     [time(), $userId]
@@ -467,12 +480,28 @@ class AdminUserService {
         }
     }
 
+    /**
+     * Delete rows at $prefix or below it.
+     */
     private function deleteDavPathPrefix(string $table, string $column, string $prefix): void {
-        $like = str_replace(['=', '%', '_'], ['==', '=%', '=_'], $prefix) . '/%';
+        // Exact compare: SQLite LIKE ignores ASCII case, but usernames are case-sensitive.
+        $below = $prefix . '/';
         $this->tryExec(
-            'DELETE FROM ' . $table . ' WHERE ' . $column . ' = ? OR ' . $column . " LIKE ? ESCAPE '='",
-            [$prefix, $like]
+            'DELETE FROM ' . $table . ' WHERE ' . $column . ' = ? OR substr(' . $column . ', 1, '
+            . mb_strlen($below, 'UTF-8') . ') = ?',
+            [$prefix, $below]
         );
+    }
+
+    /**
+     * $table is a fixed identifier from this class, never user input.
+     */
+    private function tableExists(string $table): bool {
+        try {
+            return $this->pdo->query('SELECT 1 FROM ' . $table . ' WHERE 1 = 0') !== false;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

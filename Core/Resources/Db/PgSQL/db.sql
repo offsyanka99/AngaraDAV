@@ -185,7 +185,10 @@ CREATE TABLE push_queue (
     suppressed_ids TEXT NOT NULL DEFAULT '[]',
     attempts INTEGER NOT NULL DEFAULT 0,
     available_at INTEGER NOT NULL,
-    created INTEGER NOT NULL
+    created INTEGER NOT NULL,
+    min_content_depth SMALLINT NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hold_since INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX push_queue_available ON push_queue (available_at);

@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.2`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.3`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 
@@ -307,22 +307,24 @@ A lock file prevents overlapping runs.
 
 ### Scope
 
-Private class-2 WebDAV drive: properties, locks, quotas, ranges, copy/move (passes WebDAV Litmus 0.13). Not provided: sharing between users, public links, trash/versions, full-text search, chunked-upload protocols, RFC 6578 sync for files, or WebDAV-Push for files.
+Private class-2 WebDAV drive: properties, locks, quotas, ranges, copy/move (passes WebDAV Litmus 0.13). Not provided: sharing between users, public links, trash/versions, full-text search, chunked-upload protocols, or RFC 6578 sync for files. WebDAV-Push for file folders is optional; see [WebDAV-Push](#webdav-push).
 
 ## WebDAV-Push
 
-Server-initiated CalDAV/CardDAV change notifications over Web Push (e.g. DAVx⁵). Enable **System settings → Enable WebDAV-Push** and set the external URL:
+Server-initiated change notifications over Web Push (e.g. DAVx⁵) for calendars, address books, and, if you opt in, WebDAV file folders. Enable **System settings → Enable WebDAV-Push** and set the external URL:
 
 ```yaml
 system:
   push_enabled: true
   push_external_url: 'https://dav.example.com/dav.php/'
+  # Also notify on WebDAV file changes (needs files_enabled too)
+  push_files_enabled: false
   push_log_level: 'off'
   # Strongly recommended: exact list of permitted push services (YAML only)
   # push_allowed_hosts:
   #   - updates.push.services.mozilla.com
   #   - fcm.googleapis.com
-  push_max_subscriptions_per_principal: 20
+  push_max_subscriptions_per_principal: 50
   push_max_subscriptions_per_resource: 100
   push_max_registrations_per_hour: 30
   push_worker_batch_size: 20
@@ -335,7 +337,11 @@ system:
 - DAV and portal writes enqueue jobs; a worker delivers them with retries. For shared calendars, one change notifies every owner/sharee instance.
 - Push endpoints must be public HTTPS on port 443 and are re-resolved before delivery (SSRF protection). Private/local push gateways are rejected.
 - Subscription material is encrypted with `database.encryption_key`. The VAPID key pair is generated once in `Specific/push_vapid.json` (mode `0600`); malformed key files make Push fail closed.
-- `push_debug.log` is mode `0600`, rotated at 5 MiB, and strips secrets and URL paths. At `info` it logs the change `source` (`dav` or `portal`) and, for DAV, the client `User-Agent`.
+- `push_debug.log` is mode `0600`, rotated at 5 MiB, and strips secrets and URL paths. At `info` it logs the change `source` (`dav` or `portal`) and, for DAV, the client `User-Agent`. File paths appear only at `debug`; below that, file jobs are identified by their topic.
+- **File storage.** **System settings → Enable WebDAV-Push for file storage** (`push_files_enabled`) adds Push to every folder under `/dav.php/files/{user}/`. It takes effect only while Push and file storage are both on. A client subscribes to a folder (usually its sync root) and is notified about changes anywhere below it, made by DAV clients or the portal. Only the owner can subscribe; files themselves are not push-capable. Notifications are grouped per folder: about 5 seconds after a burst of changes ends, at most one every 30 seconds while changes continue. Changes made directly on disk under the storage path are not detected.
+- **Subscription limit.** `push_max_subscriptions_per_principal` (**System settings → Max push subscriptions per user**, 1–1000) is shared by all of a user's devices, calendars, address books, and file folders. New installs default to 50. Installs from before 2.5.3 keep the `20` written in their `configuration.yaml`; raise it if clients get HTTP 429 when registering. Two phones with several calendars and a synced folder can already pass 20.
+- **Monitoring.** **Administration → Overview** shows whether Push for files is active, active subscriptions per kind, and the delivery queue (count and oldest age). An oldest queued notification that keeps getting older than a minute or two usually means the worker is not running.
+- Deleting a user removes their subscriptions and queued notifications, including other users' subscriptions on that user's collections.
 
 ### LAN-only servers
 
@@ -382,6 +388,9 @@ Run only one worker per `Specific/` directory (a lock file enforces this). Resta
 4. `PROPFIND` `transports`, `topic`, `supported-triggers` in the `https://bitfire.at/webdav-push` namespace.
 5. Rejected registrations: check the endpoint is public HTTPS:443, resolves to no private addresses, and is in `push_allowed_hosts` if configured.
 6. A second device on a shared calendar never wakes: at `info`, one write should log several `content notification enqueued` lines (one per instance). If not, update the image and restart the worker, then re-register Push in the client (e.g. toggle UnifiedPush in DAVx⁵).
+7. File folders show no Push properties: `PROPFIND` (Depth 0) on `/dav.php/files/{user}/` must return `supported-triggers` with `content-update` depth `infinity`. If it does not, check that **Enable WebDAV-Push**, **Enable WebDAV file storage**, and **Enable WebDAV-Push for file storage** are all on. Subscribe to a folder, not a file.
+8. Registration returns HTTP 429: the per-user subscription limit is reached. Raise **Max push subscriptions per user**.
+9. File topics are derived from `database.encryption_key`. Changing the key changes every file topic, and clients must register again.
 
 ## Installer lock
 
@@ -396,6 +405,7 @@ After install, `Specific/INSTALL_DISABLED` exists and `/portal/install/` reports
 
 - **Docker/TrueNAS:** pull the new image and **recreate** the container. Open `/portal/install/` if an upgrade is pending and confirm it. The upgrade updates `configured_version` and keeps the rest of `configuration.yaml`.
 - **From 2.4.x or older:** rename any `BAIKAL_*` env vars to `ANGARA_*` (see [Environment variables](#environment-variables)).
+- **To 2.5.3:** the push queue gains three columns automatically on first use (SQLite and PostgreSQL); no manual SQL. If you plan to use Push for file storage, raise **Max push subscriptions per user** (see [WebDAV-Push](#webdav-push)).
 - **Source installs:** `composer install` (requires the `patch` command; it applies [patches/](../patches/README.md)), rebuild the portal (`make portal`), then restart PHP-FPM and the Push worker.
 
 ## Source installs

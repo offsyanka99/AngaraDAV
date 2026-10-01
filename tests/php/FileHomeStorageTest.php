@@ -230,6 +230,20 @@ assert_true(
     'quarantine purge removes Unicode account file bytes'
 );
 
+// SQLite LIKE ignores ASCII case, but "bob" and "Bob" are different users.
+$pdo->exec("INSERT INTO users (username) VALUES ('bob'), ('Bob')");
+$bobId = (int) $pdo->query("SELECT id FROM users WHERE username = 'bob'")->fetchColumn();
+$repository->getOrCreateForPrincipal('principals/bob');
+$pdo->exec("INSERT INTO propertystorage (path) VALUES ('files/bob/x.txt'), ('files/Bob/keep.txt'), ('files/Bob')");
+$pdo->exec("INSERT INTO locks (uri) VALUES ('files/bob/x.txt'), ('files/Bob/keep.txt')");
+$repository->quarantineUser($bobId, 'principals/bob');
+assert_true((int) $pdo->query("SELECT COUNT(*) FROM propertystorage WHERE path = 'files/bob/x.txt'")->fetchColumn() === 0, 'quarantine removes the user\'s own properties');
+assert_true(
+    (int) $pdo->query("SELECT COUNT(*) FROM propertystorage WHERE path IN ('files/Bob/keep.txt', 'files/Bob')")->fetchColumn() === 2,
+    'property cleanup is case-sensitive'
+);
+assert_true((int) $pdo->query("SELECT COUNT(*) FROM locks WHERE uri = 'files/Bob/keep.txt'")->fetchColumn() === 1, 'lock cleanup is case-sensitive');
+
 $orphanDirectory = $purgeConfig->temporaryPath() . '/orphan';
 mkdir($orphanDirectory, 0700);
 $orphanFile = $orphanDirectory . '/abandoned.upload';

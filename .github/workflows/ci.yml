@@ -32,10 +32,22 @@ jobs:
         run: php tests/php/ContactServiceTest.php
       - name: WebDAV-Push unit test
         run: php tests/php/PushPluginTest.php
+      - name: WebDAV-Push queue merge unit test
+        run: php tests/php/PushQueueMergeTest.php
+      - name: WebDAV-Push file fan-out unit test
+        run: php tests/php/PushFilesFanoutTest.php
+      - name: WebDAV-Push file homes DAV test
+        run: php tests/php/PushFilesPluginTest.php
+      - name: WebDAV-Push file homes worker test
+        run: php tests/php/PushWorkerFilesTest.php
+      - name: WebDAV-Push worker authorization test
+        run: php tests/php/PushWorkerAuthorizationTest.php
       - name: WebDAV file-home unit test
         run: php tests/php/FileHomeStorageTest.php
       - name: Portal FileService unit test
         run: php tests/php/FileServiceTest.php
+      - name: Portal FileService WebDAV-Push unit test
+        run: php tests/php/FileServicePushTest.php
       - name: Portal file download rate-limit unit test
         run: php tests/php/FileDownloadRateLimiterTest.php
       - name: Portal same-origin unit test
@@ -46,6 +58,42 @@ jobs:
         run: php tests/php/ConfigPersistUpgradeTest.php
       - name: Admin security review unit test
         run: php tests/php/AdminSecurityReviewTest.php
+      - name: Admin audit unit test
+        run: php tests/php/AdminAuditTest.php
+      - name: Admin role unit test
+        run: php tests/php/AdminAuthTest.php
+      - name: Admin route authorization unit test
+        run: php tests/php/AdminAuthzRoutesTest.php
+      - name: Admin settings backup unit test
+        run: php tests/php/AdminBackupServiceTest.php
+      - name: Admin capabilities unit test
+        run: php tests/php/AdminCapabilitiesServiceTest.php
+      - name: Admin dashboard unit test
+        run: php tests/php/AdminDashboardServiceTest.php
+      - name: Admin settings unit test
+        run: php tests/php/AdminSettingsServiceTest.php
+      - name: Admin user resources unit test
+        run: php tests/php/AdminUserResourceServiceTest.php
+      - name: Admin users unit test
+        run: php tests/php/AdminUserServiceTest.php
+      - name: ANGARA_* env precedence unit test
+        run: php tests/php/AngaraEnvPrecedenceTest.php
+      - name: API exception unit test
+        run: php tests/php/ApiExceptionTest.php
+      - name: Portal session idle unit test
+        run: php tests/php/AuthSessionIdleTest.php
+      - name: Installer unit test
+        run: php tests/php/InstallServiceTest.php
+      - name: Note description format unit test
+        run: php tests/php/NoteDescriptionFormatTest.php
+      - name: Portal UI settings unit test
+        run: php tests/php/PortalUiSettingsTest.php
+      - name: Portal sync status unit test
+        run: php tests/php/SyncStatusServiceTest.php
+      - name: Upgrade gate unit test
+        run: php tests/php/UpgradeGateTest.php
+      - name: Version compare unit test
+        run: php tests/php/VersionCompareTest.php
       - name: Nginx CSP headers unit test
         run: php tests/php/NginxCspHeadersTest.php
       - name: Health endpoint unit test
@@ -98,3 +146,9 @@ jobs:
           BAIKAL_TEST_PGSQL_USER: baikal
           BAIKAL_TEST_PGSQL_PASSWORD: baikal
         run: php tests/php/FileSchemaDriverTest.php
+      - name: WebDAV-Push PostgreSQL schema
+        env:
+          BAIKAL_TEST_PGSQL_DSN: pgsql:host=127.0.0.1;port=5432;dbname=baikal_test
+          BAIKAL_TEST_PGSQL_USER: baikal
+          BAIKAL_TEST_PGSQL_PASSWORD: baikal
+        run: php tests/php/PushSchemaPgsqlTest.php

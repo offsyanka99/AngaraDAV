@@ -28,12 +28,15 @@ system:
     # change notifications over Web Push (RFC 8030/8291/8292), e.g. for DAVx5.
     # Requires the minishlink/web-push composer package + openssl PHP extension.
     push_enabled: false
+    # Also push changes in WebDAV file homes (/dav.php/files/). Needs push_enabled + files_enabled.
+    push_files_enabled: false
     # Canonical externally reachable DAV base URL. Required when Push is enabled;
     # never inferred from Host/X-Forwarded-* headers.
     push_external_url: ''
     # Optional exact endpoint-host allowlist. Empty permits any public HTTPS host.
     # push_allowed_hosts: ['updates.push.services.mozilla.com', 'fcm.googleapis.com']
-    push_max_subscriptions_per_principal: 20
+    # Shared by all devices, calendars, address books, and file folders of one user.
+    push_max_subscriptions_per_principal: 50
     push_max_subscriptions_per_resource: 100
     push_max_registrations_per_hour: 30
     push_worker_batch_size: 20

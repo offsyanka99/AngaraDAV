@@ -1,8 +1,27 @@
 # Changelog
 
-## Unreleased
+## 2.5.3 — 2026-09-30
+
+### WebDAV-Push
+- **Push for file storage (opt-in).** Admin → System settings → *Enable WebDAV-Push for file storage*. Works only while WebDAV-Push and WebDAV file storage are both on. A device subscribes to a folder under `/dav.php/files/{user}/` and is notified about changes anywhere below it, made through DAV clients or the portal. Notifications are grouped: about 5 seconds after a burst ends, at most one every 30 seconds per folder.
+- **Max push subscriptions per user** is now editable in System settings. The default for new installs is 50 (was 20); existing installs keep the value in their `configuration.yaml`.
+- **Admin Overview** shows whether Push for files is active, active push subscriptions per kind (calendars, address books, file folders, principals), and the delivery queue backlog (count and oldest age). Counts only, no user names or paths.
+- **No lost notifications.** A calendar or contact change that arrived while the push worker was delivering the previous notification for the same collection could be dropped. The worker now completes a queued job only if it was not updated meanwhile, so the later change is delivered too.
+- `push_queue` gains `min_content_depth`, `revision`, and `hold_since` columns. Existing SQLite and PostgreSQL databases are migrated automatically on first use; no upgrade step is needed.
+- WebDAV file changes no longer write unused rows to the push queue when nobody subscribed to them.
+- Each subscriber now receives only the update types it registered for. A subscription without a property trigger no longer gets `<property-update/>` when a content and a property change are merged into one notification.
+
+### Security
+- **Deleting a user removes their push subscriptions and queued notifications**, including other users' subscriptions on the deleted user's collections. Before, a new account created with the same username could inherit them.
+- **Push delivery re-checks access correctly for calendars and address books.** The worker accepted a subscription on another user's calendar or address book when the subscriber owned a collection with the same name (for example their own `default`), so a former calendar proxy kept receiving change notifications. Now only the owner and current members of the owner's calendar-proxy groups stay subscribed.
+- **User deletion and file-home quarantine no longer remove another user's WebDAV properties and locks on SQLite** when the two usernames differ only in letter case (`alice` / `Alice`).
+- **Deleting a user on PostgreSQL** no longer fails with an error on installs that never enabled WebDAV file storage or WebDAV-Push.
+
+### CI
+- Every `tests/php/*.php` script now runs in CI. 18 existing scripts (admin services, installer, env precedence, sync status, and others) were missing from the workflow.
 
 ### Docs
+- README, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), and [docs/SECURITY.md](docs/SECURITY.md) cover WebDAV-Push for file storage: setup, the per-user subscription limit, Overview queue monitoring, troubleshooting, and the security model.
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) is published again as an operator-only guide (Docker, TrueNAS, env vars, backup, file storage, WebDAV-Push, troubleshooting), updated for `configuration.yaml` and the 2.5.0 `BAIKAL_*` removal.
 - Architecture docs: fixed broken links and stale counts; documented `/api/sync-status`.
 

@@ -11,11 +11,15 @@ class SecretCipher {
     /** @var string 32-byte binary key */
     private $key;
 
+    /** @var string 32-byte binary sub-key, domain-separated for push topics */
+    private $topicKey;
+
     public function __construct(string $keyMaterial) {
         if (strlen(trim($keyMaterial)) < 16) {
             throw new \InvalidArgumentException('Database encryption key is too short for WebDAV-Push');
         }
         $this->key = hash('sha256', $keyMaterial, true);
+        $this->topicKey = hash_hkdf('sha256', $this->key, 32, 'angara-webdav-push-topic-v1');
     }
 
     public function encrypt(string $plaintext): string {
@@ -68,5 +72,12 @@ class SecretCipher {
 
     public function blindIndex(string $value): string {
         return hash_hmac('sha256', $value, $this->key);
+    }
+
+    /**
+     * Raw HMAC-SHA256 under the topic sub-key; the key never leaves this class.
+     */
+    public function topicMac(string $value): string {
+        return hash_hmac('sha256', $value, $this->topicKey, true);
     }
 }

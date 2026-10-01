@@ -13,6 +13,7 @@ import {
   serviceBadge,
   serviceOnOff,
 } from "./meta";
+import { pushStatsRows } from "./pushStats";
 
 export function renderAdminOverview(host: AdminHost): string {
   const meta = adminPageMeta(host, "overview");
@@ -77,6 +78,7 @@ export function renderAdminOverview(host: AdminHost): string {
                   <tr><td>Tasks</td><td>${serviceOnOff(host, !!svc.tasks)}</td></tr>
                   <tr><td>Notes</td><td>${serviceOnOff(host, !!svc.notes)}</td></tr>
                   <tr><td>Push</td><td>${serviceOnOff(host, !!svc.push)}</td></tr>
+                  <tr><td>Push for files</td><td>${serviceOnOff(host, !!svc.filesPush)}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -90,6 +92,19 @@ export function renderAdminOverview(host: AdminHost): string {
     const nEvents = d.nbevents ?? d.events;
     const nBooks = d.nbbooks ?? d.addressBooks;
     const nContacts = d.nbcontacts ?? d.contacts;
+    const pushBlock =
+      svc.push && d.pushStats
+        ? `<h3 class="admin-subsection-title">WebDAV-Push</h3>
+        <div class="admin-service-table-wrap">
+          <table class="admin-kv-table">
+            <tbody>
+              ${pushStatsRows(d.pushStats)
+                .map(([label, value]) => `<tr><td>${esc(label)}</td><td class="mono">${esc(value)}</td></tr>`)
+                .join("")}
+            </tbody>
+          </table>
+        </div>`
+        : "";
     statsBlock = `
       <section class="card admin-stats-card">
         <div class="section-header">
@@ -110,7 +125,9 @@ export function renderAdminOverview(host: AdminHost): string {
           ${serviceBadge(host, !!svc.tasks, "Tasks")}
           ${serviceBadge(host, !!svc.notes, "Notes")}
           ${serviceBadge(host, !!svc.push, "Push")}
+          ${serviceBadge(host, !!svc.filesPush, "Push for files")}
         </div>
+        ${pushBlock}
       </section>`;
   } else {
     statsBlock = `<section class="card">

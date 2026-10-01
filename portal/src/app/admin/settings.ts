@@ -5,7 +5,7 @@ import { api } from "../../api";
 import { log } from "../../log";
 import { esc } from "../../ui";
 import { timezoneSelectOptions } from "../../timezones";
-import { infoTitle } from "../sectionInfo";
+import { infoIconHtml, infoTitle } from "../sectionInfo";
 import { clampPollSeconds, setBackgroundSyncInterval } from "../backgroundSync";
 import type { AdminHost } from "./host";
 import {
@@ -35,9 +35,9 @@ export function renderAdminSettingsShell(host: AdminHost): string {
   }
   const check = (name: string, on: boolean, label: string) =>
     `<label class="check-row"><input type="checkbox" name="${esc(name)}" ${on ? "checked" : ""} ${host.state.busy || s.writable === false ? "disabled" : ""} /> ${esc(label)}</label>`;
-  const num = (name: string, val: number | undefined, label: string, help = "") =>
+  const num = (name: string, val: number | undefined, label: string, help = "", attrs = "") =>
     `<label>${esc(label)}
-      <input type="number" name="${esc(name)}" value="${esc(String(val ?? 0))}" ${host.state.busy || s.writable === false ? "disabled" : ""} />
+      <input type="number" name="${esc(name)}" value="${esc(String(val ?? 0))}" ${attrs} ${host.state.busy || s.writable === false ? "disabled" : ""} />
       ${help ? `<span class="muted small">${esc(help)}</span>` : ""}
     </label>`;
 
@@ -145,6 +145,27 @@ export function renderAdminSettingsShell(host: AdminHost): string {
 
         <h3 class="admin-subsection-title">WebDAV-Push</h3>
         ${check("push_enabled", !!s.push_enabled, "Enable WebDAV-Push")}
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          ${check("push_files_enabled", !!s.push_files_enabled, "Enable WebDAV-Push for file storage")}
+          ${infoIconHtml(
+            {
+              title: "WebDAV-Push for files",
+              paragraphs: [
+                "Notifies subscribed devices when files or folders change in a user's WebDAV file home, whether the change came from a DAV client or this portal.",
+                "Takes effect only while WebDAV-Push and WebDAV file storage are both enabled. A device subscribes to a folder and hears about changes anywhere below it.",
+                "Changes are grouped: one notification about 5 seconds after a burst of changes ends, and at most one every 30 seconds per folder while changes continue.",
+              ],
+            },
+            "About WebDAV-Push for files",
+          )}
+        </div>
+        ${num(
+          "push_max_subscriptions_per_principal",
+          s.push_max_subscriptions_per_principal ?? 50,
+          "Max push subscriptions per user",
+          "Shared by all of a user's devices, calendars, address books, and file folders (1–1000).",
+          'min="1" max="1000" required',
+        )}
         <label>Push external URL (HTTPS)
           <input type="url" name="push_external_url" value="${esc(s.push_external_url || "")}" placeholder="https://dav.example.com/dav.php/" ${host.state.busy || s.writable === false ? "disabled" : ""} />
         </label>
@@ -190,6 +211,7 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     notes_enabled: bool("notes_enabled"),
     files_enabled: bool("files_enabled"),
     push_enabled: bool("push_enabled"),
+    push_files_enabled: bool("push_files_enabled"),
     portal_admin_ui_enabled: bool("portal_admin_ui_enabled"),
     timezone: String(fd.get("timezone") ?? "").trim(),
     invite_from: String(fd.get("invite_from") ?? "").trim(),
@@ -206,6 +228,7 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     portal_admin_users: String(fd.get("portal_admin_users") ?? "").trim(),
     push_external_url: String(fd.get("push_external_url") ?? "").trim(),
     push_log_level: String(fd.get("push_log_level") ?? "off"),
+    push_max_subscriptions_per_principal: Number(fd.get("push_max_subscriptions_per_principal") ?? 50),
   };
   const pw = String(fd.get("admin_password") ?? "");
   const pwc = String(fd.get("admin_password_confirm") ?? "");

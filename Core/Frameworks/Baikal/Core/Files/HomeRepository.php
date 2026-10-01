@@ -208,11 +208,13 @@ class HomeRepository {
         if ($table === 'locks') {
             $column = 'uri';
         }
+        // Exact compare: SQLite LIKE ignores ASCII case, but usernames are case-sensitive.
+        $below = $prefix . '/';
         $stmt = $this->pdo->prepare(
             'DELETE FROM ' . $table . ' WHERE ' . $column . ' = ? '
-            . "OR " . $column . " LIKE ? ESCAPE '='"
+            . 'OR substr(' . $column . ', 1, ' . mb_strlen($below, 'UTF-8') . ') = ?'
         );
-        $stmt->execute([$prefix, self::escapeLike($prefix) . '/%']);
+        $stmt->execute([$prefix, $below]);
     }
 
     private static function principalName(string $principalUri): string {
@@ -221,10 +223,6 @@ class HomeRepository {
         }
 
         return $matches[1];
-    }
-
-    private static function escapeLike(string $value): string {
-        return str_replace(['=', '%', '_'], ['==', '=%', '=_'], $value);
     }
 
     private static function removeWithoutFollowingLinks(string $path): void {

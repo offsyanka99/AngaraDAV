@@ -2,6 +2,9 @@
 
 namespace Baikal\Core\Plugins;
 
+use Baikal\Core\Plugins\Push\FilesChangeSet;
+use Baikal\Core\Plugins\Push\FilesPushDispatcher;
+use Baikal\Core\Plugins\Push\FilesPushPaths;
 use Baikal\Core\Plugins\Push\Property\SupportedTriggers;
 use Baikal\Core\Plugins\Push\Property\Transports;
 use Baikal\Core\Plugins\Push\PushLogger;
@@ -11,6 +14,7 @@ use Baikal\Core\Plugins\Push\SchemaManager;
 use Baikal\Core\Plugins\Push\SecretCipher;
 use Baikal\Core\Plugins\Push\SubscriptionStorage;
 use Baikal\Core\Plugins\Push\SubscriptionValidator;
+use Baikal\Core\Plugins\Push\TopicResolver;
 use Baikal\Core\Plugins\Push\VapidKeyStore;
 use Sabre\DAV\INode;
 use Sabre\DAV\PropFind;
@@ -37,6 +41,10 @@ use Sabre\HTTP\ResponseInterface;
  *  - v1 supports content-update depth 1 on calendars/address books/home-sets and
  *    property-update depth 0 on calendars/address books/principals. Deeper
  *    (infinity) triggers are downgraded at registration time.
+ *  - With system.push_files_enabled, every file-home directory (files/{user} and
+ *    below) supports content-update depth infinity and property-update depth 0.
+ *    File changes are fanned out to subscribed ancestors with a change level and
+ *    debounced; see Push\FilesPushDispatcher.
  */
 class PushPlugin extends ServerPlugin {
     const NS = 'https://bitfire.at/webdav-push';
@@ -59,6 +67,9 @@ class PushPlugin extends ServerPlugin {
 
     /** @var QueueStorage */
     protected $queue;
+
+    /** @var TopicResolver */
+    protected $topics;
 
     /** @var VapidKeyStore */
     protected $vapidStore;
@@ -88,6 +99,15 @@ class PushPlugin extends ServerPlugin {
     protected $dirtyProperty = [];
 
     /** @var bool */
+    protected $filesEnabled = false;
+
+    /** @var FilesChangeSet pending file-home changes */
+    protected $filesChanges;
+
+    /** @var FilesPushDispatcher */
+    protected $filesDispatcher;
+
+    /** @var bool */
     protected $shutdownRegistered = false;
 
     /**
@@ -99,8 +119,13 @@ class PushPlugin extends ServerPlugin {
         $this->logger = new PushLogger(isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : 'off');
         SchemaManager::ensure($pdo);
         $encryptionKey = (string) ($config['database']['encryption_key'] ?? '');
-        $this->storage = new SubscriptionStorage($pdo, new SecretCipher($encryptionKey));
+        $cipher = new SecretCipher($encryptionKey);
+        $this->storage = new SubscriptionStorage($pdo, $cipher);
+        $this->topics = new TopicResolver($cipher);
         $this->queue = new QueueStorage($pdo);
+        $this->filesEnabled = !empty($sys['push_files_enabled']);
+        $this->filesChanges = new FilesChangeSet();
+        $this->filesDispatcher = new FilesPushDispatcher($this->queue, $this->storage, $this->topics, $this->logger);
         $this->vapidStore = new VapidKeyStore(null, $this->logger);
         $allowedHosts = isset($sys['push_allowed_hosts']) && is_array($sys['push_allowed_hosts'])
             ? $sys['push_allowed_hosts']
@@ -109,7 +134,7 @@ class PushPlugin extends ServerPlugin {
         $this->subject = $this->deriveSubject($sys);
         $externalUrl = getenv('ANGARA_PUSH_EXTERNAL_URL') ?: ($sys['push_external_url'] ?? '');
         $this->externalBaseUrl = $this->normalizeExternalBaseUrl((string) $externalUrl);
-        $this->maxPerPrincipal = $this->boundedConfigInt($sys, 'push_max_subscriptions_per_principal', 20, 1, 1000);
+        $this->maxPerPrincipal = $this->boundedConfigInt($sys, 'push_max_subscriptions_per_principal', 50, 1, 1000);
         $this->maxPerResource = $this->boundedConfigInt($sys, 'push_max_subscriptions_per_resource', 100, 1, 5000);
         $this->maxRegistrationsPerHour = $this->boundedConfigInt($sys, 'push_max_registrations_per_hour', 30, 1, 1000);
     }
@@ -355,7 +380,7 @@ class PushPlugin extends ServerPlugin {
         $response->setStatus(204);
         $this->logger->info('subscription registered', [
             'id'       => $registration['id'],
-            'resource' => $path,
+            'resource' => $this->filesDispatcher->resourceForLog($path),
             'content'  => $content,
             'property' => $property,
             'expires'  => $expires,
@@ -365,20 +390,33 @@ class PushPlugin extends ServerPlugin {
     // --- Change detection --------------------------------------------------
 
     public function onBind(string $path): void {
+        if ($this->recordFilesChange($path, false)) {
+            return;
+        }
         $this->markContent($this->parentCollection($path));
     }
 
     public function onUnbind(string $path): void {
+        if ($this->recordFilesChange($path, true)) {
+            return;
+        }
         $this->markContent($this->parentCollection($path));
     }
 
     public function onWriteContent(string $path, INode $node): void {
+        if ($this->recordFilesChange($path, false)) {
+            return;
+        }
         $this->markContent($this->parentCollection($path));
     }
 
     public function onMove(string $source, string $destination): void {
-        $this->markContent($this->parentCollection($source));
-        $this->markContent($this->parentCollection($destination));
+        foreach ([$source, $destination] as $path) {
+            // File moves are recorded by the afterUnbind/afterBind pair Sabre emits around afterMove.
+            if (!FilesPushPaths::isFilesPath($path)) {
+                $this->markContent($this->parentCollection($path));
+            }
+        }
     }
 
     public function onPropPatch(RequestInterface $request, ResponseInterface $response): void {
@@ -387,7 +425,7 @@ class PushPlugin extends ServerPlugin {
             return;
         }
         $path = trim($this->server->calculateUri($request->getUrl()), '/');
-        if ($path === '') {
+        if ($path === '' || (!$this->filesEnabled && FilesPushPaths::isFilesPath($path))) {
             return;
         }
         $this->dirtyProperty[$path] = true;
@@ -402,12 +440,18 @@ class PushPlugin extends ServerPlugin {
      * the separate bounded worker.
      */
     public function flush(): void {
-        if ($this->dirtyContent === [] && $this->dirtyProperty === []) {
+        if ($this->dirtyContent === [] && $this->dirtyProperty === [] && $this->filesChanges->isEmpty()) {
             return;
         }
+        $dirtyContent = $this->dirtyContent;
+        $dirtyProperty = $this->dirtyProperty;
+        $filesChanges = $this->filesChanges;
+        $this->dirtyContent = [];
+        $this->dirtyProperty = [];
+        $this->filesChanges = new FilesChangeSet();
         $dontNotify = $this->parseDontNotify();
 
-        foreach (array_keys($this->dirtyContent) as $collection) {
+        foreach (array_keys($dirtyContent) as $collection) {
             try {
                 $this->dispatchContent($collection, $dontNotify);
             } catch (\Throwable $e) {
@@ -417,13 +461,26 @@ class PushPlugin extends ServerPlugin {
                 ]);
             }
         }
-        foreach (array_keys($this->dirtyProperty) as $resource) {
+        foreach (array_keys($dirtyProperty) as $resource) {
             try {
                 $this->dispatchProperty($resource, $dontNotify);
             } catch (\Throwable $e) {
                 $this->logger->error('property notification enqueue failed', [
-                    'resource' => $resource,
+                    'resource' => $this->filesDispatcher->resourceForLog($resource),
                     'error'    => $e->getMessage(),
+                ]);
+            }
+        }
+        if (!$filesChanges->isEmpty()) {
+            try {
+                $this->filesDispatcher->dispatch(
+                    $filesChanges,
+                    fn (string $path): array => $this->suppressedIds($path, $dontNotify),
+                    'dav'
+                );
+            } catch (\Throwable $e) {
+                $this->logger->error('files content notification enqueue failed', [
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -476,6 +533,15 @@ class PushPlugin extends ServerPlugin {
      * @param string|array<int, string> $dontNotify
      */
     protected function dispatchProperty(string $resource, $dontNotify): void {
+        if (FilesPushPaths::isFilesPath($resource)) {
+            $this->filesDispatcher->dispatchProperty(
+                $resource,
+                fn (string $path): array => $this->suppressedIds($path, $dontNotify),
+                'dav'
+            );
+
+            return;
+        }
         $topic = $this->topic($resource);
         $this->queue->enqueue(
             $resource,
@@ -517,6 +583,30 @@ class PushPlugin extends ServerPlugin {
         $this->ensureShutdown();
     }
 
+    /**
+     * Record a file-home change for the shutdown flush; file changes are dropped
+     * entirely while files push is off.
+     *
+     * @return bool true when $path is a file-home path (handled here)
+     */
+    protected function recordFilesChange(string $path, bool $removed): bool {
+        if (!FilesPushPaths::isFilesPath($path)) {
+            return false;
+        }
+        if (!$this->filesEnabled) {
+            return true;
+        }
+        $this->filesChanges->member((string) FilesPushPaths::parent($path));
+        if ($removed) {
+            $this->filesChanges->removed($path);
+        }
+        if (!$this->filesChanges->isEmpty()) {
+            $this->ensureShutdown();
+        }
+
+        return true;
+    }
+
     protected function ensureShutdown(): void {
         if ($this->shutdownRegistered) {
             return;
@@ -539,10 +629,7 @@ class PushPlugin extends ServerPlugin {
      * Deterministic, server-wide-unique push topic for a resource path.
      */
     public function topic(string $path): string {
-        $norm = trim($path, '/');
-        $b64 = rtrim(strtr(base64_encode(hash('sha256', $norm, true)), '+/', '-_'), '=');
-
-        return substr($b64, 0, 22);
+        return $this->topics->forPath($path);
     }
 
     /**
@@ -564,6 +651,9 @@ class PushPlugin extends ServerPlugin {
      * @return array{content: ?string, property: ?string}|null
      */
     protected function capabilityForNode(INode $node): ?array {
+        if ($node instanceof \Baikal\Core\Files\Directory) {
+            return $this->filesEnabled ? ['content' => 'infinity', 'property' => '0'] : null;
+        }
         if ($node instanceof \Sabre\CalDAV\ICalendar || $node instanceof \Sabre\CardDAV\IAddressBook) {
             return ['content' => '1', 'property' => '0'];
         }

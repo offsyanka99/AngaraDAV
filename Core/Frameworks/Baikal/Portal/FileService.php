@@ -7,6 +7,8 @@ use Baikal\Core\Files\HomeRepository;
 use Baikal\Core\Files\HomeStorage;
 use Baikal\Core\Files\PayloadTooLarge;
 use Baikal\Core\Files\SchemaManager;
+use Baikal\Core\Plugins\Push\ChangeNotifier;
+use Baikal\Core\Plugins\Push\FilesChangeSet;
 use Sabre\DAV\Exception\Conflict;
 use Sabre\DAV\Exception\Forbidden;
 use Sabre\DAV\Exception\InsufficientStorage;
@@ -34,9 +36,19 @@ class FileService {
     /** @var string|null */
     private $initError;
 
-    public function __construct(\PDO $pdo, array $config) {
+    /** @var callable(string, FilesChangeSet): void receives file-home changes for WebDAV-Push */
+    private $filesChangeSink;
+
+    /** @var FilesChangeSet|null changes collected while bulk() runs */
+    private $deferredChanges;
+
+    public function __construct(\PDO $pdo, array $config, ?callable $filesChangeSink = null) {
         $this->pdo = $pdo;
         $this->config = $config;
+        $this->filesChangeSink = $filesChangeSink
+            ?? static function (string $username, FilesChangeSet $changes) use ($pdo): void {
+                ChangeNotifier::filesChanged($pdo, $username, $changes);
+            };
     }
 
     /**
@@ -246,6 +258,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [$parent]);
 
         return [
             'path' => $child,
@@ -285,6 +298,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [$parent]);
 
         return [
             'path' => $child,
@@ -471,6 +485,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [self::parentPath($relative)], [$relative]);
     }
 
     /**
@@ -497,6 +512,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [$parent], [$relative]);
 
         return [
             'path' => $destination,
@@ -527,6 +543,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [self::parentPath($source), $destParent], [$source]);
 
         return [
             'path' => $destination,
@@ -570,6 +587,7 @@ class FileService {
         } catch (\Throwable $e) {
             throw $this->mapStorageException($e);
         }
+        $this->notifyFilesChanged($username, [$destParent]);
 
         return [
             'path' => $destination,
@@ -596,29 +614,39 @@ class FileService {
         $errors = [];
         $entries = [];
         $seen = [];
-        foreach ($paths as $raw) {
-            if (!is_string($raw)) {
-                continue;
-            }
-            $p = trim($raw);
-            if ($p === '' || isset($seen[$p])) {
-                continue;
-            }
-            $seen[$p] = true;
-            try {
-                if ($op === 'delete') {
-                    $this->delete($username, $p);
-                } else {
-                    $entries[] = $this->copy($username, $p);
+        // Only operations that succeed record changes; all of them are dispatched together.
+        $this->deferredChanges = new FilesChangeSet();
+        try {
+            foreach ($paths as $raw) {
+                if (!is_string($raw)) {
+                    continue;
                 }
-                ++$ok;
-            } catch (ApiException $e) {
-                ++$failed;
-                $errors[] = $p . ': ' . $e->getMessage();
-            } catch (\Throwable $e) {
-                ++$failed;
-                $errors[] = $p . ': operation failed';
-                error_log('AngaraDAV portal files bulk: ' . $e->getMessage());
+                $p = trim($raw);
+                if ($p === '' || isset($seen[$p])) {
+                    continue;
+                }
+                $seen[$p] = true;
+                try {
+                    if ($op === 'delete') {
+                        $this->delete($username, $p);
+                    } else {
+                        $entries[] = $this->copy($username, $p);
+                    }
+                    ++$ok;
+                } catch (ApiException $e) {
+                    ++$failed;
+                    $errors[] = $p . ': ' . $e->getMessage();
+                } catch (\Throwable $e) {
+                    ++$failed;
+                    $errors[] = $p . ': operation failed';
+                    error_log('AngaraDAV portal files bulk: ' . $e->getMessage());
+                }
+            }
+        } finally {
+            $changes = $this->deferredChanges;
+            $this->deferredChanges = null;
+            if (!$changes->isEmpty()) {
+                ($this->filesChangeSink)($username, $changes);
             }
         }
 
@@ -703,6 +731,32 @@ class FileService {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
 
         return !empty($sys['files_enabled']);
+    }
+
+    /**
+     * Record a successful mutation for WebDAV-Push (plan section 6), or collect it while bulk() runs.
+     *
+     * @param list<string> $memberOf home-relative directories whose direct members changed
+     * @param list<string> $removed  home-relative paths that no longer exist
+     */
+    private function notifyFilesChanged(string $username, array $memberOf, array $removed = []): void {
+        $changes = $this->deferredChanges ?? new FilesChangeSet();
+        $home = 'files/' . $username;
+        foreach ($memberOf as $directory) {
+            $changes->member($directory === '' ? $home : $home . '/' . $directory);
+        }
+        foreach ($removed as $path) {
+            $changes->removed($home . '/' . $path);
+        }
+        if ($this->deferredChanges === null) {
+            ($this->filesChangeSink)($username, $changes);
+        }
+    }
+
+    private static function parentPath(string $relative): string {
+        $position = strrpos($relative, '/');
+
+        return $position === false ? '' : substr($relative, 0, $position);
     }
 
     private function storageFor(string $username): HomeStorage {

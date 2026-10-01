@@ -6,6 +6,20 @@ namespace Baikal\Core\Plugins\Push;
  * Idempotently provisions WebDAV-Push tables for new and existing installs.
  */
 class SchemaManager {
+    /** @var array<string, string> push_queue columns added after the initial schema */
+    private const QUEUE_COLUMNS_SQLITE = [
+        'min_content_depth' => 'integer NOT NULL DEFAULT 1',
+        'revision'          => 'integer NOT NULL DEFAULT 0',
+        'hold_since'        => 'integer NOT NULL DEFAULT 0',
+    ];
+
+    /** @var array<string, string> */
+    private const QUEUE_COLUMNS_PGSQL = [
+        'min_content_depth' => 'SMALLINT NOT NULL DEFAULT 1',
+        'revision'          => 'INTEGER NOT NULL DEFAULT 0',
+        'hold_since'        => 'INTEGER NOT NULL DEFAULT 0',
+    ];
+
     public static function ensure(\PDO $pdo): void {
         $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
         if ($driver === 'pgsql') {
@@ -47,11 +61,32 @@ CREATE TABLE IF NOT EXISTS push_queue (
     suppressed_ids text NOT NULL DEFAULT '[]',
     attempts integer NOT NULL DEFAULT 0,
     available_at integer NOT NULL,
-    created integer NOT NULL
+    created integer NOT NULL,
+    min_content_depth integer NOT NULL DEFAULT 1,
+    revision integer NOT NULL DEFAULT 0,
+    hold_since integer NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS push_queue_available ON push_queue (available_at);
 SQL
         );
+
+        $existing = [];
+        foreach ($pdo->query('PRAGMA table_info(push_queue)')->fetchAll(\PDO::FETCH_ASSOC) as $column) {
+            $existing[strtolower((string) $column['name'])] = true;
+        }
+        foreach (self::QUEUE_COLUMNS_SQLITE as $name => $definition) {
+            if (isset($existing[$name])) {
+                continue;
+            }
+            try {
+                $pdo->exec('ALTER TABLE push_queue ADD COLUMN ' . $name . ' ' . $definition);
+            } catch (\PDOException $e) {
+                // A concurrent first request may have added it between PRAGMA and ALTER.
+                if (stripos($e->getMessage(), 'duplicate column') === false) {
+                    throw $e;
+                }
+            }
+        }
     }
 
     private static function pgsql(\PDO $pdo): void {
@@ -84,10 +119,25 @@ CREATE TABLE IF NOT EXISTS push_queue (
     suppressed_ids TEXT NOT NULL DEFAULT '[]',
     attempts INTEGER NOT NULL DEFAULT 0,
     available_at INTEGER NOT NULL,
-    created INTEGER NOT NULL
+    created INTEGER NOT NULL,
+    min_content_depth SMALLINT NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hold_since INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS push_queue_available ON push_queue (available_at);
 SQL
         );
+
+        // Checked first because ALTER TABLE takes an exclusive lock even when IF NOT EXISTS skips it.
+        $stmt = $pdo->query(
+            "SELECT column_name FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'push_queue'"
+        );
+        $existing = array_map('strtolower', $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: []);
+        foreach (self::QUEUE_COLUMNS_PGSQL as $name => $definition) {
+            if (!in_array($name, $existing, true)) {
+                $pdo->exec('ALTER TABLE push_queue ADD COLUMN IF NOT EXISTS ' . $name . ' ' . $definition);
+            }
+        }
     }
 }

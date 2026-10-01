@@ -86,6 +86,61 @@ $defaults = (new AdminDashboardService($pdo, ['system' => []]))->stats();
 assert_true($defaults['services']['caldav'] === true, 'default caldav on');
 assert_true($defaults['services']['files'] === false, 'default files off');
 assert_true($defaults['services']['notes'] === false, 'default notes off');
+assert_true($defaults['services']['filesPush'] === false, 'default files push off');
+
+// filesPush is effective only with push, files, and push_files_enabled all on
+$filesPushOn = ['push_enabled' => true, 'files_enabled' => true, 'push_files_enabled' => true];
+assert_true((new AdminDashboardService($pdo, ['system' => $filesPushOn]))->stats()['services']['filesPush'] === true, 'files push on');
+foreach (array_keys($filesPushOn) as $off) {
+    $flags = array_merge($filesPushOn, [$off => false]);
+    assert_true(
+        (new AdminDashboardService($pdo, ['system' => $flags]))->stats()['services']['filesPush'] === false,
+        "files push off when $off is off"
+    );
+}
+
+// Push stats: zeros without push tables, aggregates only with them
+$emptyPush = $stats['pushStats'];
+assert_true(
+    $emptyPush['subscriptions'] === ['calendars' => 0, 'addressbooks' => 0, 'files' => 0, 'principals' => 0]
+        && $emptyPush['queue'] === ['jobs' => 0, 'oldestAgeSeconds' => 0],
+    'push stats are zero without push tables'
+);
+\Baikal\Core\Plugins\Push\SchemaManager::ensure($pdo);
+$sub = $pdo->prepare(
+    'INSERT INTO push_subscriptions (registration_token, principaluri, resource_uri, topic, push_resource,'
+    . ' push_resource_hash, pubkey, auth_secret, triggers, created, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+);
+$future = time() + 3600;
+foreach ([
+    ['t1', 'calendars/alice/default', $future],
+    ['t2', 'calendars/alice', $future],
+    ['t3', 'addressbooks/alice/default', $future],
+    ['t4', 'files/alice/Taxes', $future],
+    ['t5', 'files/bob', $future],
+    ['t6', 'principals/alice', $future],
+    ['t7', 'files/alice/Expired', time() - 10],
+] as [$token, $resource, $expires]) {
+    $sub->execute([$token, 'principals/alice', $resource, 'topic', 'ep', 'hash-' . $token, 'pub', 'auth', '{}', time(), $expires]);
+}
+$queue = $pdo->prepare('INSERT INTO push_queue (resource_uri, topic, available_at, created) VALUES (?, ?, ?, ?)');
+$queue->execute(['files/alice/Taxes', 'topic', time(), time() - 120]);
+$queue->execute(['calendars/alice/default', 'topic', time(), time() - 5]);
+$pushStats = (new AdminDashboardService($pdo, $config))->stats()['pushStats'];
+assert_true(
+    $pushStats['subscriptions'] === ['calendars' => 2, 'addressbooks' => 1, 'files' => 2, 'principals' => 1],
+    'active subscriptions are counted per kind, expired ones excluded'
+);
+assert_true($pushStats['queue']['jobs'] === 2, 'queue job count');
+assert_true(
+    $pushStats['queue']['oldestAgeSeconds'] >= 120 && $pushStats['queue']['oldestAgeSeconds'] < 130,
+    'oldest queued job age'
+);
+$encoded = (string) json_encode($pushStats);
+assert_true(
+    !str_contains($encoded, 'alice') && !str_contains($encoded, 'Taxes') && !str_contains($encoded, 'files/'),
+    'push stats contain no usernames or paths'
+);
 
 if ($failures > 0) {
     echo "\n$failures failure(s)\n";

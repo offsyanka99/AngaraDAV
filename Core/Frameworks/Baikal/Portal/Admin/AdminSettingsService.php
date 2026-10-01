@@ -51,6 +51,7 @@ class AdminSettingsService {
         'session_max_age_minutes',
         'portal_sync_poll_seconds',
         'push_enabled',
+        'push_files_enabled',
         'push_external_url',
         'push_log_level',
         'push_max_subscriptions_per_principal',
@@ -894,6 +895,7 @@ class AdminSettingsService {
             case 'tasks_enabled':
             case 'notes_enabled':
             case 'push_enabled':
+            case 'push_files_enabled':
             case 'portal_admin_ui_enabled':
                 return $this->toBool($value);
 
@@ -1025,9 +1027,10 @@ class AdminSettingsService {
             'session_max_age_minutes' => 15,
             'portal_sync_poll_seconds' => 30,
             'push_enabled'            => false,
+            'push_files_enabled'      => false,
             'push_external_url'       => '',
             'push_log_level'          => 'off',
-            'push_max_subscriptions_per_principal' => 20,
+            'push_max_subscriptions_per_principal' => 50,
             'push_max_subscriptions_per_resource'  => 100,
             'push_max_registrations_per_hour'      => 30,
             'push_worker_batch_size'               => 20,

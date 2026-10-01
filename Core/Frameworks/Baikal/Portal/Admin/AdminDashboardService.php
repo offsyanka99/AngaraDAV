@@ -50,7 +50,12 @@ class AdminDashboardService {
      *     files: bool,
      *     tasks: bool,
      *     notes: bool,
-     *     push: bool
+     *     push: bool,
+     *     filesPush: bool
+     *   },
+     *   pushStats: array{
+     *     subscriptions: array{calendars: int, addressbooks: int, files: int, principals: int},
+     *     queue: array{jobs: int, oldestAgeSeconds: int}
      *   },
      *   links: array{docs: string, releases: string, administration: string}
      * }
@@ -90,7 +95,12 @@ class AdminDashboardService {
                 'tasks'          => self::boolFlag($sys, 'tasks_enabled', true),
                 'notes'          => self::boolFlag($sys, 'notes_enabled', false),
                 'push'           => self::boolFlag($sys, 'push_enabled', false),
+                // Effective only with Push and file storage both on
+                'filesPush'      => self::boolFlag($sys, 'push_enabled', false)
+                    && self::boolFlag($sys, 'files_enabled', false)
+                    && self::boolFlag($sys, 'push_files_enabled', false),
             ],
+            'pushStats'    => $this->pushStats(),
             'links'        => [
                 'docs'           => 'https://github.com/offsyanka99/AngaraDAV/tree/main/docs',
                 'releases'       => 'https://github.com/offsyanka99/AngaraDAV/releases',
@@ -118,6 +128,52 @@ class AdminDashboardService {
         } catch (\Throwable $e) {
             return 0;
         }
+    }
+
+    /**
+     * Aggregate WebDAV-Push counts only (no usernames or paths); zeros when the push tables do not exist.
+     *
+     * @return array{
+     *   subscriptions: array{calendars: int, addressbooks: int, files: int, principals: int},
+     *   queue: array{jobs: int, oldestAgeSeconds: int}
+     * }
+     */
+    private function pushStats(): array {
+        $subscriptions = ['calendars' => 0, 'addressbooks' => 0, 'files' => 0, 'principals' => 0];
+        $queue = ['jobs' => 0, 'oldestAgeSeconds' => 0];
+        $now = time();
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT CASE
+                    WHEN resource_uri LIKE 'calendars/%' THEN 'calendars'
+                    WHEN resource_uri LIKE 'addressbooks/%' THEN 'addressbooks'
+                    WHEN resource_uri LIKE 'files/%' THEN 'files'
+                    WHEN resource_uri LIKE 'principals/%' THEN 'principals'
+                    ELSE 'other' END AS kind, COUNT(*) AS n
+                 FROM push_subscriptions WHERE expires > ? GROUP BY kind"
+            );
+            $stmt->execute([$now]);
+            foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $kind = (string) $row['kind'];
+                if (isset($subscriptions[$kind])) {
+                    $subscriptions[$kind] = (int) $row['n'];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Push never enabled: no subscriptions table yet.
+        }
+        try {
+            $row = $this->pdo->query('SELECT COUNT(*) AS jobs, MIN(created) AS oldest FROM push_queue')
+                ->fetch(\PDO::FETCH_ASSOC);
+            if (is_array($row)) {
+                $queue['jobs'] = (int) $row['jobs'];
+                $queue['oldestAgeSeconds'] = $row['oldest'] === null ? 0 : max(0, $now - (int) $row['oldest']);
+            }
+        } catch (\Throwable $e) {
+            // Push never enabled: no queue table yet.
+        }
+
+        return ['subscriptions' => $subscriptions, 'queue' => $queue];
     }
 
     /**

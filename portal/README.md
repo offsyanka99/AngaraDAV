@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.2`
+**Version:** `2.5.3`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -86,8 +86,8 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 
 - Opened from the **user menu → Administration** (hidden for non-admins).
 - Hash routes: `#admin` (Overview), `#admin/settings`, `#admin/users`, `#admin/users/{username}`, `#admin/database`, `#admin/configuration`.
-- **Overview:** stats + service On/Off + version/releases links.
-- **System settings:** form writes `configuration.yaml` (services, files, push, session, admin password); timezone select.
+- **Overview:** stats + service On/Off (including Push for files) + WebDAV-Push subscriptions per kind and queue backlog when Push is on (`app/admin/pushStats.ts`) + version/releases links.
+- **System settings:** form writes `configuration.yaml` (services, files, push incl. Push for file storage and the per-user subscription limit, session, admin password); timezone select.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
 - **Configuration:** download/restore a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`), preview shows a changed/unknown/invalid diff before applying. **Reset to Default** (full factory wipe + reopen installer) lives here, not on System settings.

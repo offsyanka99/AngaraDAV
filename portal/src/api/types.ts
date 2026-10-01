@@ -13,6 +13,20 @@ export type PortalUser = {
   role?: string;
 };
 
+/** Active WebDAV-Push subscriptions per kind and the delivery queue backlog. */
+export type AdminPushStats = {
+  subscriptions: {
+    calendars: number;
+    addressbooks: number;
+    files: number;
+    principals: number;
+  };
+  queue: {
+    jobs: number;
+    oldestAgeSeconds: number;
+  };
+};
+
 /** GET /api/admin/dashboard payload (Administration Overview). */
 export type AdminDashboardStats = {
   version: string;
@@ -39,7 +53,11 @@ export type AdminDashboardStats = {
     tasks: boolean;
     notes: boolean;
     push: boolean;
+    /** Push for WebDAV file homes is effective (push + files + push_files_enabled). */
+    filesPush?: boolean;
   };
+  /** Aggregate WebDAV-Push counts (no usernames or paths). */
+  pushStats?: AdminPushStats;
   links?: {
     docs?: string;
     releases?: string;
@@ -121,6 +139,7 @@ export type AdminSystemSettings = {
   session_max_age_minutes: number;
   portal_sync_poll_seconds?: number;
   push_enabled: boolean;
+  push_files_enabled?: boolean;
   push_external_url: string;
   push_log_level: string;
   push_max_subscriptions_per_principal?: number;

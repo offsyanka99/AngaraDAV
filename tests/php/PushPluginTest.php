@@ -25,6 +25,7 @@ use Baikal\Core\Plugins\Push\SchemaManager;
 use Baikal\Core\Plugins\Push\SecretCipher;
 use Baikal\Core\Plugins\Push\SubscriptionStorage;
 use Baikal\Core\Plugins\Push\SubscriptionValidator;
+use Baikal\Core\Plugins\Push\TopicResolver;
 use Baikal\Core\Plugins\PushPlugin;
 
 $failures = 0;
@@ -44,6 +45,10 @@ function assert_true(bool $cond, string $msg): void {
  * Subclass to expose protected resolve helpers (no server needed).
  */
 class PushPluginProbe extends PushPlugin {
+    public function pubMaxPerPrincipal(): int {
+        return $this->maxPerPrincipal;
+    }
+
     public function pubResolveDepth(?string $requested, ?string $capMax): ?string {
         return $this->resolveDepth($requested, $capMax);
     }
@@ -88,12 +93,65 @@ $plugin = new PushPluginProbe($pdo, [
 ]);
 
 // --- topic: deterministic, stable, url-safe, 22 chars ---
+assert_true($plugin->pubMaxPerPrincipal() === 50, 'per-principal subscription quota falls back to 50');
+if (!defined('ANGARA_VERSION')) {
+    define('ANGARA_VERSION', 'test');
+}
+$standardDefaults = (new ReflectionClass(\Baikal\Model\Config\Standard::class))->getDefaultProperties()['aData'];
+assert_true(
+    $standardDefaults['push_max_subscriptions_per_principal'] === 50 && $standardDefaults['push_files_enabled'] === false,
+    'new installs default to 50 subscriptions per principal and files push off'
+);
 $t1 = $plugin->topic('calendars/alice/default');
 $t2 = $plugin->topic('/calendars/alice/default/');
 assert_true($t1 === $t2, 'topic is stable regardless of surrounding slashes');
 assert_true(strlen($t1) === 22, 'topic is 22 chars');
 assert_true((bool) preg_match('#^[A-Za-z0-9_-]+$#', $t1), 'topic is base64url-safe');
 assert_true($plugin->topic('calendars/bob/default') !== $t1, 'different paths yield different topics');
+
+// Golden values: CalDAV/CardDAV topics must stay byte-identical so existing registrations keep working.
+$goldenTopics = [
+    'calendars/alice/default'     => 'OzoaUzevM2x7i6R-MWEaR5',
+    'addressbooks/alice/contacts' => 'g4_KpMbPpjbyDycCcJ8yad',
+    'principals/alice'            => 'hHTofJoxUJhpFDyPBLP30C',
+    'calendars/bob/shared-work'   => '7Wi5MWivVP4dtavQkktIvs',
+];
+foreach ($goldenTopics as $goldenPath => $goldenTopic) {
+    assert_true($plugin->topic($goldenPath) === $goldenTopic, "legacy plugin topic unchanged for $goldenPath");
+    assert_true(ChangeNotifier::topic($goldenPath) === $goldenTopic, "legacy notifier topic unchanged for $goldenPath");
+    assert_true(TopicResolver::legacy($goldenPath) === $goldenTopic, "TopicResolver::legacy matches for $goldenPath");
+}
+
+// --- File topics are keyed (draft section 6.4) ---
+$topicCipher = new SecretCipher('test-encryption-key-at-least-16-bytes');
+$resolver = new TopicResolver($topicCipher);
+$fileTopic = $resolver->forPath('files/alice/Taxes 2026');
+assert_true($plugin->topic('files/alice/Taxes 2026') === $fileTopic, 'plugin delegates file topics to TopicResolver');
+assert_true($fileTopic !== TopicResolver::legacy('files/alice/Taxes 2026'), 'file topic is not the unkeyed SHA-256');
+assert_true(strlen($fileTopic) === 22 && (bool) preg_match('#^[A-Za-z0-9_-]+$#', $fileTopic), 'file topic is 22 base64url chars');
+assert_true($resolver->forPath('/files/alice/Taxes 2026/') === $fileTopic, 'file topic ignores surrounding slashes');
+assert_true($resolver->forPath('files/alice/Medical') !== $fileTopic, 'different folders yield different file topics');
+assert_true(
+    (new TopicResolver(new SecretCipher('another-encryption-key-of-enough-length')))->forPath('files/alice/Taxes 2026')
+        !== $fileTopic,
+    'file topic depends on the encryption key'
+);
+assert_true($resolver->forPath('files') !== TopicResolver::legacy('files'), 'files root topic is keyed');
+assert_true(
+    $resolver->forPath('filesystem/alice') === TopicResolver::legacy('filesystem/alice'),
+    'only the files/ namespace is keyed'
+);
+assert_true(
+    bin2hex($topicCipher->topicMac('files/alice')) !== $topicCipher->blindIndex('files/alice'),
+    'topic MAC uses a sub-key separate from the blind index'
+);
+$notifierRejectsFiles = false;
+try {
+    ChangeNotifier::topic('files/alice/Sync');
+} catch (InvalidArgumentException $e) {
+    $notifierRejectsFiles = true;
+}
+assert_true($notifierRejectsFiles, 'unkeyed notifier topic refuses file paths');
 
 // --- resolveDepth: downgrade + ignore ---
 assert_true($plugin->pubResolveDepth('infinity', '1') === '1', 'requested infinity downgraded to cap 1');
@@ -327,7 +385,7 @@ assert_true((int) $jobs[0]['content_update'] === 1, 'merged queue job keeps cont
 assert_true((int) $jobs[0]['property_update'] === 1, 'merged queue job keeps property update');
 assert_true($jobs[0]['sync_token'] === 'sync-2', 'merged queue job keeps latest sync token');
 assert_true(json_decode($jobs[0]['suppressed_ids'], true) === [2], 'merged suppression is intersection only');
-$queue->complete((int) $jobs[0]['id']);
+$queue->complete((int) $jobs[0]['id'], (int) $jobs[0]['revision']);
 
 // Expired subscriptions are excluded and purgeable.
 $storage->upsert(array_merge($base, [
@@ -470,7 +528,7 @@ assert_true(
     'each fan-out job carries the topic for its own path'
 );
 foreach ($fanoutJobs as $j) {
-    $queue->complete((int) $j['id']);
+    $queue->complete((int) $j['id'], (int) $j['revision']);
 }
 
 // Sharee-triggered path also fans out (e.g. read-write share write from bob).
@@ -483,7 +541,7 @@ assert_true(
     'sharee-side write also fans out to all instances'
 );
 foreach ($fanoutFromSharee as $j) {
-    $queue->complete((int) $j['id']);
+    $queue->complete((int) $j['id'], (int) $j['revision']);
 }
 
 // Worker delivery would match subscriptions by exact resource_uri:
@@ -525,6 +583,50 @@ assert_true(
         && (string) $storage->findActiveByResource('calendars/alice/work')[0]['principaluri'] === 'principals/alice',
     'owner-path lookup does not return sharee subscription (pre-fan-out gap)'
 );
+
+// --- SubscriptionStorage: resource lookups for file fan-out, principal purge ---
+$fileSubscription = static function (string $resourceUri, string $endpoint, int $expires) use ($storage, $resolver): void {
+    $storage->upsert([
+        'principaluri'     => 'principals/carol',
+        'resource_uri'     => $resourceUri,
+        'topic'            => $resolver->forPath($resourceUri),
+        'push_resource'    => 'https://up.example.net/' . $endpoint,
+        'content_encoding' => 'aes128gcm',
+        'pubkey'           => 'PUB-C',
+        'auth_secret'      => 'SEC-C',
+        'triggers'         => json_encode(['content' => 'infinity', 'property' => '0']),
+        'expires'          => $expires,
+    ]);
+};
+$fileSubscription('files/carol/Sync', 'carol-1', $now + 3600);
+$fileSubscription('files/carol/Sync', 'carol-2', $now + 3600);
+$fileSubscription('files/carol/Sync/Docs', 'carol-3', $now + 3600);
+$fileSubscription('files/carol/Sync/Docs/old', 'carol-4', $now - 10);
+$fileSubscription('files/carol/SyncOther', 'carol-5', $now + 3600);
+$fileSubscription('files/carol/sync/lower', 'carol-6', $now + 3600);
+$fileSubscription('files/carol/50%_off=/a', 'carol-7', $now + 3600);
+$fileSubscription('files/carol/50x_offx/b', 'carol-8', $now + 3600);
+
+$activeUris = $storage->findActiveResourceUris([
+    'files/carol/Sync',
+    'files/carol/Sync',
+    'files/carol/Nope',
+    'files/carol/Sync/Docs/old',
+]);
+assert_true($activeUris === ['files/carol/Sync'], 'active URI lookup is distinct and skips unknown and expired');
+assert_true($storage->findActiveResourceUris([]) === [], 'active URI lookup with no candidates is empty');
+
+$under = $storage->findActiveResourceUrisUnder('/files/carol/Sync/');
+sort($under);
+assert_true($under === ['files/carol/Sync/Docs'], 'subtree lookup excludes self, siblings, case variants, expired');
+assert_true(
+    $storage->findActiveResourceUrisUnder('files/carol/50%_off=') === ['files/carol/50%_off=/a'],
+    'subtree lookup escapes LIKE wildcards and the escape char'
+);
+assert_true($storage->findActiveResourceUrisUnder('') === [], 'subtree lookup refuses an empty prefix');
+
+assert_true($storage->deleteByPrincipal('principals/carol') === 8, 'deleteByPrincipal removes every row of the principal');
+assert_true(count($storage->findActiveByResource('calendars/bob/shared-work')) === 1, 'deleteByPrincipal keeps other principals');
 
 echo "\n" . ($failures === 0 ? "All push tests passed." : "$failures push test(s) FAILED.") . "\n";
 exit($failures === 0 ? 0 : 1);

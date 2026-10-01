@@ -9,7 +9,7 @@ use Symfony\Component\Yaml\Yaml;
  * the SabreDAV server (portal /api writes).
  *
  * Failures are logged and swallowed so a misconfigured Push setup never breaks
- * calendar/contact CRUD.
+ * calendar, contact, or file CRUD.
  *
  * Shared calendars: Sabre stores one calendar row and multiple calendarinstances
  * (owner + sharees), each under a different DAV path. Clients register push on
@@ -145,13 +145,57 @@ class ChangeNotifier {
     }
 
     /**
-     * Same topic algorithm as PushPlugin::topic().
+     * Unkeyed topic for calendar / address-book paths. File paths need a keyed
+     * TopicResolver, so they are rejected here.
      */
     public static function topic(string $path): string {
-        $norm = trim($path, '/');
-        $b64 = rtrim(strtr(base64_encode(hash('sha256', $norm, true)), '+/', '-_'), '=');
+        if (FilesPushPaths::isFilesPath($path)) {
+            throw new \InvalidArgumentException('File push topics require a keyed TopicResolver');
+        }
 
-        return substr($b64, 0, 22);
+        return TopicResolver::legacy($path);
+    }
+
+    /**
+     * Enqueue file-home changes made through the portal, with the same fan-out
+     * as DAV writes. Changes outside files/{username} are ignored.
+     */
+    public static function filesChanged(\PDO $pdo, string $username, FilesChangeSet $changes): void {
+        if ($changes->isEmpty()) {
+            return;
+        }
+        $config = self::readConfig();
+        $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
+        if (empty($sys['push_enabled']) || empty($sys['push_files_enabled'])) {
+            return;
+        }
+        $logger = new PushLogger(isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : null);
+        try {
+            $home = FilesPushPaths::ROOT . '/' . trim($username, '/');
+            $scoped = new FilesChangeSet();
+            foreach ($changes->members() as $path) {
+                if (FilesPushPaths::homeRoot($path) === $home) {
+                    $scoped->member($path);
+                }
+            }
+            foreach ($changes->removedPaths() as $path) {
+                if (FilesPushPaths::homeRoot($path) === $home) {
+                    $scoped->removed($path);
+                }
+            }
+            SchemaManager::ensure($pdo);
+            $database = is_array($config['database'] ?? null) ? $config['database'] : [];
+            $cipher = new SecretCipher((string) ($database['encryption_key'] ?? ''));
+            $dispatcher = new FilesPushDispatcher(
+                new QueueStorage($pdo),
+                new SubscriptionStorage($pdo, $cipher),
+                new TopicResolver($cipher),
+                $logger
+            );
+            $dispatcher->dispatch($scoped, static fn (string $path): array => [], 'portal');
+        } catch (\Throwable $e) {
+            $logger->error('portal files enqueue failed', ['error' => $e->getMessage()]);
+        }
     }
 
     private static function enqueue(\PDO $pdo, string $resourceUri, ?string $syncToken): void {
@@ -190,14 +234,7 @@ class ChangeNotifier {
     }
 
     private static function isPushEnabled(): bool {
-        if (!defined('PROJECT_PATH_CONFIG')) {
-            return false;
-        }
-        try {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
-        } catch (\Throwable $e) {
-            return false;
-        }
+        $config = self::readConfig();
         $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
 
         return !empty($sys['push_enabled']);
@@ -207,18 +244,26 @@ class ChangeNotifier {
      * Same dedicated log file as PushPlugin (never PHP error_log(); see PushLogger).
      */
     private static function logger(): PushLogger {
-        $level = null;
-        if (defined('PROJECT_PATH_CONFIG')) {
-            try {
-                $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
-                $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
-                $level = isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : null;
-            } catch (\Throwable $e) {
-                $level = null;
-            }
+        $config = self::readConfig();
+        $sys = is_array($config['system'] ?? null) ? $config['system'] : [];
+
+        return new PushLogger(isset($sys['push_log_level']) ? (string) $sys['push_log_level'] : null);
+    }
+
+    /**
+     * @return array<string, mixed> parsed configuration.yaml, or [] when unavailable
+     */
+    private static function readConfig(): array {
+        if (!defined('PROJECT_PATH_CONFIG')) {
+            return [];
+        }
+        try {
+            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . 'configuration.yaml');
+        } catch (\Throwable $e) {
+            return [];
         }
 
-        return new PushLogger($level);
+        return is_array($config) ? $config : [];
     }
 
     private static function calendarSyncToken(\PDO $pdo, int $calendarId): ?string {

@@ -64,6 +64,20 @@ try {
     assert_true($get['files_enabled'] === false, 'files off');
     assert_true($get['cal_enabled'] === true, 'cal on');
     assert_true($get['writable'] === true, 'writable');
+    assert_true($get['push_files_enabled'] === false, 'push_files_enabled defaults to false');
+    assert_true($get['push_max_subscriptions_per_principal'] === 50, 'per-user push subscription default is 50');
+
+    $pushFiles = $svc->updateSystemSettings([
+        'push_files_enabled'                   => 'true',
+        'push_max_subscriptions_per_principal' => 5000,
+    ]);
+    assert_true($pushFiles['push_files_enabled'] === true, 'push_files_enabled is editable and coerced to bool');
+    assert_true($pushFiles['push_max_subscriptions_per_principal'] === 1000, 'per-user push subscriptions clamp to 1000');
+    assert_true(
+        Yaml::parseFile($path)['system']['push_files_enabled'] === true,
+        'push_files_enabled is stored without requiring push or files to be on'
+    );
+    $svc->updateSystemSettings(['push_files_enabled' => false, 'push_max_subscriptions_per_principal' => 50]);
 
     $updated = $svc->updateSystemSettings([
         'files_enabled'       => true,

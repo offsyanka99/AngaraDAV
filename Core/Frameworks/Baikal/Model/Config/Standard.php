@@ -55,10 +55,12 @@ class Standard extends \Baikal\Model\Config {
         // WebDAV-Push (draft-bitfire-webdav-push): server-initiated change
         // notifications over Web Push (RFC 8030/8291/8292) for CalDAV/CardDAV.
         "push_enabled"             => false,
+        // Also push changes in WebDAV file homes (needs push_enabled + files_enabled)
+        "push_files_enabled"       => false,
         // WebDAV-Push debug log level -> Specific/push_debug.log
         "push_log_level"           => "off",
         "push_external_url"        => "",
-        "push_max_subscriptions_per_principal" => 20,
+        "push_max_subscriptions_per_principal" => 50,
         "push_max_subscriptions_per_resource"  => 100,
         "push_max_registrations_per_hour"      => 30,
         "push_worker_batch_size"               => 20,

@@ -101,6 +101,14 @@ $after = $settings->getSystemSettings();
 assert_true((int) $after['files_max_upload_mb'] === 512, 'restore actually wrote the new value');
 assert_true($after['timezone'] === 'America/Toronto', 'restore actually wrote timezone');
 
+$docPush = $backup->export('admin');
+assert_true(($docPush['settings']['push_files_enabled'] ?? null) === false, 'export includes push_files_enabled');
+$docPush['settings']['push_files_enabled'] = true;
+unset($docPush['checksum']);
+$restoredPush = $backup->restore($docPush, true, 'admin');
+assert_true($restoredPush['applied'] === ['push_files_enabled'], 'restore applies push_files_enabled');
+assert_true($settings->getSystemSettings()['push_files_enabled'] === true, 'push_files_enabled round-trips through backup');
+
 // Unknown key: ignored, not applied, no error
 $doc3 = $doc;
 $doc3['settings']['totally_made_up_key'] = 'x';

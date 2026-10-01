@@ -102,7 +102,7 @@ Two independent HTTP surfaces sit on the same data:
 
 ### CI
 
-- [.github/workflows/ci.yml](../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs 17 named PHP test scripts individually, then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs `FileSchemaDriverTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
+- [.github/workflows/ci.yml](../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs every `tests/php/*.php` script as a named step (41, no glob), then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs the PostgreSQL-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
 - [.github/workflows/docker.yml](../.github/workflows/docker.yml) — multi-arch (`linux/amd64,linux/arm64`) GHCR publish. Tags: `latest` (default branch only), `sha-<sha>`, branch ref, tag ref, semver. Build args `GIT_SHA`, `BUILD_TIME`. **Only branches in its `push.branches` allowlist publish images.**
 - [.github/actions/build/action.yaml](../.github/actions/build/action.yaml) — composite setup (PHP extensions, Composer cache, installs `patch` for the vendor-patch hook).
 
@@ -167,7 +167,7 @@ The single place the DAV node tree and every plugin are assembled.
 
 ### WebDAV-Push — [Core/Frameworks/Baikal/Core/Plugins/Push](../Core/Frameworks/Baikal/Core/Plugins/Push)
 
-Implements draft-bitfire-webdav-push. `PushPlugin` handles registration and change dispatch; `ChangeNotifier` lets portal API writes enqueue the same jobs as DAV writes; `QueueStorage`/`SubscriptionStorage` persist state; `SubscriptionValidator` performs SSRF-style endpoint validation with host pinning; `SecretCipher` encrypts stored secrets with `database.encryption_key`; `VapidKeyStore` persists the VAPID identity to `Specific/push_vapid.json`; `PushWorker` is the bounded CLI loop driven by [scripts/push-worker.php](../scripts/push-worker.php). `PushLogger` writes only to `Specific/push_debug.log` — never `error_log()`.
+Implements draft-bitfire-webdav-push. `PushPlugin` handles registration and change dispatch; `ChangeNotifier` lets portal API writes enqueue the same jobs as DAV writes; `QueueStorage`/`SubscriptionStorage` persist state; `TopicResolver` derives push topics (keyed HMAC for `files/` paths); `SubscriptionValidator` performs SSRF-style endpoint validation with host pinning; `SecretCipher` encrypts stored secrets with `database.encryption_key`; `VapidKeyStore` persists the VAPID identity to `Specific/push_vapid.json`; `PushWorker` is the bounded CLI loop driven by [scripts/push-worker.php](../scripts/push-worker.php). `PushLogger` writes only to `Specific/push_debug.log` — never `error_log()`. With `push_files_enabled`, `FilesPushDispatcher` fans file-home changes (DAV and portal) out to subscribed folders with a change level, and the worker delivers when a subscription's depth covers that level.
 
 ### Config models — [Core/Frameworks/Baikal/Model](../Core/Frameworks/Baikal/Model)
 

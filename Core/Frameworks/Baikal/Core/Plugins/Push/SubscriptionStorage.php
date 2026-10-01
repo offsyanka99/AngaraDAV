@@ -126,6 +126,67 @@ class SubscriptionStorage {
     }
 
     /**
+     * Which of $uris have at least one active subscription (no decryption).
+     *
+     * @param array<int, string> $uris
+     *
+     * @return list<string>
+     */
+    public function findActiveResourceUris(array $uris): array {
+        $uris = array_values(array_unique(array_map('strval', $uris)));
+        $found = [];
+        $now = time();
+        foreach (array_chunk($uris, 500) as $chunk) {
+            $stmt = $this->pdo->prepare(
+                'SELECT DISTINCT resource_uri FROM push_subscriptions WHERE resource_uri IN ('
+                . implode(', ', array_fill(0, count($chunk), '?')) . ') AND expires > ?'
+            );
+            $stmt->execute(array_merge($chunk, [$now]));
+            foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) ?: [] as $uri) {
+                $found[] = (string) $uri;
+            }
+        }
+
+        return array_values(array_unique($found));
+    }
+
+    /**
+     * Actively subscribed resource URIs strictly below $prefix (no decryption).
+     *
+     * @return list<string>
+     */
+    public function findActiveResourceUrisUnder(string $prefix): array {
+        $prefix = trim($prefix, '/');
+        if ($prefix === '') {
+            return [];
+        }
+        $like = str_replace(['=', '%', '_'], ['==', '=%', '=_'], $prefix) . '/%';
+        $stmt = $this->pdo->prepare(
+            "SELECT DISTINCT resource_uri FROM push_subscriptions WHERE resource_uri LIKE ? ESCAPE '=' AND expires > ?"
+        );
+        $stmt->execute([$like, time()]);
+        $found = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) ?: [] as $uri) {
+            // SQLite LIKE is ASCII case-insensitive; enforce an exact prefix.
+            if (str_starts_with((string) $uri, $prefix . '/')) {
+                $found[] = (string) $uri;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @return int number of rows removed
+     */
+    public function deleteByPrincipal(string $principaluri): int {
+        $stmt = $this->pdo->prepare('DELETE FROM push_subscriptions WHERE principaluri = ?');
+        $stmt->execute([$principaluri]);
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * Remove a subscription, scoped to its owner (spec section 7.1).
      *
      * @return bool true if a row was deleted

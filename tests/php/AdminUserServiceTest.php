@@ -225,6 +225,10 @@ $pdo2->exec("INSERT INTO calendarsubscriptions (principaluri) VALUES ('principal
 
 $del = $svc2->deleteUser('carol', true);
 assert_true($del['ok'] === true && $del['username'] === 'carol', 'delete ok');
+assert_true(
+    (int) $pdo2->query("SELECT COUNT(*) FROM sqlite_master WHERE name = 'push_subscriptions'")->fetchColumn() === 0,
+    'delete works when the push tables do not exist'
+);
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM users WHERE username='carol'")->fetchColumn() === 0, 'user row gone');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM principals WHERE uri='principals/carol'")->fetchColumn() === 0, 'principal gone');
 assert_true((int) $pdo2->query("SELECT COUNT(*) FROM calendarinstances WHERE principaluri='principals/carol'")->fetchColumn() === 0, 'calendars gone');
@@ -249,6 +253,63 @@ try {
 } catch (ApiException $e) {
     assert_true($e->getStatus() === 400, 'delete last user → 400');
 }
+
+// --- Delete purges WebDAV-Push state so a reused username inherits nothing ---
+$pdoPush = fresh_pdo();
+$svcPush = new AdminUserService($pdoPush, $config);
+foreach (['dave' => 'dave', 'Dave' => 'dave-upper', 'dave2' => 'dave2', 'erin' => 'erin'] as $name => $mailbox) {
+    $svcPush->createUser([
+        'username'        => $name,
+        'displayname'     => $name,
+        'email'           => $mailbox . '@example.com',
+        'password'        => 'secret',
+        'passwordConfirm' => 'secret',
+    ]);
+}
+\Baikal\Core\Plugins\Push\SchemaManager::ensure($pdoPush);
+$insertSub = $pdoPush->prepare(
+    'INSERT INTO push_subscriptions (registration_token, principaluri, resource_uri, topic, push_resource,'
+    . ' push_resource_hash, pubkey, auth_secret, triggers, created, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+);
+$subscriptions = [
+    ['principals/dave', 'calendars/dave/default'],
+    ['principals/dave', 'addressbooks/dave/default'],
+    ['principals/dave', 'files/dave/Docs'],
+    ['principals/dave', 'principals/dave'],
+    ['principals/erin', 'calendars/dave/default'],
+    ['principals/Dave', 'files/Dave/Docs'],
+    ['principals/dave2', 'files/dave2'],
+    ['principals/erin', 'calendars/erin/default'],
+];
+foreach ($subscriptions as $i => [$owner, $resource]) {
+    $insertSub->execute(['tok' . $i, $owner, $resource, 't', 'ep', 'hash' . $i, 'pub', 'auth', '{}', time(), time() + 3600]);
+}
+$insertJob = $pdoPush->prepare('INSERT INTO push_queue (resource_uri, topic, available_at, created) VALUES (?, ?, ?, ?)');
+foreach (['calendars/dave', 'calendars/dave/default', 'addressbooks/dave/default', 'files/dave/Docs', 'principals/dave',
+    'files/Dave/Docs', 'files/dave2', 'calendars/erin/default'] as $resource) {
+    $insertJob->execute([$resource, 't', time(), time()]);
+}
+$pdoPush->exec("INSERT INTO propertystorage (path, name) VALUES ('files/dave/a', 'n'), ('files/Dave/a', 'n'), ('calendars/Dave/default', 'n')");
+
+$svcPush->deleteUser('dave', true);
+$remainingSubs = $pdoPush->query('SELECT principaluri, resource_uri FROM push_subscriptions ORDER BY resource_uri')->fetchAll(PDO::FETCH_NUM);
+assert_true(
+    $remainingSubs === [
+        ['principals/erin', 'calendars/erin/default'],
+        ['principals/Dave', 'files/Dave/Docs'],
+        ['principals/dave2', 'files/dave2'],
+    ],
+    "delete removes the user's subscriptions and others' subscriptions on the user's collections only"
+);
+$remainingJobs = $pdoPush->query('SELECT resource_uri FROM push_queue ORDER BY resource_uri')->fetchAll(PDO::FETCH_COLUMN);
+assert_true(
+    $remainingJobs === ['calendars/erin/default', 'files/Dave/Docs', 'files/dave2'],
+    'delete removes queued jobs under the user\'s paths, not under prefix or case neighbours'
+);
+assert_true(
+    $pdoPush->query('SELECT path FROM propertystorage ORDER BY path')->fetchAll(PDO::FETCH_COLUMN) === ['calendars/Dave/default', 'files/Dave/a'],
+    'DAV metadata cleanup is case-sensitive'
+);
 
 // --- Last Admin role user (default: username "admin") ---
 $pdoAdmin = fresh_pdo();

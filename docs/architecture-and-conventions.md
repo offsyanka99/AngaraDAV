@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.2` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.3` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
 
@@ -122,8 +122,8 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
 
-- `code-analysis` runs **17 named** `php tests/php/*.php` scripts individually, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`.
-- `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (41), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
+- `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 
 It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
 
@@ -148,7 +148,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.2`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.3`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -263,14 +263,16 @@ Every DAV/API entry defines `PROJECT_PATH_ROOT`, then:
 
 ### WebDAV-Push — [`Core/Frameworks/Baikal/Core/Plugins/Push`](../Core/Frameworks/Baikal/Core/Plugins/Push)
 
-Implements draft-bitfire-webdav-push. Optional; not advertised until `push_external_url` / `ANGARA_PUSH_EXTERNAL_URL` is valid HTTPS. **Does not cover file homes.**
+Implements draft-bitfire-webdav-push. Optional; not advertised until `push_external_url` / `ANGARA_PUSH_EXTERNAL_URL` is valid HTTPS. **File homes are opt-in** via `system.push_files_enabled` (Admin → System settings; off by default); DAV and portal file writes both notify. `AdminDashboardService` reports aggregate push stats (subscriptions per kind, queue backlog).
 
 | Class | Role |
 |---|---|
 | [`PushPlugin.php`](../Core/Frameworks/Baikal/Core/Plugins/PushPlugin.php) | Sabre plugin: registration + change dispatch |
 | [`ChangeNotifier.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/ChangeNotifier.php) | Portal API writes enqueue the same jobs as DAV writes |
 | [`Notifier.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/Notifier.php) | Delivery |
-| [`QueueStorage.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/QueueStorage.php) / [`SubscriptionStorage.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/SubscriptionStorage.php) | Persistence |
+| [`QueueStorage.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/QueueStorage.php) / [`SubscriptionStorage.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/SubscriptionStorage.php) | Persistence; queue jobs are revision-guarded so changes merged during delivery are kept |
+| [`TopicResolver.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/TopicResolver.php) | Push topics: unkeyed SHA-256 for CalDAV/CardDAV, keyed HMAC for `files/` paths |
+| [`FilesPushDispatcher.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/FilesPushDispatcher.php), [`FilesPushFanout.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/FilesPushFanout.php), [`FilesChangeSet.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/FilesChangeSet.php), [`FilesPushPaths.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/FilesPushPaths.php) | File-home changes → debounced jobs for subscribed directories with a change level (0 removed, 1 member, 2 descendant); the worker delivers when the subscription's depth rank ≥ level |
 | [`SubscriptionValidator.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/SubscriptionValidator.php) | SSRF-style endpoint validation + host pinning |
 | [`SecretCipher.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/SecretCipher.php) | Encrypts stored secrets with `database.encryption_key` |
 | [`VapidKeyStore.php`](../Core/Frameworks/Baikal/Core/Plugins/Push/VapidKeyStore.php) | VAPID identity → `Specific/push_vapid.json` |
@@ -709,7 +711,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 `Specific/` as a directory is **not** gitignored wholesale — only the named lock/secret/log files above. Portal logging never uses `error_log()` (php-fpm would tag `[error]`).
 
-**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
+**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
 
 **YAML `database` keys:** `encryption_key`, `backend` (`sqlite` \| `pgsql`), `sqlite_file`, `pgsql_host`, `pgsql_dbname`, `pgsql_username`, `pgsql_password`.
 
@@ -936,7 +938,7 @@ Observed in every `tests/php/*.php` file (canonical: [`AdminSettingsServiceTest.
 
 Do **not** introduce PHPUnit/Pest or a shared test base class.
 
-### PHP test files (36)
+### PHP test files (43)
 
 | File | Covers |
 |---|---|
@@ -961,6 +963,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `FileDownloadRateLimiterTest.php` | Download limiter |
 | `FileHomeStorageTest.php` | HomeStorage safety |
 | `FileSchemaDriverTest.php` | SQLite + optional Postgres |
+| `FileServicePushTest.php` | Portal file writes → WebDAV-Push |
 | `FileServiceTest.php` | Portal FileService |
 | `FilesMaintenanceSchedulerTest.php` | Entrypoint 46 + maintenance script |
 | `HealthEndpointTest.php` | `health.php` |
@@ -969,7 +972,13 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `NginxCspHeadersTest.php` | CSP include |
 | `NoteDescriptionFormatTest.php` | HTML/Markdown bridge |
 | `PortalUiSettingsTest.php` | `/ui` settings |
+| `PushFilesFanoutTest.php` | File-home push paths, fan-out levels, dispatcher |
+| `PushFilesPluginTest.php` | File-home push through a SabreDAV server |
 | `PushPluginTest.php` | WebDAV-Push |
+| `PushQueueMergeTest.php` | Push queue merge, revision guard, debounce, column migration |
+| `PushSchemaPgsqlTest.php` | Push queue migration on optional Postgres |
+| `PushWorkerAuthorizationTest.php` | Push worker CalDAV/CardDAV authorization (owner, calendar proxies) |
+| `PushWorkerFilesTest.php` | Push worker depth rule, grouped payloads, file-home authorization |
 | `ReadOnlyPluginTest.php` | CalDAV read-only |
 | `SameOriginTest.php` | Origin/Referer gate |
 | `ServerExceptionLoggingTest.php` | DAV exception logger |

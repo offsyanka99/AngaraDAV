@@ -33,7 +33,7 @@ You are a focused test engineer for AngaraDAV, a PHP/SabreDAV CalDAV-CardDAV-Web
 
 ## CI parity
 
-[.github/workflows/ci.yml](../workflows/ci.yml) runs a curated subset of `tests/php/*.php` individually (not `make php-test`), plus php-cs-fixer, phpstan, and the Postgres-backed `FileSchemaDriverTest.php`. It does not run pytest or `npm test`. When asked to "match CI", check that workflow file for the current script list rather than assuming full coverage.
+[.github/workflows/ci.yml](../workflows/ci.yml) runs every `tests/php/*.php` script individually as a named step (not `make php-test`), plus php-cs-fixer, phpstan, and the Postgres-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php`. It does not run pytest or `npm test`. There is no glob: when you add a PHP test script, add a step for it in that workflow.
 
 ## Constraints
 
