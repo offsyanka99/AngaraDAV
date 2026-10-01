@@ -205,6 +205,29 @@ export type AdminCapabilities = {
   pages: AdminCapabilityPage[];
 };
 
+/** One row from GET /api/admin/push-subscriptions. No endpoint URL or key material. */
+export type AdminPushSubscription = {
+  id: number;
+  username: string;
+  principalUri: string;
+  kind: string;
+  resourceUri: string;
+  endpointHost: string;
+  endpointHint: string;
+  contentDepth: string | null;
+  propertyDepth: string | null;
+  created: number;
+  expires: number;
+  expired: boolean;
+};
+
+/** GET /api/admin/push-subscriptions payload (`data`). */
+export type AdminPushSubscriptionList = {
+  subscriptions: AdminPushSubscription[];
+  /** Expired rows omitted by the default filter. 0 when expired=1. */
+  expiredHidden: number;
+};
+
 export type Calendar = {
   id: number;
   calendarId: number;

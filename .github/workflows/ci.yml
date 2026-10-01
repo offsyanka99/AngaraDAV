@@ -70,6 +70,8 @@ jobs:
         run: php tests/php/AdminBackupServiceTest.php
       - name: Admin capabilities unit test
         run: php tests/php/AdminCapabilitiesServiceTest.php
+      - name: Admin push subscriptions unit test
+        run: php tests/php/AdminPushSubscriptionServiceTest.php
       - name: Admin dashboard unit test
         run: php tests/php/AdminDashboardServiceTest.php
       - name: Admin settings unit test

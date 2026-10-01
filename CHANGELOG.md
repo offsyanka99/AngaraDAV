@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.6 — 2026-10-01
+
+### Portal
+- **Administration → Subscriptions** is shown only while WebDAV-Push is on. It lists each subscription (user, kind, resource, a short endpoint hint, triggers, created, and expires) and does not show the endpoint URL, registration token, or keys. Remove deletes the chosen rows after confirmation, which stops notifications to those devices. The device registers again the next time it sets up WebDAV-Push. Remove expired clears rows that are already past their expiry. Turning WebDAV-Push off hides the tab, and the API answers 404.
+
 ## 2.5.5 — 2026-10-01
 
 ### WebDAV-Push

@@ -3,12 +3,14 @@
  */
 import { api } from "../../api";
 import { log } from "../../log";
+import { openConfirmDelete } from "../confirmDelete";
 import type { AdminPageId } from "../types";
 import type { AdminHost } from "./host";
 import { activateAdminPage } from "./page";
 import {
   loadAdminDashboard,
   loadAdminDatabaseSettings,
+  loadAdminSubscriptions,
   loadAdminSystemSettings,
   loadAdminUserDetail,
   loadAdminUserResources,
@@ -27,7 +29,8 @@ function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
     raw === "users" ||
     raw === "settings" ||
     raw === "database" ||
-    raw === "configuration"
+    raw === "configuration" ||
+    raw === "subscriptions"
   ) {
     return raw;
   }
@@ -466,6 +469,66 @@ if (action === "admin-db-confirm-save") {
     host.state.busy = false;
     host.render();
   }
+  return true;
+}
+if (action === "admin-subscriptions-refresh" || action === "admin-subscriptions-toggle-expired") {
+  if (!host.userIsAdmin() || host.state.activeTab !== "admin") return true;
+  if (action === "admin-subscriptions-toggle-expired") {
+    host.state.adminSubscriptionsShowExpired = !host.state.adminSubscriptionsShowExpired;
+  }
+  host.state.busy = true;
+  host.clearFlash();
+  host.render();
+  try {
+    await loadAdminSubscriptions(host);
+    host.setFlash(
+      "success",
+      action === "admin-subscriptions-refresh" ? "Subscriptions refreshed" : "Subscription list updated",
+    );
+  } catch (e) {
+    host.setFlash("error", e instanceof Error ? e.message : "Refresh failed");
+  } finally {
+    host.state.busy = false;
+    host.render();
+  }
+  return true;
+}
+if (action === "admin-subscription-delete") {
+  const id = Number(t.dataset.id);
+  if (!Number.isInteger(id) || id <= 0) return true;
+  openConfirmDelete(host.state, {
+    scope: "push-subscription",
+    title: "Remove subscription",
+    message: "Remove this subscription? Notifications to that device will stop.",
+    detail: "The device registers again the next time it sets up WebDAV-Push.",
+    ids: [id],
+    count: 1,
+  });
+  host.render();
+  return true;
+}
+if (action === "admin-subscriptions-delete-selected") {
+  const ids = host.state.adminSubscriptionSelection;
+  if (ids.length === 0) return true;
+  openConfirmDelete(host.state, {
+    scope: "push-subscriptions",
+    title: "Remove subscriptions",
+    message: `Remove ${ids.length} subscription${ids.length === 1 ? "" : "s"}? Notifications to those devices will stop.`,
+    detail: "Those devices register again the next time they set up WebDAV-Push.",
+    ids: [...ids],
+    count: ids.length,
+  });
+  host.render();
+  return true;
+}
+if (action === "admin-subscriptions-purge") {
+  openConfirmDelete(host.state, {
+    scope: "push-subscriptions-expired",
+    title: "Remove expired subscriptions",
+    message: "Remove every subscription that is already past its expiry? Notifications to those devices will stop.",
+    detail: "Active subscriptions stay in place. Rows also expire on their own.",
+  });
+  host.render();
   return true;
 }
 

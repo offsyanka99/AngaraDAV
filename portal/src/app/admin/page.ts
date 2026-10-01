@@ -9,6 +9,7 @@ import {
   loadAdminCapabilities,
   loadAdminDashboard,
   loadAdminDatabaseSettings,
+  loadAdminSubscriptions,
   loadAdminSystemSettings,
   loadAdminUserDetail,
   loadAdminUserResources,
@@ -19,6 +20,7 @@ import { renderAdminUsersShell } from "./users";
 import { renderAdminSettingsShell } from "./settings";
 import { renderAdminDatabaseShell } from "./database";
 import { renderAdminConfigurationShell } from "./configuration";
+import { renderAdminSubscriptionsShell } from "./subscriptions";
 
 export async function activateAdminPage(
   host: AdminHost,
@@ -31,6 +33,9 @@ export async function activateAdminPage(
   }
   host.state.activeTab = "admin";
   host.state.adminPage = page;
+  if (page !== "subscriptions") {
+    host.state.adminSubscriptionSelection = [];
+  }
   if (page !== "users") {
     host.state.adminSelectedUsername = null;
     host.state.adminUserDetail = null;
@@ -72,6 +77,16 @@ export async function activateAdminPage(
       await loadAdminSystemSettings(host);
     } else if (page === "database" && meta?.available !== false) {
       await loadAdminDatabaseSettings(host);
+    } else if (page === "subscriptions") {
+      if (meta == null || meta.available === false) {
+        host.state.adminPage = "overview";
+        host.state.adminSubscriptionSelection = [];
+        host.persistTab("admin", "overview", host.state.adminSelectedUsername);
+        host.setFlash("info", "WebDAV-Push is off.");
+        await loadAdminDashboard(host);
+      } else {
+        await loadAdminSubscriptions(host);
+      }
     }
   } catch (e) {
     log.warn("admin page load failed", e instanceof Error ? e.message : e);
@@ -99,6 +114,7 @@ export function renderAdminSection(host: AdminHost): string {
       </section>`;
   }
   if (host.state.adminPage === "users") return renderAdminUsersShell(host);
+  if (host.state.adminPage === "subscriptions") return renderAdminSubscriptionsShell(host);
   if (host.state.adminPage === "settings") return renderAdminSettingsShell(host);
   if (host.state.adminPage === "database") return renderAdminDatabaseShell(host);
   if (host.state.adminPage === "configuration") return renderAdminConfigurationShell(host);

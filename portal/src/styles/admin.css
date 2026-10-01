@@ -314,4 +314,8 @@ label.check-row input[type="radio"] {
   text-align: left;
 }
 
+.admin-subscription-expired td {
+  opacity: 0.72;
+}
+
 /* Administration uses the same main width as the user portal (no wider container) */

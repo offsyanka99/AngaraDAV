@@ -13,7 +13,10 @@ export type ConfirmDeleteScope =
   | "bulk-task"
   | "bulk-note"
   | "bulk-contact"
-  | "revoke-share";
+  | "revoke-share"
+  | "push-subscription"
+  | "push-subscriptions"
+  | "push-subscriptions-expired";
 
 export type ConfirmDeleteState = {
   scope: ConfirmDeleteScope;
@@ -28,6 +31,8 @@ export type ConfirmDeleteState = {
   count?: number;
   /** Direct + nested subtasks of a parent being deleted (exclude self). */
   taskDescendantCount?: number;
+  /** Subscription ids for push-subscription and push-subscriptions. */
+  ids?: number[];
 };
 
 export function renderConfirmDeleteModal(state: AppState): string {
@@ -37,6 +42,12 @@ export function renderConfirmDeleteModal(state: AppState): string {
     ? `<p class="muted small" style="margin:0.75rem 0 0">${esc(d.detail)}</p>`
     : "";
   const hasSubs = (d.taskDescendantCount ?? 0) > 0;
+  const confirmLabel =
+    d.scope === "push-subscription" ||
+    d.scope === "push-subscriptions" ||
+    d.scope === "push-subscriptions-expired"
+      ? "Remove"
+      : "Delete";
   const footer = hasSubs
     ? [
         {
@@ -66,7 +77,7 @@ export function renderConfirmDeleteModal(state: AppState): string {
           disabled: state.busy,
         },
         {
-          label: "Delete",
+          label: confirmLabel,
           action: "confirm-delete-ok",
           variant: "danger" as const,
           disabled: state.busy,

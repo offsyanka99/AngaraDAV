@@ -12,7 +12,8 @@ function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
     raw === "users" ||
     raw === "settings" ||
     raw === "database" ||
-    raw === "configuration"
+    raw === "configuration" ||
+    raw === "subscriptions"
   ) {
     return raw;
   }
@@ -47,12 +48,20 @@ export function adminStatusBadgeClass(_host: AdminHost, status: string): string 
 }
 
 export function adminSubnavButtons(host: AdminHost): string {
-  /** Fixed UI order: Overview → System settings → Users → Database → Configuration */
-  const order: AdminPageId[] = ["overview", "settings", "users", "database", "configuration"];
+  /** Fixed UI order: Overview → System settings → Users → Subscriptions → Database → Configuration */
+  const order: AdminPageId[] = [
+    "overview",
+    "settings",
+    "users",
+    "subscriptions",
+    "database",
+    "configuration",
+  ];
   const labels: Record<AdminPageId, string> = {
     overview: "Overview",
     settings: "System settings",
     users: "Users",
+    subscriptions: "Subscriptions",
     database: "Database",
     configuration: "Configuration",
   };
@@ -65,6 +74,11 @@ export function adminSubnavButtons(host: AdminHost): string {
   }
 
   return order
+    .filter((id) => {
+      if (id !== "subscriptions") return true;
+      const page = byId.get(id);
+      return page != null && page.available !== false;
+    })
     .map((id) => {
       const p = byId.get(id);
       const label = p?.label || labels[id];

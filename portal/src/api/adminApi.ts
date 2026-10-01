@@ -3,6 +3,7 @@ import type {
   AdminCapabilities,
   AdminDashboardStats,
   AdminDatabaseSettings,
+  AdminPushSubscriptionList,
   AdminSettingsBackup,
   AdminSettingsRestoreResult,
   AdminSystemSettings,
@@ -192,6 +193,35 @@ export const adminApi = {
     request<{ data: AdminDatabaseSettings }>("/admin/settings/database", {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+  /** GET /api/admin/push-subscriptions. 404 when WebDAV-Push is off. */
+  adminPushSubscriptions: (query?: { user?: string; kind?: string; expired?: string }) => {
+    const q = new URLSearchParams();
+    if (query?.user) q.set("user", query.user);
+    if (query?.kind) q.set("kind", query.kind);
+    if (query?.expired) q.set("expired", query.expired);
+    const qs = q.toString();
+    return request<{ data: AdminPushSubscriptionList }>(
+      `/admin/push-subscriptions${qs ? `?${qs}` : ""}`,
+    );
+  },
+  /** DELETE /api/admin/push-subscriptions/{id}. Body confirm: true. */
+  adminDeletePushSubscription: (id: number, confirm = true) =>
+    request<{ ok: boolean }>(`/admin/push-subscriptions/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm }),
+    }),
+  /** POST /api/admin/push-subscriptions/delete. Unknown ids are counted as missing. */
+  adminDeletePushSubscriptions: (ids: number[], confirm = true) =>
+    request<{ ok: boolean; deleted: number; missing: number }>(
+      "/admin/push-subscriptions/delete",
+      { method: "POST", body: JSON.stringify({ ids, confirm }) },
+    ),
+  /** POST /api/admin/push-subscriptions/purge. Removes rows already past expires. */
+  adminPurgePushSubscriptions: (confirm = true) =>
+    request<{ ok: boolean; deleted: number }>("/admin/push-subscriptions/purge", {
+      method: "POST",
+      body: JSON.stringify({ confirm }),
     }),
   me: async () => {
     const data = await request<{

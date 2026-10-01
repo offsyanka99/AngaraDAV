@@ -6,6 +6,7 @@ use Baikal\Portal\Admin\AdminAudit;
 use Baikal\Portal\Admin\AdminBackupService;
 use Baikal\Portal\Admin\AdminCapabilitiesService;
 use Baikal\Portal\Admin\AdminDashboardService;
+use Baikal\Portal\Admin\AdminPushSubscriptionService;
 use Baikal\Portal\Admin\AdminSettingsService;
 use Baikal\Portal\Admin\AdminUserResourceService;
 use Baikal\Portal\Admin\AdminUserService;
@@ -24,6 +25,7 @@ class App {
     private AdminAudit $adminAudit;
     private AdminDashboardService $adminDashboard;
     private AdminCapabilitiesService $adminCapabilities;
+    private AdminPushSubscriptionService $adminPushSubscriptions;
     private AdminUserService $adminUsers;
     private AdminUserResourceService $adminResources;
     private AdminSettingsService $adminSettings;
@@ -62,6 +64,7 @@ class App {
         $this->adminAudit = new AdminAudit($this->portalSpecificDir(), $this->portalLogLevel());
         $this->adminDashboard = new AdminDashboardService($pdo, $config);
         $this->adminCapabilities = new AdminCapabilitiesService($config);
+        $this->adminPushSubscriptions = new AdminPushSubscriptionService($pdo, $config, $this->adminAudit);
         $this->adminUsers = new AdminUserService($pdo, $config);
         $this->adminResources = new AdminUserResourceService($pdo, $config);
         $configPath = defined('PROJECT_PATH_CONFIG')
@@ -1145,6 +1148,45 @@ class App {
                     throw $e;
                 }
             }
+        }
+
+        // WebDAV-Push subscriptions. Bulk paths are exact matches and are not
+        // captured by the {id} pattern. Push off is 404 from the service.
+        if ($method === 'GET' && ($adminPath === '/admin/push-subscriptions' || $adminPath === '/admin/push-subscriptions/')) {
+            return [
+                'data' => $this->adminPushSubscriptions->listFromQuery($_GET),
+            ];
+        }
+
+        if ($adminPath === '/admin/push-subscriptions/delete' || $adminPath === '/admin/push-subscriptions/delete/') {
+            if ($method !== 'POST') {
+                throw new ApiException('Method not allowed', 405);
+            }
+            $body = $this->http->jsonBody();
+
+            return $this->adminPushSubscriptions->deleteMany(
+                $adminUser,
+                $body['ids'] ?? null,
+                $body['confirm'] ?? null
+            );
+        }
+
+        if ($adminPath === '/admin/push-subscriptions/purge' || $adminPath === '/admin/push-subscriptions/purge/') {
+            if ($method !== 'POST') {
+                throw new ApiException('Method not allowed', 405);
+            }
+            $body = $this->http->jsonBody();
+
+            return $this->adminPushSubscriptions->purge($adminUser, $body['confirm'] ?? null);
+        }
+
+        if (preg_match('#^/admin/push-subscriptions/(\d+)/?$#', $adminPath, $m)) {
+            if ($method !== 'DELETE') {
+                throw new ApiException('Method not allowed', 405);
+            }
+            $body = $this->http->jsonBody();
+
+            return $this->adminPushSubscriptions->deleteOne($adminUser, (int) $m[1], $body['confirm'] ?? null);
         }
 
         // Unknown admin route — 404 (not 403) so missing features are obvious

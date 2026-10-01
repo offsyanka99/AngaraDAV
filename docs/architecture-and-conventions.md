@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.5` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.6` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
 
@@ -98,7 +98,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | Dev deps | `typescript ^6.0.3`, `vite ^8.2.2` | [`portal/package.json`](../portal/package.json) |
 | TS config | ES2022, `moduleResolution: bundler`, `strict`, `noEmit`, `noUnusedLocals` / `noUnusedParameters`; `src/**/*.test.ts` excluded from typecheck | [`portal/tsconfig.json`](../portal/tsconfig.json) |
 | Vite | `base: "/portal/"`, `outDir: "../html/portal"`, `emptyOutDir`, `sourcemap: false`; dev proxy `/api` → `ANGARADAV_API` or `http://127.0.0.1:31088` | [`portal/vite.config.ts`](../portal/vite.config.ts) |
-| Tests | Node built-in `node:test` via `--experimental-strip-types`; **17 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
+| Tests | Node built-in `node:test` via `--experimental-strip-types`; **20 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
 
 ### Make targets — [`Makefile`](../Makefile)
 
@@ -122,7 +122,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
 
-- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (42), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (43), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 
 It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
@@ -148,7 +148,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.5`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.6`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -404,13 +404,14 @@ Same storage as `/dav.php/files/{username}/`. Upload releases the PHP session lo
 
 ### Admin API — [`Core/Frameworks/Baikal/Portal/Admin`](../Core/Frameworks/Baikal/Portal/Admin)
 
-Seven focused types (six services + audit). Routed only from `dispatchAdminRoutes()`.
+Eight focused types (seven services + audit). Routed only from `dispatchAdminRoutes()`.
 
 | Class | Path | Responsibility |
 |---|---|---|
 | `AdminAudit` | [`AdminAudit.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminAudit.php) | One-line records: `admin audit actor= action= target= result=`. Drops context keys matching `/pass\|digest\|secret\|token\|hash\|csrf/i`. Writes `Specific/portal_debug.log`. |
 | `AdminDashboardService` | [`AdminDashboardService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminDashboardService.php) | Read-only counts (allow-listed table names) + service flags + links |
-| `AdminCapabilitiesService` | [`AdminCapabilitiesService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminCapabilitiesService.php) | `uiEnabled` + admin page URLs; API stays available when UI is hidden |
+| `AdminPushSubscriptionService` | [`AdminPushSubscriptionService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminPushSubscriptionService.php) | List and remove `push_subscriptions` while `push_enabled` is on. Returns a host and a path hint, never the endpoint, token, or keys. Push off is 404 and does not create the tables |
+| `AdminCapabilitiesService` | [`AdminCapabilitiesService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminCapabilitiesService.php) | `uiEnabled` + admin page URLs. Order: Overview, System settings, Users, Subscriptions (only while `push_enabled` is on), Database, Configuration. API stays available when the UI is hidden |
 | `AdminUserService` | [`AdminUserService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserService.php) | User CRUD in one transaction (principal + user + default calendar + default address book); never returns `digesta1`; refuses deleting last user or last admin; quarantines file home before cascade; password changes IP rate-limited |
 | `AdminUserResourceService` | [`AdminUserResourceService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserResourceService.php) | Per-user calendars / address books, scoped by the **target** principal |
 | `AdminSettingsService` | [`AdminSettingsService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) | Only portal writer of `configuration.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS`; atomic write + verify; `push_enabled` requires `https://` external URL; factory reset honours install lock |
@@ -423,6 +424,10 @@ Admin routes:
 | GET | `/admin/ping` |
 | GET | `/admin/dashboard` |
 | GET | `/admin/capabilities` |
+| GET | `/admin/push-subscriptions` (`user`, `kind`, `expired=1`) |
+| POST | `/admin/push-subscriptions/delete` (`ids`, `confirm`) |
+| POST | `/admin/push-subscriptions/purge` (`confirm`) |
+| DELETE | `/admin/push-subscriptions/{id}` (`confirm`) |
 | GET/PATCH/PUT | `/admin/settings/system` |
 | POST | `/admin/settings/reset-to-default` (password re-auth + confirm) |
 | GET | `/admin/settings/backup` |
@@ -580,9 +585,9 @@ Unused host parameters are prefixed `_` (`noUnusedParameters`).
 
 ### Domain inventories
 
-Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **admin 13**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
+Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **admin 17**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (`subscriptionsListing.ts` is the subscriptions table helper; mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
 
-**Admin** [`portal/src/app/admin/`](../portal/src/app/admin) — Overview / Settings / Users / Database / Configuration.
+**Admin** [`portal/src/app/admin/`](../portal/src/app/admin) — Overview / Settings / Users / Subscriptions / Database / Configuration. Subscriptions is omitted unless WebDAV-Push is on.
 
 | File | Role |
 |---|---|
@@ -592,6 +597,8 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **ad
 | `overview.ts` | Dashboard |
 | `settings.ts` | System settings form |
 | `users.ts` | User CRUD UI |
+| `subscriptions.ts` | Subscriptions page (list and remove) |
+| `subscriptionsListing.ts` | Kind labels, endpoint hint, empty state |
 | `database.ts` | DB form (`CONFIRM`) |
 | `configuration.ts` | Backup / restore / reset |
 | `loaders.ts` | Admin fetches |
@@ -599,6 +606,8 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **ad
 | `bind.ts` | Post-render |
 | `meta.ts` | Page metadata (local `parseAdminPageId` duplicates `routing.ts`) |
 | `backupFileName.ts` | Backup filename helper |
+| `pushStats.ts` | Overview push counts |
+| `filesPushToggle.ts` | Files-push checkbox enablement |
 
 **Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month grid, events, ICS import.
 
@@ -920,7 +929,7 @@ Wire plugins in [`Server.php`](../Core/Frameworks/Baikal/Core/Server.php). Keep 
 |---|---|---|
 | PHP | `make php-test`, or `php tests/php/<File>.php` | Standalone scripts, **not** PHPUnit |
 | Static | `composer phpstan`, `composer cs-fixer` | `composer test` = these two only |
-| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 17 files listed in `package.json` |
+| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 20 files listed in `package.json` |
 | E2E | `pytest tests/portal_admin_e2e.py -v` | Live instance only; `make local-up` first |
 
 ### Standalone PHP test convention
@@ -938,7 +947,7 @@ Observed in every `tests/php/*.php` file (canonical: [`AdminSettingsServiceTest.
 
 Do **not** introduce PHPUnit/Pest or a shared test base class.
 
-### PHP test files (43)
+### PHP test files (45)
 
 | File | Covers |
 |---|---|
@@ -948,6 +957,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `AdminBackupServiceTest.php` | Settings backup/restore |
 | `AdminCapabilitiesServiceTest.php` | Capabilities payload |
 | `AdminDashboardServiceTest.php` | Dashboard stats |
+| `AdminPushSubscriptionServiceTest.php` | Subscription list redaction, confirm, purge, push-off 404 |
 | `AdminSecurityReviewTest.php` | Admin security invariants |
 | `AdminSettingsServiceTest.php` | YAML allow-list / atomic write |
 | `AdminUserResourceServiceTest.php` | Per-user calendars/ABs |
@@ -975,6 +985,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `PushFilesFanoutTest.php` | File-home push paths, fan-out levels, dispatcher |
 | `PushFilesPluginTest.php` | File-home push through a SabreDAV server |
 | `PushPluginTest.php` | WebDAV-Push |
+| `PushLocationStatusTest.php` | Registration response stays 204 when PHP rewrites `Location` to 302 |
 | `PushQueueMergeTest.php` | Push queue merge, revision guard, debounce, column migration |
 | `PushSchemaPgsqlTest.php` | Push queue migration on optional Postgres |
 | `PushWorkerAuthorizationTest.php` | Push worker CalDAV/CardDAV authorization (owner, calendar proxies) |
@@ -988,7 +999,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 
 ### Portal tests vs `package.json`
 
-All **17** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
+All **20** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
 
 E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib `urllib` + `CookieJar` and synthesizes `Origin`/`Referer` plus `X-CSRF-Token`. Env: `BAIKAL_BASE_URL`, `PORTAL_TEST_ADMIN_PASSWORD`. Skips when no server or `PORTAL_E2E=0`. Disposable local instances only.
 
@@ -998,10 +1009,10 @@ E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib
 
 Recorded as facts, not recommendations:
 
-- CI `code-analysis` runs **17** named PHP scripts and the `tests` job runs **1** more (`FileSchemaDriverTest.php`) → **18 of 36** `tests/php/` files. The other 18 run only via `make php-test`.
+- CI `code-analysis` runs **43** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 45** `tests/php/` files.
 - No CI job runs portal `npm test` or `npm run build`; the portal is built only in the Docker `portal` stage.
 - `composer test` does not execute `tests/php`.
-- Portal test files must be added to `package.json` manually — there is no glob. (Today all 17 on-disk tests are registered.)
+- Portal test files must be added to `package.json` manually — there is no glob. (Today all 20 on-disk tests are registered.)
 - [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) **is** invoked by [`docker/entrypoint.d/46-webdav-files-maintenance.sh`](../docker/entrypoint.d/46-webdav-files-maintenance.sh) on a timer. It is unused on non-Docker installs (no cron unit ships in the zip).
 - [`Dockerfile`](../Dockerfile) emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - [`esc()`](../portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.

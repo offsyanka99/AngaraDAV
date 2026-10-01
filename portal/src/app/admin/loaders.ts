@@ -165,3 +165,23 @@ export async function loadAdminDatabaseSettings(host: AdminHost): Promise<void> 
     host.state.adminDatabaseSettingsLoading = false;
   }
 }
+
+export async function loadAdminSubscriptions(host: AdminHost): Promise<void> {
+  host.state.adminSubscriptionsError = null;
+  try {
+    const res = await api.adminPushSubscriptions(
+      host.state.adminSubscriptionsShowExpired ? { expired: "1" } : undefined,
+    );
+    host.state.adminSubscriptions = res.data;
+    const visible = new Set(res.data.subscriptions.map((row) => row.id));
+    host.state.adminSubscriptionSelection = host.state.adminSubscriptionSelection.filter((id) =>
+      visible.has(id),
+    );
+    log.debug("admin.subscriptions", { count: res.data.subscriptions.length });
+  } catch (e) {
+    host.state.adminSubscriptions = null;
+    host.state.adminSubscriptionsError =
+      e instanceof Error ? e.message : "Failed to load subscriptions";
+    throw e;
+  }
+}

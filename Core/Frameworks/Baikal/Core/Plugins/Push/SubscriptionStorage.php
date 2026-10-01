@@ -249,6 +249,79 @@ class SubscriptionStorage {
     }
 
     /**
+     * Admin list. Decrypts push_resource only long enough to build a host and
+     * a path hint, then drops the URL. Never returns tokens or key material.
+     *
+     * @return list<array{
+     *   id: int,
+     *   principaluri: string,
+     *   resource_uri: string,
+     *   triggers: string,
+     *   created: int,
+     *   expires: int,
+     *   endpointHost: string,
+     *   endpointHint: string
+     * }>
+     */
+    public function listAdminSummaries(?string $principalUri, ?string $kind, bool $includeExpired, int $limit, int $now): array {
+        $filter = $this->adminWhere($principalUri, $kind, $includeExpired ? null : 'active', $now);
+        $limit = max(1, min(500, $limit));
+        $stmt = $this->pdo->prepare(
+            'SELECT id, principaluri, resource_uri, push_resource, triggers, created, expires
+             FROM push_subscriptions' . $filter['sql'] . ' ORDER BY created DESC, id DESC LIMIT ' . $limit
+        );
+        $stmt->execute($filter['params']);
+        $out = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+            $endpoint = $this->endpointHintFields((string) $row['push_resource']);
+            $out[] = [
+                'id'            => (int) $row['id'],
+                'principaluri'  => (string) $row['principaluri'],
+                'resource_uri'  => (string) $row['resource_uri'],
+                'triggers'      => (string) $row['triggers'],
+                'created'       => (int) $row['created'],
+                'expires'       => (int) $row['expires'],
+                'endpointHost'  => $endpoint['host'],
+                'endpointHint'  => $endpoint['hint'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Expired rows matching the same user and kind filters as the admin list.
+     */
+    public function countExpiredAdmin(?string $principalUri, ?string $kind, int $now): int {
+        $filter = $this->adminWhere($principalUri, $kind, 'expired', $now);
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM push_subscriptions' . $filter['sql']);
+        $stmt->execute($filter['params']);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Owner and resource only, for an audit line. No endpoint and no keys.
+     *
+     * @return array{principaluri: string, resource_uri: string}|null
+     */
+    public function findAdminIdentity(int $id): ?array {
+        $stmt = $this->pdo->prepare(
+            'SELECT principaluri, resource_uri FROM push_subscriptions WHERE id = ?'
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'principaluri' => (string) $row['principaluri'],
+            'resource_uri' => (string) $row['resource_uri'],
+        ];
+    }
+
+    /**
      * @param array<int, mixed> $params
      */
     private function countWhere(string $where, array $params): int {
@@ -283,5 +356,96 @@ class SubscriptionStorage {
         }
 
         return $row;
+    }
+
+    /**
+     * Whitelist only. Unknown kinds match nothing so a caller cannot widen the SQL.
+     */
+    private function adminKindSql(?string $kind): ?string {
+        if ($kind === null || $kind === '') {
+            return null;
+        }
+
+        switch ($kind) {
+            case 'calendars':
+                return "resource_uri LIKE 'calendars/%'";
+            case 'addressbooks':
+                return "resource_uri LIKE 'addressbooks/%'";
+            case 'files':
+                return "resource_uri LIKE 'files/%'";
+            case 'principals':
+                return "resource_uri LIKE 'principals/%'";
+            case 'other':
+                return "resource_uri NOT LIKE 'calendars/%'"
+                    . " AND resource_uri NOT LIKE 'addressbooks/%'"
+                    . " AND resource_uri NOT LIKE 'files/%'"
+                    . " AND resource_uri NOT LIKE 'principals/%'";
+            default:
+                return '0 = 1';
+        }
+    }
+
+    /**
+     * @param 'active'|'expired'|null $expiresMode
+     *
+     * @return array{sql: string, params: array<int, mixed>}
+     */
+    private function adminWhere(?string $principalUri, ?string $kind, ?string $expiresMode, int $now): array {
+        $where = [];
+        $params = [];
+        if ($principalUri !== null && $principalUri !== '') {
+            $where[] = 'principaluri = ?';
+            $params[] = $principalUri;
+        }
+        $kindSql = $this->adminKindSql($kind);
+        if ($kindSql !== null) {
+            $where[] = $kindSql;
+        }
+        if ($expiresMode === 'active') {
+            $where[] = 'expires > ?';
+            $params[] = $now;
+        } elseif ($expiresMode === 'expired') {
+            $where[] = 'expires <= ?';
+            $params[] = $now;
+        }
+
+        return [
+            'sql'    => $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+            'params' => $params,
+        ];
+    }
+
+    /**
+     * @return array{host: string, hint: string}
+     */
+    private function endpointHintFields(string $stored): array {
+        if ($this->cipher === null) {
+            if (str_starts_with($stored, SecretCipher::PREFIX)) {
+                return ['host' => '', 'hint' => ''];
+            }
+
+            return self::splitEndpoint($stored);
+        }
+        try {
+            $plain = $this->cipher->decrypt($stored);
+        } catch (\Throwable) {
+            return ['host' => '', 'hint' => ''];
+        }
+
+        return self::splitEndpoint($plain);
+    }
+
+    /**
+     * @return array{host: string, hint: string}
+     */
+    private static function splitEndpoint(string $url): array {
+        $host = parse_url($url, PHP_URL_HOST);
+        $path = parse_url($url, PHP_URL_PATH);
+        $path = is_string($path) ? $path : '';
+
+        return [
+            'host' => is_string($host) ? $host : '',
+            'hint' => $path === '' ? '' : substr($path, -6),
+        ];
     }
 }

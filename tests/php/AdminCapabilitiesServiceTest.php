@@ -46,6 +46,7 @@ foreach ($cap['pages'] as $p) {
 }
 
 assert_true($order === ['overview', 'settings', 'users', 'database', 'configuration'], 'tab order overview→settings→users→database→configuration');
+assert_true(!in_array('subscriptions', $order, true), 'push off by default omits subscriptions');
 
 assert_true(isset($byId['overview']), 'overview page defined');
 assert_true($byId['overview']['available'] === true, 'overview available');
@@ -70,6 +71,34 @@ $stringOff = (new AdminCapabilitiesService([
     'system' => ['portal_admin_ui_enabled' => 'off'],
 ]))->capabilities();
 assert_true($stringOff['uiEnabled'] === false, 'portal_admin_ui_enabled string off');
+
+$pushOn = (new AdminCapabilitiesService([
+    'system' => ['push_enabled' => true],
+]))->capabilities();
+$pushOrder = array_column($pushOn['pages'], 'id');
+assert_true(
+    $pushOrder === ['overview', 'settings', 'users', 'subscriptions', 'database', 'configuration'],
+    'subscriptions sits between users and database when push is on'
+);
+$subscriptionPage = null;
+foreach ($pushOn['pages'] as $p) {
+    if ($p['id'] === 'subscriptions') {
+        $subscriptionPage = $p;
+    }
+}
+assert_true($subscriptionPage !== null && $subscriptionPage['available'] === true, 'subscriptions available');
+assert_true($subscriptionPage['status'] === 'full', 'subscriptions full');
+assert_true($subscriptionPage['portalUrl'] === '/portal/#admin/subscriptions', 'subscriptions portal url');
+
+$pushString = (new AdminCapabilitiesService([
+    'system' => ['push_enabled' => 'true'],
+]))->capabilities();
+assert_true(in_array('subscriptions', array_column($pushString['pages'], 'id'), true), 'push_enabled string true shows subscriptions');
+
+$pushFlagOff = (new AdminCapabilitiesService([
+    'system' => ['push_enabled' => 'off'],
+]))->capabilities();
+assert_true(!in_array('subscriptions', array_column($pushFlagOff['pages'], 'id'), true), 'push_enabled off omits subscriptions');
 
 // Every incomplete page must keep a portal navigation URL
 foreach ($cap['pages'] as $p) {

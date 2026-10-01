@@ -8,6 +8,7 @@ import {
   type AdminCapabilities,
   type AdminDashboardStats,
   type AdminDatabaseSettings,
+  type AdminPushSubscriptionList,
   type AdminSettingsRestoreResult,
   type AdminSystemSettings,
   type AdminUserAddressBook,
@@ -201,6 +202,11 @@ export type AppState = {
   adminDbConfirmOpen: boolean;
   adminDbConfirmText: string;
   adminDbPendingBody: Record<string, unknown> | null;
+  adminSubscriptions: AdminPushSubscriptionList | null;
+  adminSubscriptionsError: string | null;
+  adminSubscriptionsShowExpired: boolean;
+  /** Selected subscription ids. Cleared when leaving the Subscriptions page. */
+  adminSubscriptionSelection: number[];
   userMenuOpen: boolean;
   userMenuDocClick: ((ev: MouseEvent) => void) | null;
   userSettings: UserSettings;
@@ -404,6 +410,10 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     adminDbConfirmOpen: false,
     adminDbConfirmText: "",
     adminDbPendingBody: null,
+    adminSubscriptions: null,
+    adminSubscriptionsError: null,
+    adminSubscriptionsShowExpired: false,
+    adminSubscriptionSelection: [],
     userMenuOpen: false,
     userMenuDocClick: null,
     userSettings: readStoredUserSettings(),

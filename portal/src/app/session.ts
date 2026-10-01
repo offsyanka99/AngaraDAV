@@ -283,6 +283,10 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.adminDbConfirmOpen = false;
   state.adminDbConfirmText = "";
   state.adminDbPendingBody = null;
+  state.adminSubscriptions = null;
+  state.adminSubscriptionsError = null;
+  state.adminSubscriptionsShowExpired = false;
+  state.adminSubscriptionSelection = [];
   hooks.unbindUserMenuOutside();
 }
 

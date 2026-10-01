@@ -7,6 +7,7 @@ import { api } from "../api";
 import { log } from "../log";
 import { closeAboutModal, openAboutModal } from "./about";
 import { closeConfirmDelete } from "./confirmDelete";
+import { loadAdminSubscriptions } from "./admin/loaders";
 import {
   backgroundSyncHost,
   cancelRefreshConfirm,
@@ -203,6 +204,46 @@ export async function handleShellAction(
         setFlash("success", "Share revoked");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Revoke failed");
+      } finally {
+        state.busy = false;
+        render();
+      }
+      return true;
+    }
+
+    if (
+      scope === "push-subscription" ||
+      scope === "push-subscriptions" ||
+      scope === "push-subscriptions-expired"
+    ) {
+      const ids = pending.ids ?? [];
+      if (scope !== "push-subscriptions-expired" && ids.length === 0) {
+        render();
+        return true;
+      }
+      state.busy = true;
+      clearFlash();
+      render();
+      try {
+        let removed = 0;
+        if (scope === "push-subscriptions-expired") {
+          removed = (await api.adminPurgePushSubscriptions(true)).deleted;
+        } else if (scope === "push-subscriptions") {
+          removed = (await api.adminDeletePushSubscriptions(ids, true)).deleted;
+        } else {
+          await api.adminDeletePushSubscription(ids[0], true);
+          removed = 1;
+        }
+        const gone = new Set(scope === "push-subscriptions-expired" ? [] : ids);
+        if (gone.size > 0) {
+          state.adminSubscriptionSelection = state.adminSubscriptionSelection.filter(
+            (id) => !gone.has(id),
+          );
+        }
+        await loadAdminSubscriptions(o.adminHost);
+        setFlash("success", `Removed ${removed} subscription${removed === 1 ? "" : "s"}`);
+      } catch (e) {
+        setFlash("error", e instanceof Error ? e.message : "Remove failed");
       } finally {
         state.busy = false;
         render();

@@ -46,7 +46,8 @@ class AdminCapabilitiesService {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
         $uiEnabled = self::boolFlag($sys, 'portal_admin_ui_enabled', true);
 
-        // UI tab order: Overview → System settings → Users → Database → Configuration
+        // UI tab order: Overview → System settings → Users → Subscriptions (only while
+        // WebDAV-Push is on) → Database → Configuration
         $pages = [
             [
                 'id'          => 'overview',
@@ -94,6 +95,19 @@ class AdminCapabilitiesService {
                 'summary'     => 'Download or restore a settings backup; reset the instance to defaults.',
             ],
         ];
+
+        if (self::boolFlag($sys, 'push_enabled', false)) {
+            $subscriptions = [
+                'id'          => 'subscriptions',
+                'label'       => 'Subscriptions',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/subscriptions',
+                'portalLabel' => 'Subscriptions',
+                'summary'     => 'List and remove WebDAV-Push subscriptions. The endpoint URL and keys are not shown.',
+            ];
+            array_splice($pages, 3, 0, [$subscriptions]);
+        }
 
         return [
             'uiEnabled'      => $uiEnabled,

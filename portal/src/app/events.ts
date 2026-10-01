@@ -221,6 +221,24 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     return;
   }
 
+  if (el instanceof HTMLInputElement && el.name === "admin-subscription-check") {
+    const id = Number(el.dataset.id);
+    const selected = new Set(state.adminSubscriptionSelection);
+    if (Number.isInteger(id) && id > 0) {
+      if (el.checked) selected.add(id);
+      else selected.delete(id);
+    }
+    state.adminSubscriptionSelection = [...selected];
+    render();
+    return;
+  }
+  if (el instanceof HTMLInputElement && el.name === "admin-subscription-select-all") {
+    const ids = state.adminSubscriptions?.subscriptions.map((row) => row.id) ?? [];
+    state.adminSubscriptionSelection = el.checked ? [...ids] : [];
+    render();
+    return;
+  }
+
   if (
     el instanceof HTMLInputElement &&
     (el.name === "push_enabled" || el.name === "files_enabled") &&

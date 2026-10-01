@@ -20,6 +20,7 @@ export {
   loadAdminUserResources,
   loadAdminSystemSettings,
   loadAdminDatabaseSettings,
+  loadAdminSubscriptions,
 } from "./loaders";
 export { renderAdminOverview } from "./overview";
 export {
@@ -54,6 +55,7 @@ export {
   renderAdminDatabaseShell,
   renderAdminDbConfirmModal,
 } from "./database";
+export { renderAdminSubscriptionsShell } from "./subscriptions";
 export { activateAdminPage, renderAdminSection } from "./page";
 export { handleAdminAction } from "./actionsRouter";
 export { bindAdminDom } from "./bind";
