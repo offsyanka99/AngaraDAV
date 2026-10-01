@@ -38,6 +38,8 @@ jobs:
         run: php tests/php/PushFilesFanoutTest.php
       - name: WebDAV-Push file homes DAV test
         run: php tests/php/PushFilesPluginTest.php
+      - name: WebDAV-Push registration status unit test
+        run: php tests/php/PushLocationStatusTest.php
       - name: WebDAV-Push file homes worker test
         run: php tests/php/PushWorkerFilesTest.php
       - name: WebDAV-Push worker authorization test

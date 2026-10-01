@@ -280,11 +280,35 @@ class PushPlugin extends ServerPlugin {
 
     /**
      * Sabre does not send the response when a beforeMethod listener returns false.
+     *
+     * PHP's header() then rewrites any status other than 201 or 3xx to 302
+     * when it sends Location. A push registration is 204 plus Location, so
+     * the status has to be written again after that header. The body is
+     * empty, which leaves the status line replaceable.
      */
     protected function handled(ResponseInterface $response): bool {
         $this->server->sapi->sendResponse($response);
+        $this->restoreStatusRewrittenByPhpLocation($response);
 
         return false;
+    }
+
+    private function restoreStatusRewrittenByPhpLocation(ResponseInterface $response): void {
+        if ($response->getHeader('Location') === null) {
+            return;
+        }
+        $status = $response->getStatus();
+        if ($status === 201 || ($status >= 300 && $status <= 399)) {
+            return;
+        }
+        if (headers_sent() || http_response_code() !== 302) {
+            return;
+        }
+        header(
+            'HTTP/' . $response->getHttpVersion() . ' ' . $status . ' ' . $response->getStatusText(),
+            true,
+            $status
+        );
     }
 
     /**

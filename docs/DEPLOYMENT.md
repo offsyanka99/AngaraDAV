@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.4`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.5`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 
@@ -391,6 +391,7 @@ Run only one worker per `Specific/` directory (a lock file enforces this). Resta
 7. File folders show no Push properties: `PROPFIND` (Depth 0) on `/dav.php/files/{user}/` must return `supported-triggers` with `content-update` depth `infinity`. If it does not, check that **Enable WebDAV-Push**, **Enable WebDAV file storage**, and **Enable WebDAV-Push for file storage** are all on. Subscribe to a folder, not a file.
 8. Registration returns HTTP 429: the per-user subscription limit is reached. Raise **Max push subscriptions per user**.
 9. File topics are derived from `database.encryption_key`. Changing the key changes every file topic, and clients must register again.
+10. The client reports `Server error (HTTP 302)` on push registration while Administration still shows the folder subscription: update to **2.5.5** or newer and register again (toggle WebDAV-Push). Older servers stored the subscription and then sent 302 because PHP rewrote the 204 when `Location` was set.
 
 ## Installer lock
 
@@ -406,6 +407,7 @@ After install, `Specific/INSTALL_DISABLED` exists and `/portal/install/` reports
 - **Docker/TrueNAS:** pull the new image and **recreate** the container. Open `/portal/install/` if an upgrade is pending and confirm it. The upgrade updates `configured_version` and keeps the rest of `configuration.yaml`.
 - **From 2.4.x or older:** rename any `BAIKAL_*` env vars to `ANGARA_*` (see [Environment variables](#environment-variables)).
 - **To 2.5.3:** the push queue gains three columns automatically on first use (SQLite and PostgreSQL); no manual SQL. If you plan to use Push for file storage, raise **Max push subscriptions per user** (see [WebDAV-Push](#webdav-push)).
+- **To 2.5.5:** no schema change. Push registration is returned as 204 with `Location` and `Expires`. Clients that recorded HTTP 302 should register again. Subscriptions stored during those failed registrations expire on their own.
 - **Source installs:** `composer install` (requires the `patch` command; it applies [patches/](../patches/README.md)), rebuild the portal (`make portal`), then restart PHP-FPM and the Push worker.
 
 ## Source installs

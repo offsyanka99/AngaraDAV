@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.5 — 2026-10-01
+
+### WebDAV-Push
+- A stored push registration reached the client as HTTP 302. PHP changes the status to 302 when it sends a `Location` header on a 204 response. WebDAV-sync reported `Server error (HTTP 302)` and left that subscription in place. The server sends the 204 status again after `Location`, with `Location` and `Expires` unchanged. The next registration from the client then shows server push as active. Subscriptions already stored from the 302 responses expire on their own. No database change.
+
 ## 2.5.4 — 2026-10-01
 
 ### WebDAV-Push

@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.4` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.5` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). A shorter overview already lives at [ARCHITECTURE.md](ARCHITECTURE.md); this file is the path-level inventory.
 
@@ -122,7 +122,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
 
-- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (41), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (42), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 
 It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
@@ -148,7 +148,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.4`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.5`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |

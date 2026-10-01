@@ -102,7 +102,7 @@ Two independent HTTP surfaces sit on the same data:
 
 ### CI
 
-- [.github/workflows/ci.yml](../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs every `tests/php/*.php` script as a named step (41, no glob), then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs the PostgreSQL-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
+- [.github/workflows/ci.yml](../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs every `tests/php/*.php` script as a named step (42, no glob), then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs the PostgreSQL-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
 - [.github/workflows/docker.yml](../.github/workflows/docker.yml) — multi-arch (`linux/amd64,linux/arm64`) GHCR publish. Tags: `latest` (default branch only), `sha-<sha>`, branch ref, tag ref, semver. Build args `GIT_SHA`, `BUILD_TIME`. **Only branches in its `push.branches` allowlist publish images.**
 - [.github/actions/build/action.yaml](../.github/actions/build/action.yaml) — composite setup (PHP extensions, Composer cache, installs `patch` for the vendor-patch hook).
 
