@@ -12,6 +12,10 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 require $root . '/vendor/autoload.php';
 
+use Baikal\Core\Files\File;
+use Baikal\Core\Files\FileStorageConfig;
+use Baikal\Core\Files\HomeRepository;
+use Baikal\Core\Files\HomeStorage;
 use Baikal\Portal\ApiException;
 use Baikal\Portal\FileService;
 
@@ -50,6 +54,8 @@ $temporaryRoot = sys_get_temp_dir() . '/baikal-portal-files-' . bin2hex(random_b
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, digesta1 TEXT NOT NULL)');
+$pdo->exec('CREATE TABLE propertystorage (path TEXT NOT NULL)');
+$pdo->exec('CREATE TABLE locks (uri TEXT NOT NULL)');
 $pdo->exec("INSERT INTO users (username, digesta1) VALUES ('alice', 'hash')");
 
 $configDisabled = [
@@ -62,6 +68,7 @@ $svcOff = new FileService($pdo, $configDisabled);
 $statusOff = $svcOff->status('alice');
 assert_true($statusOff['enabled'] === false, 'status reports disabled when files_enabled is false');
 assert_true($statusOff['ready'] === false, 'status not ready when disabled');
+assert_true($statusOff['trashDays'] === 0, 'disabled status reports trashDays 0');
 assert_true(str_contains($statusOff['davPath'], 'alice'), 'davPath includes username when disabled');
 
 try {
@@ -87,6 +94,7 @@ assert_true($status['enabled'] === true, 'status enabled when files_enabled is t
 assert_true($status['ready'] === true, 'status ready after init');
 assert_true($status['maxUploadBytes'] === 1024 * 1024, 'max upload bytes reported');
 assert_true($status['quotaBytes'] === 10 * 1024 * 1024, 'quota bytes reported');
+assert_true($status['trashDays'] === 30, 'trash retention defaults to 30 days');
 assert_true(str_contains($status['davPath'], '/dav.php/files/alice/'), 'davPath is WebDAV home URL');
 
 $list = $svc->listEntries('alice', '');
@@ -228,6 +236,149 @@ $bulkCopy = $svc->bulk('alice', 'copy', ['archive/note.txt', 'archive/new-via-re
 assert_true($bulkCopy['ok'] === 2 && $bulkCopy['failed'] === 0, 'bulk copy two files');
 $bulkDel = $svc->bulk('alice', 'delete', ['archive/new-via-replace.txt']);
 assert_true($bulkDel['ok'] === 1, 'bulk delete one file');
+
+/**
+ * @param list<array<string, mixed>> $items
+ *
+ * @return array<string, mixed>|null
+ */
+function trash_named(array $items, string $path): ?array {
+    foreach ($items as $item) {
+        if (($item['path'] ?? '') === $path) {
+            return $item;
+        }
+    }
+
+    return null;
+}
+
+$svc->writeFile('alice', 'docs', 'hello.txt', "hello portal\n", false);
+$svc->delete('alice', 'docs/hello.txt');
+$docsAfterDelete = $svc->listEntries('alice', 'docs');
+$docsNames = array_column($docsAfterDelete['entries'], 'name');
+assert_true(!in_array('hello.txt', $docsNames, true), 'trashed file leaves the folder');
+$trashedHello = trash_named($svc->listTrash('alice')['items'], 'docs/hello.txt');
+assert_true($trashedHello !== null && $trashedHello['directory'] === false, 'trashed file is listed');
+assert_true((int) $trashedHello['expiresAt'] > (int) $trashedHello['deletedAt'], 'trash expiry is after deletion');
+$restoredHello = $svc->restoreTrash('alice', (int) $trashedHello['id']);
+assert_true($restoredHello['path'] === 'docs/hello.txt' && $restoredHello['renamed'] === false, 'restore returns the original path');
+$helloMeta = $svc->openDownload('alice', 'docs/hello.txt');
+assert_true(file_get_contents($helloMeta['absolutePath']) === "hello portal\n", 'restored file contents match');
+
+$svc->delete('alice', 'docs/hello.txt');
+$svc->writeFile('alice', 'docs', 'hello.txt', "newer\n", false);
+$clash = trash_named($svc->listTrash('alice')['items'], 'docs/hello.txt');
+assert_true($clash !== null, 'name clash still has a trash row');
+$restoredClash = $svc->restoreTrash('alice', (int) $clash['id']);
+assert_true($restoredClash['renamed'] === true, 'restore renames when the original name is taken');
+assert_true($restoredClash['name'] === 'hello (restored).txt', 'restore suffix is (restored)');
+$keptMeta = $svc->openDownload('alice', 'docs/hello.txt');
+$suffixMeta = $svc->openDownload('alice', 'docs/hello (restored).txt');
+assert_true(file_get_contents($keptMeta['absolutePath']) === "newer\n", 'existing file stays in place');
+assert_true(file_get_contents($suffixMeta['absolutePath']) === "hello portal\n", 'restored copy keeps its contents');
+
+$svc->createDirectory('alice', '', 'box');
+$svc->writeFile('alice', 'box', 'inside.txt', "in\n", false);
+$svc->delete('alice', 'box');
+try {
+    $svc->listEntries('alice', 'box');
+    assert_true(false, 'trashed folder should be missing');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 404, 'trashed folder → 404');
+}
+$boxRows = array_values(array_filter(
+    $svc->listTrash('alice')['items'],
+    static function (array $item): bool {
+        return $item['path'] === 'box';
+    }
+));
+assert_true(count($boxRows) === 1 && $boxRows[0]['directory'] === true, 'folder delete is one trash row');
+$restoredBox = $svc->restoreTrash('alice', (int) $boxRows[0]['id']);
+assert_true($restoredBox['path'] === 'box' && $restoredBox['renamed'] === false, 'folder restores to its original path');
+$boxList = $svc->listEntries('alice', 'box');
+assert_true(count($boxList['entries']) === 1 && $boxList['entries'][0]['name'] === 'inside.txt', 'restored folder keeps its contents');
+
+$svc->createDirectory('alice', '', 'restore-parent');
+$svc->writeFile('alice', 'restore-parent', 'leaf.txt', "leaf\n", false);
+$svc->delete('alice', 'restore-parent/leaf.txt');
+$svc->delete('alice', 'restore-parent');
+$leaf = trash_named($svc->listTrash('alice')['items'], 'restore-parent/leaf.txt');
+assert_true($leaf !== null, 'file inside a later-deleted folder stays its own trash row');
+$restoredLeaf = $svc->restoreTrash('alice', (int) $leaf['id']);
+assert_true($restoredLeaf['path'] === 'restore-parent/leaf.txt', 'restore recreates a missing parent folder');
+$leafMeta = $svc->openDownload('alice', 'restore-parent/leaf.txt');
+assert_true(file_get_contents($leafMeta['absolutePath']) === "leaf\n", 'file restored under the recreated folder');
+
+$svc->writeFile('alice', '', 'perm.txt', 'zz', false);
+$usedBeforePerm = $svc->status('alice')['usedBytes'];
+$svc->delete('alice', 'perm.txt');
+assert_true($svc->status('alice')['usedBytes'] === $usedBeforePerm, 'trash keeps the file in the quota');
+$perm = trash_named($svc->listTrash('alice')['items'], 'perm.txt');
+assert_true($perm !== null, 'permanent-delete target is in trash');
+$svc->deleteTrash('alice', (int) $perm['id']);
+assert_true(trash_named($svc->listTrash('alice')['items'], 'perm.txt') === null, 'delete now removes the trash row');
+assert_true($svc->status('alice')['usedBytes'] === $usedBeforePerm - 2, 'delete now frees the quota bytes');
+
+$svc->writeFile('alice', '', 'empty-a.txt', 'aa', false);
+$svc->writeFile('alice', '', 'empty-b.txt', 'bbb', false);
+$svc->delete('alice', 'empty-a.txt');
+$svc->delete('alice', 'empty-b.txt');
+$usedBeforeEmpty = $svc->status('alice')['usedBytes'];
+$emptied = $svc->emptyTrash('alice');
+assert_true($emptied['removed'] >= 2, 'empty trash removes the rows');
+assert_true($svc->listTrash('alice')['items'] === [], 'empty trash clears the list');
+assert_true($svc->status('alice')['usedBytes'] < $usedBeforeEmpty, 'empty trash frees quota bytes');
+
+$svc->writeFile('alice', '', 'old-trash.txt', 'old', false);
+$svc->delete('alice', 'old-trash.txt');
+$svc->writeFile('alice', '', 'fresh-trash.txt', 'new', false);
+$svc->delete('alice', 'fresh-trash.txt');
+$pdo->exec("UPDATE file_trash SET deleted_at = 1 WHERE name = 'old-trash.txt'");
+$purgeRepo = new HomeRepository($pdo, new FileStorageConfig($config));
+$purged = $purgeRepo->purgeExpiredTrash();
+assert_true($purged >= 1, 'maintenance purges trash older than retention');
+assert_true(trash_named($svc->listTrash('alice')['items'], 'old-trash.txt') === null, 'expired trash row is gone');
+assert_true(trash_named($svc->listTrash('alice')['items'], 'fresh-trash.txt') !== null, 'fresh trash row stays');
+
+$configNow = $config;
+$configNow['system']['files_trash_days'] = 0;
+$svcNow = new FileService($pdo, $configNow);
+assert_true($svcNow->status('alice')['trashDays'] === 0, 'trashDays reports 0');
+$svcNow->writeFile('alice', '', 'immediate.txt', 'gone', false);
+$svcNow->delete('alice', 'immediate.txt');
+$rootNames = array_column($svcNow->listEntries('alice', '')['entries'], 'name');
+assert_true(!in_array('immediate.txt', $rootNames, true), 'zero retention removes the file');
+assert_true(trash_named($svcNow->listTrash('alice')['items'], 'immediate.txt') === null, 'zero retention does not trash the file');
+
+$svc->writeFile('alice', '', 'dav.txt', 'dav', false);
+$davConfig = new FileStorageConfig($config);
+$davRepo = new HomeRepository($pdo, $davConfig);
+$davHome = $davRepo->getOrCreateForPrincipal('principals/alice');
+$davStorage = new HomeStorage($davConfig, (string) $davHome['storage_id']);
+$davRepo->attachTrash($davStorage, $davHome);
+$davNode = new File($davStorage, 'dav.txt', [], 'principals/alice');
+$davNode->delete();
+$afterDav = array_column($svc->listEntries('alice', '')['entries'], 'name');
+assert_true(!in_array('dav.txt', $afterDav, true), 'WebDAV delete leaves the home');
+assert_true(trash_named($svc->listTrash('alice')['items'], 'dav.txt') !== null, 'WebDAV delete moves the file to trash');
+
+$svc->writeFile('alice', '', 'link-target.txt', 't', false);
+symlink($davStorage->getPath('link-target.txt'), $davStorage->getPath('link.txt'));
+$svc->delete('alice', 'link.txt');
+assert_true(!is_link($davStorage->getPath('link.txt')), 'symlink delete unlinks the link');
+assert_true(trash_named($svc->listTrash('alice')['items'], 'link.txt') === null, 'symlink delete does not create a trash row');
+
+$svc->writeFile('alice', '', 'quarantine-me.txt', 'keep', false);
+$svc->delete('alice', 'quarantine-me.txt');
+$activeStorageId = $pdo->query("SELECT storage_id FROM file_homes WHERE user_id = 1 AND status = 'active'")->fetchColumn();
+assert_true(is_string($activeStorageId) && $activeStorageId !== '', 'active home has a storage id');
+$davRepo->quarantineUser(1, 'principals/alice');
+$left = (int) $pdo->query("SELECT COUNT(*) FROM file_trash WHERE name = 'quarantine-me.txt'")->fetchColumn();
+assert_true($left === 0, 'user quarantine drops trash rows');
+$tucked = $temporaryRoot . '/quarantine/' . $activeStorageId . '/.angara-trash';
+$orphan = $temporaryRoot . '/trash/' . $activeStorageId;
+assert_true(is_dir($tucked), 'user quarantine tucks trash into the quarantined home');
+assert_true(!file_exists($orphan) && !is_link($orphan), 'user quarantine leaves no trash directory behind');
 
 remove_tree($temporaryRoot);
 

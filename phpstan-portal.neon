@@ -1,0 +1,13 @@
+parameters:
+  level: 2
+  paths:
+    - Core/Frameworks/Baikal/Portal
+  bootstrapFiles:
+    - phpstan-bootstrap.php
+  # Sabre\VObject components expose calendar and vCard properties through __get.
+  universalObjectCratesClasses:
+    - Sabre\VObject\Component
+  reportUnmatchedIgnoredErrors: true
+
+includes:
+  - vendor/phpstan/phpstan-deprecation-rules/rules.neon

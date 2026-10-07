@@ -1,5 +1,6 @@
 /** Notes save handler (Phase 7). */
 import { api } from "../../api";
+import { loadAgendaItems } from "../calendars/loaders";
 import { entityFlash } from "../format";
 import { itemKey } from "../keys";
 import { sanitizeNoteHtml } from "./html";
@@ -124,6 +125,9 @@ export async function onSaveNote(host: NotesHost, form: HTMLFormElement) {
       host.setFlash("success", entityFlash("Note", res.note.summary || summary, "saved"));
     }
     await loadNotes(host);
+    if (host.state.activeTab === "calendars" && host.state.calView === "agenda") {
+      await loadAgendaItems(host);
+    }
   } catch (e) {
     host.setFlash("error", e instanceof Error ? e.message : "Save failed");
   } finally {

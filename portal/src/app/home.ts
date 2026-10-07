@@ -121,6 +121,8 @@ export function renderHome(o: AppOrchestrator): void {
       state.filesUploadProgress !== null ||
       state.filesRenamePath !== null ||
       state.filesDeletePaths !== null ||
+      state.filesTrashDeleteId !== null ||
+      state.filesEmptyTrashOpen ||
       state.filesTransfer !== null ||
       state.filesMkdirOpen ||
       state.filesPreview !== null ||

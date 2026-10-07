@@ -16,7 +16,7 @@ Self-hosted CalDAV/CardDAV/WebDAV server (Baïkal-derived) with a TypeScript adm
 
 ## Admin API pattern
 
-The Admin API lives in [Core/Frameworks/Baikal/Portal/App.php](Core/Frameworks/Baikal/Portal/App.php) (`App::handle()`), reached via [html/api/index.php](html/api/index.php). Every `/api/admin/*` route passes same-origin + CSRF checks, then `AdminAuth::requireAdmin()`, then `dispatchAdminRoutes()`. Business logic lives in focused services under [Core/Frameworks/Baikal/Portal/Admin](Core/Frameworks/Baikal/Portal/Admin) (`AdminUserService`, `AdminSettingsService`, `AdminBackupService`, etc.).
+The Admin API lives in [Core/Frameworks/Baikal/Portal/App.php](Core/Frameworks/Baikal/Portal/App.php) (`App::handle()`), reached via [html/api/index.php](html/api/index.php). Every `/api/admin/*` route passes same-origin + CSRF checks, then `AdminAuth::requireAdmin()`, then `dispatchAdminRoutes()`. Business logic lives in focused services under [Core/Frameworks/Baikal/Portal/Admin](Core/Frameworks/Baikal/Portal/Admin) (`AdminUserService`, `AdminSettingsService`, `AdminBackupService`, `AdminDataExportService`, etc.).
 
 To add a new admin endpoint:
 1. Put logic/validation in a `Baikal\Portal\Admin\*Service`; parse bodies via `HttpIO::jsonBody()`, throw `ApiException` for client errors.
@@ -38,8 +38,8 @@ To add a new admin endpoint:
 Full detail in the [test-engineer agent](.github/agents/test-engineer.agent.md). Quick reference:
 
 - `make php-test` — runs `tests/php/*.php` (standalone scripts, not PHPUnit).
-- `composer phpstan` — static analysis; `composer cs-fixer` — auto-format. **`composer test` runs cs-fixer + phpstan, not the PHP tests.**
-- `make portal` — `npm test` (Node's built-in `node:test`) + `npm run build` in [portal/](portal).
+- `composer phpstan` — level 0 on `Core` and `html`, then level 2 on `Baikal\Portal` (`phpstan-portal.neon`). `composer cs-fixer` auto-formats. **`composer test` runs cs-fixer, phpstan, then `tests/php`.**
+- `make portal` — `npm test` (Node's built-in `node:test`) + `npm run build` in [portal/](portal). CI job `portal` runs `npm ci && npm test && npm run build`.
 - `pytest tests/portal_admin_e2e.py -v` — live e2e against a disposable local instance only (`make local-up` first).
 - `make local-up` — local Docker dev instance on `:31088`; see [README.md](README.md) for ownership/recreate pitfalls.
 

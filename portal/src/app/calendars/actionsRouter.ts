@@ -14,8 +14,46 @@ import {
 } from "../datetime";
 import { syncOpenItemFormsBeforeDtRender } from "../datetimeSync";
 import type { AppOrchestrator } from "../orchestrator";
-import { readRepeatFromForm } from "./eventModal";
+import { readRepeatFromForm, reminderFromForm } from "./eventModal";
 import { persistCalendarSelection } from "./selectionPersist";
+
+/** Load one event and open the edit dialog. */
+export async function openEventEditor(
+  o: AppOrchestrator,
+  instanceId: number,
+  uri: string,
+): Promise<void> {
+  const { state, render, setFlash, clearFlash } = o;
+  if (!Number.isFinite(instanceId) || !uri) return;
+  state.busy = true;
+  clearFlash();
+  render();
+  try {
+    const res = await api.getEvent(instanceId, uri);
+    state.editingEvent = {
+      ...res.event,
+      repeat: res.event.repeat ?? o.defaultRepeat(),
+      reminderMinutes: res.event.reminderMinutes ?? null,
+      reminderCustom: !!res.event.reminderCustom,
+    };
+    state.creatingEvent = false;
+    state.eventModalOpen = true;
+    state.taskModalOpen = false;
+    state.editingTask = null;
+    state.creatingTask = false;
+    state.noteModalOpen = false;
+    state.editingNote = null;
+    state.creatingNote = false;
+    state.eventDtPicker = null;
+    state.calModalOpen = false;
+    state.deleteConfirmId = null;
+  } catch (e) {
+    setFlash("error", e instanceof Error ? e.message : "Failed to open event");
+  } finally {
+    state.busy = false;
+    render();
+  }
+}
 
 /**
  * Handle calendar-tab and shared datetime-picker actions.
@@ -248,27 +286,7 @@ export async function handleCalendarsAction(
     ev.stopPropagation();
     const instanceId = Number(t.dataset.instance);
     const uri = t.dataset.uri ?? "";
-    if (!Number.isFinite(instanceId) || !uri) return true;
-    state.busy = true;
-    clearFlash();
-    render();
-    try {
-      const res = await api.getEvent(instanceId, uri);
-      state.editingEvent = {
-        ...res.event,
-        repeat: res.event.repeat ?? o.defaultRepeat(),
-      };
-      state.creatingEvent = false;
-      state.eventModalOpen = true;
-      state.eventDtPicker = null;
-      state.calModalOpen = false;
-      state.deleteConfirmId = null;
-    } catch (e) {
-      setFlash("error", e instanceof Error ? e.message : "Failed to open event");
-    } finally {
-      state.busy = false;
-      render();
-    }
+    await openEventEditor(o, instanceId, uri);
     return true;
   }
 
@@ -333,6 +351,58 @@ export async function handleCalendarsAction(
     state.eventDtPicker = null;
     state.calModalOpen = false;
     state.deleteConfirmId = null;
+    clearFlash();
+    render();
+    return true;
+  }
+
+  if (action === "open-agenda-task") {
+    ev.stopPropagation();
+    const instanceId = Number(t.dataset.instance);
+    const uri = t.dataset.uri ?? "";
+    const found =
+      state.agendaTasks.find((x) => x.instanceId === instanceId && x.uri === uri) ?? null;
+    if (!found) {
+      setFlash("error", "Task is no longer in this agenda");
+      render();
+      return true;
+    }
+    state.creatingTask = false;
+    state.selectedTaskKey = o.itemKey(instanceId, uri);
+    state.editingTask = { ...found };
+    state.taskModalOpen = true;
+    state.noteModalOpen = false;
+    state.editingNote = null;
+    state.creatingNote = false;
+    state.eventModalOpen = false;
+    state.editingEvent = null;
+    state.creatingEvent = false;
+    clearFlash();
+    render();
+    return true;
+  }
+
+  if (action === "open-agenda-note") {
+    ev.stopPropagation();
+    const instanceId = Number(t.dataset.instance);
+    const uri = t.dataset.uri ?? "";
+    const found =
+      state.agendaNotes.find((x) => x.instanceId === instanceId && x.uri === uri) ?? null;
+    if (!found) {
+      setFlash("error", "Note is no longer in this agenda");
+      render();
+      return true;
+    }
+    state.creatingNote = false;
+    state.selectedNoteKey = o.itemKey(instanceId, uri);
+    state.editingNote = { ...found };
+    state.noteModalOpen = true;
+    state.taskModalOpen = false;
+    state.editingTask = null;
+    state.creatingTask = false;
+    state.eventModalOpen = false;
+    state.editingEvent = null;
+    state.creatingEvent = false;
     clearFlash();
     render();
     return true;
@@ -530,6 +600,7 @@ export async function handleCalendarsAction(
         start,
         end,
         repeat: readRepeatFromForm(fd),
+        ...reminderFromForm(fd),
       };
     } else {
       state.editingEvent = { ...state.editingEvent, allDay: goingAllDay };
@@ -558,6 +629,7 @@ export async function handleCalendarsAction(
       end: String(fd.get("end") ?? state.editingEvent.end ?? "") || null,
       repeat: nextRepeat,
       hasRrule: !!String(fd.get("repeatFreq") ?? "").trim(),
+      ...reminderFromForm(fd),
     };
     if (
       nextRepeat.freq &&

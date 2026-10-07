@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.6`
+**Version:** `2.5.7`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -8,7 +8,9 @@ TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 User tabs follow Admin **DAV services** (CalDAV → Calendar, CardDAV → Contacts,
 Tasks/Notes/Files toggles). Contacts, Tasks, and Notes lists support **↑/↓/Enter**
 keyboard navigation. Tasks have per-column filters (Status, Due, Calendar, %);
-Status defaults to Open (completed tasks hidden). Create/edit for **Notes** and
+Status defaults to Open (completed tasks hidden). Repeat uses the same rule as
+calendar events and needs a due date. Completing a repeating task saves that
+occurrence and moves the series to the next due date. Create/edit for **Notes** and
 **Tasks** is a modal; lists are full width. Notes rich text matches jtx
 Board Markdown (H1–H3, blockquote, `- [ ]` checkboxes, `~~strike~~`, `` `code` ``, `---`).
 User settings validation errors stay in the settings modal. **Password** (current, new, confirm) changes the signed-in user's DAV password via `POST /api/me/password`. Leave those fields blank to keep the password. The rules are in the **(i)** next to Password. A wrong current password stays in the modal (HTTP 400) and does not sign the user out. Sign in and each of those fields have a **View password** eye; it only shows or hides that field in the browser.
@@ -38,8 +40,9 @@ User settings validation errors stay in the settings modal. **Password** (curren
 | `app/bootstrap.ts` | Bootstrap + login submit flow |
 | `app/files/*` | Files tab: load, transfer, upload, render, actions |
 | `app/admin/*` | Administration: overview, users, settings, database |
-| `app/calendars/*` | Calendars: month grid, events, import progress, ICS import |
+| `app/calendars/*` | Calendars: month, week, agenda (events, open tasks due, dated notes), display reminders and due-reminder notifications, import progress, ICS import |
 | `app/keys.ts` | Shared `itemKey` for tasks/notes |
+| `app/repeatControl.ts` | Shared Repeat fieldset for events and tasks |
 | `app/notes/*` | Notes tab: load, render, save |
 | `app/tasks/*` | Tasks tab: tree, bulk, load, render, save |
 | `app/contacts/*` | Contacts tab: loaders, form, photo, VCF import, save |
@@ -57,11 +60,11 @@ hosts — they do not import `app.ts`.
 
 | Tab | Features |
 |-----|----------|
-| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month grid; create/edit/delete VEVENT (RRULE); holidays/read-only; large `.ics` import progress modal |
+| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month / week / agenda; agenda also lists open tasks on their due date and notes that have a date; create/edit/delete VEVENT (RRULE) with one display reminder (a notification when it is due; click opens the event); holidays/read-only; large `.ics` import progress modal |
 | **Contacts** | Address books (create/rename/delete with confirm), contact table/search, per-contact CRUD, multi email/phone, photos, birthday/special dates, Unicode custom fields, book + single-contact `.vcf` export; large `.vcf` import progress modal |
-| **Tasks** | CalDAV `VTODO` list (sortable, full width), subtasks via `RELATED-TO;RELTYPE=PARENT`, multi-select bulk status/due/%, create/edit modal on writable calendars |
+| **Tasks** | CalDAV `VTODO` list (sortable, full width), subtasks via `RELATED-TO;RELTYPE=PARENT`, repeat (`RRULE`) on the series, multi-select bulk status/due/%, create/edit modal on writable calendars |
 | **Notes** | CalDAV `VJOURNAL` list (sortable, full width), create/edit modal, rich editor (H1–H3, blockquote, checkbox, strikethrough, inline code, horizontal line, lists/links) with jtx Board Markdown in `DESCRIPTION` |
-| **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete; upload progress dialog; folder item count; quota bar; same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/` |
+| **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete into **Trash** (restore, delete now, empty; “ (restored)” when the original name is taken); upload progress dialog; folder item count; quota bar (Trash counts); same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/`. WebDAV clients do not see Trash. Retention is **Trash retention (days)** in System settings (`files_trash_days`, default 30; 0 deletes immediately) |
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database** · **Configuration**. Installer: `/portal/install/`. |
 
 Section help lives under **(i)** info modals. A button from `infoIconHtml()` carries its own title and paragraphs (`data-info-title`, `data-info-paragraphs`). A button with `data-info` still opens a `SECTION_INFO` entry. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
@@ -90,7 +93,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 - **System settings:** form writes `configuration.yaml` (services, files, push incl. Push for file storage and the per-user subscription limit, session, admin password); timezone select.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
-- **Configuration:** download/restore a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`), preview shows a changed/unknown/invalid diff before applying. **Reset to Default** (full factory wipe + reopen installer) lives here, not on System settings.
+- **Configuration:** three sections. **Settings backup and restore** downloads or restores a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`); the preview shows a changed/unknown/invalid diff before applying. **Data backup and restore** downloads one archive (`POST /api/admin/data-export`) and can put it back (`POST /api/admin/data-restore`): a SQLite snapshot or a PostgreSQL `pg_dump`, plus a tarball of the WebDAV file store. Restore replaces the live database and file store. `configuration.yaml` stays on the config volume. **Danger zone** is **Reset to Default** (full factory wipe + reopen installer).
 - **Capabilities:** `GET /api/admin/capabilities` → `portalAdminUrl` + per-page `portalUrl` (all under `/portal/#admin…`).
 - Non-admins never see the menu item; `/api/admin/*` still returns **403**.
 
@@ -104,6 +107,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 | System settings | Yes |
 | Database settings write | Yes (`confirm: "CONFIRM"`) |
 | Settings backup / restore | Yes (never secrets or user/DAV data) |
+| Data backup / restore | Yes (SQLite snapshot or `pg_dump`, plus the file store; restore replaces that data; config volume stays separate) |
 | Installer / upgrade | Yes (`/portal/install/`). Upgrade keeps `portal_log_level`, `portal_time_format`, and `portal_week_start` |
 
 Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → server import, elapsed time) and show the result when finished.

@@ -11,6 +11,9 @@ system:
     files_max_upload_mb: 1024
     files_quota_mb: 10240
     files_quarantine_days: 30
+    # Days a deleted file or folder stays in Trash. 0 deletes immediately.
+    # Trashed items still count toward the quota. Separate from files_quarantine_days.
+    files_trash_days: 30
     tasks_enabled: true
     notes_enabled: false
     invite_from: 'noreply@localhost'

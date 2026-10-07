@@ -47,11 +47,7 @@ portal:
 	cd portal && npm test && npm run build
 
 php-test: vendor/autoload.php
-	@set -e; \
-	for t in tests/php/*.php; do \
-	  echo "== $$t"; \
-	  php $$t; \
-	done
+	php scripts/run-php-tests.php
 
 local-build:
 	sh scripts/local-docker.sh build

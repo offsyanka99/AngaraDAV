@@ -4,10 +4,12 @@
 import { api } from "../../api";
 import { log } from "../../log";
 import type { Calendar, CalendarEvent } from "../../api";
-import type { CalendarsHost } from "./host";
-import { eventsRangeForView } from "./eventsView";
-import { persistCalendarSelection } from "./selectionPersist";
+import type { AppState } from "../context";
 import { captureSyncSnapshot } from "../backgroundSync";
+import { isUserTabEnabled } from "../session";
+import { eventsRangeForView } from "./eventsView";
+import type { CalendarsHost } from "./host";
+import { persistCalendarSelection } from "./selectionPersist";
 
 export function calendarEventsFingerprint(
   events: Array<CalendarEvent & { instanceId?: number }>,
@@ -37,11 +39,55 @@ export function pickDefaultCalendar(host: CalendarsHost): Calendar | null {
   return own.find(isDefault) ?? own[0] ?? null;
 }
 
+/** Tasks and notes for the agenda. Cleared when another calendar view is showing. */
+export async function loadAgendaItems(host: { state: AppState }): Promise<void> {
+  if (host.state.calView !== "agenda") {
+    host.state.agendaTasks = [];
+    host.state.agendaNotes = [];
+    return;
+  }
+  const jobs: Promise<void>[] = [];
+  if (isUserTabEnabled(host.state, "tasks")) {
+    jobs.push(
+      api
+        .tasks({ q: "", sort: "due", order: "asc" })
+        .then((res) => {
+          host.state.agendaTasks = res.tasks;
+          if (host.state.taskCalendars.length === 0) host.state.taskCalendars = res.calendars;
+        })
+        .catch((e) => {
+          host.state.agendaTasks = [];
+          log.warn("loadAgendaItems tasks failed", e instanceof Error ? e.message : e);
+        }),
+    );
+  } else {
+    host.state.agendaTasks = [];
+  }
+  if (isUserTabEnabled(host.state, "notes")) {
+    jobs.push(
+      api
+        .notes({ q: "", sort: "dtstart", order: "asc" })
+        .then((res) => {
+          host.state.agendaNotes = res.notes;
+          if (host.state.noteCalendars.length === 0) host.state.noteCalendars = res.calendars;
+        })
+        .catch((e) => {
+          host.state.agendaNotes = [];
+          log.warn("loadAgendaItems notes failed", e instanceof Error ? e.message : e);
+        }),
+    );
+  } else {
+    host.state.agendaNotes = [];
+  }
+  await Promise.all(jobs);
+}
+
 export async function loadMonthEvents(host: CalendarsHost) {
   const ids = host.state.selectedIds.filter((id) => host.state.calendars.some((c) => c.id === id));
   if (ids.length === 0) {
     host.state.monthEvents = [];
     host.state.calendarEventsReady = true;
+    await loadAgendaItems(host);
     await captureSyncSnapshot(host);
     return;
   }
@@ -65,6 +111,7 @@ export async function loadMonthEvents(host: CalendarsHost) {
     });
     host.state.monthEvents = merged;
     host.state.calendarEventsReady = true;
+    await loadAgendaItems(host);
     log.event("monthEvents.loaded", {
       calendarIds: ids,
       count: host.state.monthEvents.length,
@@ -74,6 +121,8 @@ export async function loadMonthEvents(host: CalendarsHost) {
     await captureSyncSnapshot(host);
   } catch (e) {
     host.state.monthEvents = [];
+    host.state.agendaTasks = [];
+    host.state.agendaNotes = [];
     host.state.calendarEventsReady = true;
     log.warn(
       "loadMonthEvents failed",

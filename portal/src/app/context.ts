@@ -23,6 +23,7 @@ import {
   type DirectoryUser,
   type FileEntry,
   type FilesStatus,
+  type TrashItem,
   type HolidayCountry,
   type ItemCalendarOption,
   type NoteItem,
@@ -190,6 +191,13 @@ export type AppState = {
   adminResetPassword: string;
   adminBackupBusy: boolean;
   adminBackupError: string | null;
+  adminDataExportBusy: boolean;
+  adminDataExportError: string | null;
+  /** Chosen angaradav-data archive. Held until restore, discard, or logout. */
+  adminDataRestoreFile: File | null;
+  adminDataRestoreConfirm: boolean;
+  adminDataRestoreBusy: boolean;
+  adminDataRestoreError: string | null;
   adminRestoreFileName: string | null;
   adminRestoreDoc: Record<string, unknown> | null;
   adminRestorePreview: AdminSettingsRestoreResult | null;
@@ -248,6 +256,9 @@ export type AppState = {
   eventSearch: string;
   eventSearchFocus: boolean;
   monthEvents: Array<CalendarEvent & { instanceId: number }>;
+  /** Full task and note lists for the agenda. Empty outside that view. */
+  agendaTasks: TaskItem[];
+  agendaNotes: NoteItem[];
   monthEventsLoading: boolean;
   /** True after the first events fetch this session (tab switch can reuse the cache). */
   calendarEventsReady: boolean;
@@ -311,6 +322,10 @@ export type AppState = {
   checkedNoteKeys: string[];
   checkedContactUris: string[];
   filesStatus: FilesStatus | null;
+  filesView: "files" | "trash";
+  filesTrash: TrashItem[];
+  filesTrashDeleteId: number | null;
+  filesEmptyTrashOpen: boolean;
   filesPath: string;
   filesEntries: FileEntry[];
   filesLoading: boolean;
@@ -398,6 +413,12 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     adminResetPassword: "",
     adminBackupBusy: false,
     adminBackupError: null,
+    adminDataExportBusy: false,
+    adminDataExportError: null,
+    adminDataRestoreFile: null,
+    adminDataRestoreConfirm: false,
+    adminDataRestoreBusy: false,
+    adminDataRestoreError: null,
     adminRestoreFileName: null,
     adminRestoreDoc: null,
     adminRestorePreview: null,
@@ -443,6 +464,8 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     eventSearch: "",
     eventSearchFocus: false,
     monthEvents: [],
+    agendaTasks: [],
+    agendaNotes: [],
     monthEventsLoading: false,
     calendarEventsReady: false,
     eventModalOpen: false,
@@ -509,6 +532,10 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     checkedNoteKeys: [],
     checkedContactUris: [],
     filesStatus: null,
+    filesView: "files",
+    filesTrash: [],
+    filesTrashDeleteId: null,
+    filesEmptyTrashOpen: false,
     filesPath: "",
     filesEntries: [],
     filesLoading: false,

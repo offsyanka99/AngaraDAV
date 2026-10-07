@@ -361,7 +361,10 @@ class CalendarImportService {
                 continue;
             }
             if (isset($child['TZID'])) {
-                $ids[(string) $child['TZID']] = true;
+                $tzid = $child['TZID'];
+                if ($tzid instanceof \Sabre\VObject\Parameter) {
+                    $ids[(string) $tzid] = true;
+                }
             }
         }
 

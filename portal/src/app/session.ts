@@ -173,6 +173,8 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.editingEvent = null;
   state.creatingEvent = false;
   state.monthEvents = [];
+  state.agendaTasks = [];
+  state.agendaNotes = [];
   state.monthEventsLoading = false;
   state.calendarEventsReady = false;
   state.calView = "month";
@@ -202,6 +204,10 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.checkedNoteKeys = [];
   state.checkedContactUris = [];
   state.filesStatus = null;
+  state.filesView = "files";
+  state.filesTrash = [];
+  state.filesTrashDeleteId = null;
+  state.filesEmptyTrashOpen = false;
   state.filesPath = "";
   state.filesEntries = [];
   state.filesLoading = false;
@@ -276,6 +282,10 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   state.adminResetModalOpen = false;
   state.adminResetConfirmChecked = false;
   state.adminResetPassword = "";
+  state.adminDataRestoreFile = null;
+  state.adminDataRestoreConfirm = false;
+  state.adminDataRestoreBusy = false;
+  state.adminDataRestoreError = null;
   state.adminDatabaseSettings = null;
   state.adminDatabaseSettingsLoading = false;
   state.adminDatabaseSettingsError = null;

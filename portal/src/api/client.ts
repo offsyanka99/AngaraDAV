@@ -123,12 +123,63 @@ export async function requestBlob(
   return { blob, contentType };
 }
 
+/** POST that returns a file. Sends the session CSRF token. */
+export async function postBlob(
+  path: string,
+  body = "{}",
+): Promise<{ blob: Blob; filename: string | null }> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (csrfToken) {
+    headers.set("X-CSRF-Token", csrfToken);
+  }
+  const t0 =
+    typeof performance !== "undefined" ? performance.now() : Date.now();
+  log.debug(`api → POST ${path}`);
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers,
+    body,
+    credentials: "same-origin",
+  });
+  const ms = Math.round(
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0,
+  );
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    let payload: Record<string, unknown> = {};
+    try {
+      const data = (await res.json()) as Record<string, unknown>;
+      payload = { ...data };
+      if (typeof data.error === "string") {
+        msg = data.error;
+      }
+    } catch {
+      /* ignore */
+    }
+    if (res.status >= 500) {
+      log.error(`api ← POST ${path} ${res.status} (${ms}ms)`, msg);
+    } else if (res.status !== 401) {
+      log.warn(`api ← POST ${path} ${res.status} (${ms}ms)`, msg);
+    } else {
+      log.debug(`api ← POST ${path} 401 (${ms}ms)`);
+      notifyUnauthorized(path, msg);
+    }
+    throw new ApiError(msg, res.status, payload);
+  }
+  log.info(`api ← POST ${path} ${res.status} (${ms}ms)`);
+  notifySessionActivity(path);
+  const cd = res.headers.get("Content-Disposition") || "";
+  const match = /filename="([^"]+)"/i.exec(cd);
+  return { blob: await res.blob(), filename: match?.[1] ?? null };
+}
+
 export async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+  const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body && !isForm && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const method = (init.method || "GET").toUpperCase();

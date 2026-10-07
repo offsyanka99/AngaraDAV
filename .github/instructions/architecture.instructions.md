@@ -72,11 +72,11 @@ Two independent HTTP surfaces sit on the same data:
 | Core deps | `sabre/dav ~4.7.0`, `symfony/yaml ^8.1`, `minishlink/web-push ^11.0`, `symfony/http-client ^8.1`, `nyholm/psr7 ^1.8` | [composer.json](../../composer.json) |
 | Required ext | `curl`, `dom`, `mbstring`, `openssl`, `pdo`, `zlib` (`gmp` suggested for faster VAPID) | [composer.json](../../composer.json) |
 | Dev deps | `php-cs-fixer ^3.95`, `phpstan ^2.2` + deprecation rules | [composer.json](../../composer.json) |
-| Static analysis | PHPStan **level 0**, analysing only `Core` and `html` | [phpstan.neon](../../phpstan.neon) |
+| Static analysis | PHPStan **level 0** on `Core` and `html`. **Level 2** on `Baikal\Portal` | [phpstan.neon](../../phpstan.neon), [phpstan-portal.neon](../../phpstan-portal.neon) |
 | Formatting | `@PSR2` + `@Symfony`, same-line opening braces, repo-wide except `vendor` | [.php-cs-fixer.dist.php](../../.php-cs-fixer.dist.php) |
 | Vendor patching | `post-install-cmd` / `post-update-cmd` run `scripts/apply-vendor-patches.sh` | [composer.json](../../composer.json) |
 
-`composer test` = cs-fixer + phpstan. It does **not** run `tests/php`.
+`composer test` runs cs-fixer, phpstan, then every `tests/php` script (`composer php-test`).
 
 ### Portal (TypeScript)
 
@@ -86,7 +86,7 @@ Two independent HTTP surfaces sit on the same data:
 | Deps | **Zero runtime deps**; devDeps only `typescript ^6`, `vite ^8` | [portal/package.json](../../portal/package.json) |
 | TS config | ES2022, `bundler` resolution, `strict`, `noEmit`, `noUnusedLocals/Parameters`; `src/**/*.test.ts` excluded from typecheck | [portal/tsconfig.json](../../portal/tsconfig.json) |
 | Vite | `base: "/portal/"`, `outDir: "../html/portal"`, `emptyOutDir`, `sourcemap: false`; dev proxy `/api` → `:31088` | [portal/vite.config.ts](../../portal/vite.config.ts) |
-| Tests | Node built-in `node:test` via `--experimental-strip-types`, 17 files enumerated explicitly (no glob) | [portal/package.json](../../portal/package.json) |
+| Tests | Node built-in `node:test` via `--experimental-strip-types`, 21 files enumerated explicitly (no glob) | [portal/package.json](../../portal/package.json) |
 
 ### Make targets — [Makefile](../../Makefile)
 
@@ -102,7 +102,7 @@ Two independent HTTP surfaces sit on the same data:
 
 ### CI
 
-- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs every `tests/php/*.php` script as a named step (41, no glob), then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs the PostgreSQL-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — matrix PHP 8.4/8.5/8.6; runs every `tests/php/*.php` script as a named step (44 in code-analysis, no glob), then `php-cs-fixer --dry-run --diff` and `composer phpstan`. A second job runs the PostgreSQL-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php` against a `postgres:18` service container. It does not run `make php-test`, and it does not run portal tests.
 - [.github/workflows/docker.yml](../../.github/workflows/docker.yml) — multi-arch (`linux/amd64,linux/arm64`) GHCR publish. Tags: `latest` (default branch only), `sha-<sha>`, branch ref, tag ref, semver. Build args `GIT_SHA`, `BUILD_TIME`. **Only branches in its `push.branches` allowlist publish images.**
 - [.github/actions/build/action.yaml](../../.github/actions/build/action.yaml) — composite setup (PHP extensions, Composer cache, installs `patch` for the vendor-patch hook).
 
@@ -218,7 +218,7 @@ All share one signature: `dispatch(string $method, string $path, string $usernam
 
 **[ContactRoutes.php](../../Core/Frameworks/Baikal/Portal/Http/ContactRoutes.php)** — address book CRUD, import, and contacts CRUD. `/contacts/bulk` and `/contacts/export` are matched **before** the generic `/contacts/{uri}` regex.
 
-**[ItemRoutes.php](../../Core/Frameworks/Baikal/Portal/Http/ItemRoutes.php)** — tasks (VTODO) and notes (VJOURNAL) generated from one `foreach` over `['tasks' => KIND_TASK, 'notes' => KIND_NOTE]`; response key is the singular via `rtrim($seg, 's')`. `?cascade=1` is honoured for tasks only.
+**[ItemRoutes.php](../../Core/Frameworks/Baikal/Portal/Http/ItemRoutes.php)** — tasks (VTODO) and notes (VJOURNAL) generated from one `foreach` over `['tasks' => KIND_TASK, 'notes' => KIND_NOTE]`; response key is the singular via `rtrim($seg, 's')`. `?cascade=1` is honoured for tasks only. A task body may include `repeat` (same shape as events). A repeating task requires `due`. Status `COMPLETED` on a repeating VTODO finishes this occurrence (`occurrenceCompleted` on the returned task) and advances the series; `CANCELLED` stays on the series.
 
 **Files routes** live inline in `App::dispatchFileRoutes()`: `/files`, `/files/entries`, `/files/mkdir`, `/files/upload`, `/files/entry`, `/files/rename`, `/files/move`, `/files/copy`, `/files/bulk`.
 
@@ -255,8 +255,9 @@ Admin conventions: every mutation is wrapped `try { … audit 'ok' } catch (ApiE
 | Class | Responsibility |
 |---|---|
 | `CalendarStore` / `ContactStore` | Shared SabreDAV PDO backends, ACL checks, URI helpers, push notification, import transactions |
-| `CalendarService`, `EventService`, `ShareService` | Calendar CRUD, VEVENT CRUD with RRULE expansion (capped at 500), sharing |
-| `CalendarItemService` | Tasks + notes in CalDAV calendars; subtasks via `RELATED-TO;RELTYPE=PARENT` with cycle detection |
+| `CalendarService`, `EventService`, `ShareService` | Calendar CRUD, VEVENT CRUD with RRULE parse/build via `RecurrenceRule` and expansion capped at 500, one relative DISPLAY reminder (other `VALARM`s stay), sharing |
+| `RecurrenceRule` | Shared RRULE parse, build, and next occurrence for VEVENT and VTODO |
+| `CalendarItemService` | Tasks + notes in CalDAV calendars; subtasks via `RELATED-TO;RELTYPE=PARENT` with cycle detection. VTODO `RRULE` is one object per series: completing an occurrence stores a completed copy (no `RRULE`, no `RELATED-TO`) and advances `DTSTART`/`DUE`; the last occurrence stays `COMPLETED` on the series |
 | `ContactService`, `VCardMapper` | Contact CRUD preserving unknown vCard properties; photo sanitize/resize; custom fields under `X-BAIKAL-CUSTOM` |
 | `CalendarImportService`, `ContactImportService` | ICS/vCard import-export; chunked transactions (`IMPORT_TX_CHUNK = 200`) so SQLite does not fsync per row |
 | `FileService`, `FileDownloadRateLimiter` | Portal API over the same file homes as `/dav.php/files/{user}/` |
@@ -319,7 +320,7 @@ This inverts dependency direction — domains never import `app.ts`. Unused host
 
 Recurring files per domain: `host.ts` (type), `index.ts` (barrel), `loaders.ts` (fetch + mutate state), `actions.ts` (submit/bulk handlers), `actionsRouter.ts` (`handle<Domain>Action(host, action, t, ev) => Promise<boolean>`), `render.ts` (`render<Domain>Tab(host) => string`), `listing.ts` (pure, unit-tested), `tree.ts`, `bind.ts` (post-render DOM-only). Calendars and contacts additionally use `home.ts`, which takes the orchestrator rather than the host.
 
-Domain sizes (excluding tests): calendars 17 files, files 18, admin 13, contacts 9, tasks 8, notes 8.
+Domain sizes (excluding tests): calendars 19 files, files 18, admin 13, contacts 9, tasks 8, notes 8.
 
 ### Rendering and escaping conventions
 
@@ -491,8 +492,8 @@ Wire plugins in [Core/Frameworks/Baikal/Core/Server.php](../../Core/Frameworks/B
 | Layer | How to run | Notes |
 |---|---|---|
 | PHP | `make php-test`, or `php tests/php/<File>.php` | Standalone scripts, **not** PHPUnit |
-| Static | `composer phpstan`, `composer cs-fixer` | `composer test` = these two only |
-| Portal | `npm test` in [portal/](../../portal), or `make portal` | `node:test`; the 17 files are enumerated in `package.json` |
+| Static | `composer phpstan`, `composer cs-fixer` | Level 0 on `Core`/`html`; level 2 on `Baikal\Portal`. `composer test` runs cs-fixer, phpstan, then `tests/php` |
+| Portal | `npm test` in [portal/](../../portal), or `make portal` | `node:test`; 21 files enumerated in `package.json`. CI runs `npm ci && npm test && npm run build` |
 | E2E | `pytest tests/portal_admin_e2e.py -v` | Live instance only; `make local-up` first |
 
 **PHP test convention** — every file: `declare(strict_types=1)`, `require` the autoloader from `dirname(__DIR__, 2)`, a local `$failures` counter and an `assert_true(bool, string)` helper printing `OK`/`FAIL`, and a final `exit($failures === 0 ? 0 : 1)` with an `All … tests passed.` line. `make php-test` relies on those exit codes.
@@ -507,9 +508,9 @@ Wire plugins in [Core/Frameworks/Baikal/Core/Server.php](../../Core/Frameworks/B
 
 Recorded as facts, not recommendations:
 
-- CI runs 18 of the 36 `tests/php/` scripts (17 named in `code-analysis`, plus `FileSchemaDriverTest.php`); the rest run only via `make php-test`.
-- No CI job runs the portal `npm test` or `npm run build`; the portal is built only inside the Docker image stage.
-- `composer test` does not execute `tests/php`.
+- CI `code-analysis` runs 44 named PHP scripts and the `tests` job runs 2 more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → all 46 `tests/php/` files.
+- CI job `portal` runs `npm ci && npm test && npm run build` on Node 24. The Docker image still builds the portal in its `portal` stage.
+- `composer test` runs cs-fixer, phpstan, then every `tests/php` script.
 - Portal test files must be added to `package.json` manually — there is no glob.
 - `Dockerfile` emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` into gitignored `Core/BuildInfo.php`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - `esc()` in [portal/src/ui.ts](../../portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.

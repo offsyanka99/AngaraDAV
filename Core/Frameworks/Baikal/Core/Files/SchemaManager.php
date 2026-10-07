@@ -40,6 +40,18 @@ CREATE TABLE IF NOT EXISTS file_homes (
 );
 CREATE INDEX IF NOT EXISTS file_homes_principal ON file_homes (principaluri);
 CREATE INDEX IF NOT EXISTS file_homes_status ON file_homes (status);
+CREATE TABLE IF NOT EXISTS file_trash (
+    id integer primary key asc NOT NULL,
+    home_id integer NOT NULL,
+    token text NOT NULL,
+    original_path text NOT NULL,
+    name text NOT NULL,
+    is_directory integer NOT NULL,
+    size_bytes integer NOT NULL,
+    deleted_at integer NOT NULL,
+    UNIQUE (home_id, token)
+);
+CREATE INDEX IF NOT EXISTS file_trash_home_deleted ON file_trash (home_id, deleted_at);
 SQL
         );
     }
@@ -57,6 +69,18 @@ CREATE TABLE IF NOT EXISTS file_homes (
 );
 CREATE INDEX IF NOT EXISTS file_homes_principal ON file_homes (principaluri);
 CREATE INDEX IF NOT EXISTS file_homes_status ON file_homes (status);
+CREATE TABLE IF NOT EXISTS file_trash (
+    id SERIAL PRIMARY KEY,
+    home_id INTEGER NOT NULL,
+    token TEXT NOT NULL,
+    original_path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    is_directory INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    deleted_at INTEGER NOT NULL,
+    UNIQUE (home_id, token)
+);
+CREATE INDEX IF NOT EXISTS file_trash_home_deleted ON file_trash (home_id, deleted_at);
 SQL
         );
     }

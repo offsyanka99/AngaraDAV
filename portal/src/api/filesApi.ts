@@ -7,7 +7,7 @@ import {
   request,
   requestBlob,
 } from "./client";
-import type { FileEntry, FilesStatus } from "./types";
+import type { FileEntry, FilesStatus, TrashItem } from "./types";
 
 
 export const filesApi = {
@@ -142,6 +142,19 @@ export const filesApi = {
       method: "DELETE",
       body: JSON.stringify({ path }),
     }),
+  filesTrash: () => request<{ days: number; items: TrashItem[] }>("/files/trash"),
+  filesTrashRestore: (id: number) =>
+    request<{ path: string; name: string; renamed: boolean }>("/files/trash/restore", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    }),
+  filesTrashDelete: (id: number) =>
+    request<{ ok: boolean }>("/files/trash/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    }),
+  filesTrashEmpty: () =>
+    request<{ removed: number }>("/files/trash/empty", { method: "POST", body: "{}" }),
   filesRename: (path: string, newName: string) =>
     request<{ entry: { path: string; name: string } }>("/files/rename", {
       method: "POST",

@@ -171,6 +171,10 @@ class SchemaUpgrade {
                     $this->aSuccess[] = 'warning: skipped record ' . $row['id'] . '. Error: ' . $e->getMessage();
                     continue;
                 }
+                if (!$vobj instanceof \Sabre\VObject\Component\VCalendar) {
+                    $vobj->destroy();
+                    continue;
+                }
                 $uid = null;
                 $item = $vobj->getBaseComponent();
                 if (!isset($item->UID)) {
@@ -253,6 +257,7 @@ CREATE TABLE addressbooks (
             }
         }
         if (version_compare($sVersionFrom, '0.5.1', '<')) {
+            $calendarBackup = null;
             if ($databaseConfig['mysql'] === false) {
                 $pdo->exec(<<<SQL
 CREATE TABLE calendarinstances (
@@ -318,11 +323,13 @@ SQL
                 $this->aSuccess[] = 'Created new calendars table';
             }
 
-            $pdo->exec(<<<SQL
+            if (is_string($calendarBackup)) {
+                $pdo->exec(<<<SQL
 INSERT INTO calendars (id, synctoken, components) SELECT id, COALESCE(synctoken,1) as synctoken, COALESCE(components,"VEVENT,VTODO,VJOURNAL") as components FROM $calendarBackup
 SQL
-            );
-            $this->aSuccess[] = 'Migrated calendars table';
+                );
+                $this->aSuccess[] = 'Migrated calendars table';
+            }
         }
         if (version_compare($sVersionFrom, '0.9.4', '<')) {
             $pdo->exec("UPDATE calendarinstances SET access = 1 WHERE access IS NULL");

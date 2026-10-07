@@ -41,6 +41,8 @@ export function hasOpenEditor(state: {
   filesMkdirOpen?: unknown;
   filesTransfer?: unknown;
   filesDeletePaths?: unknown;
+  filesTrashDeleteId?: unknown;
+  filesEmptyTrashOpen?: unknown;
   filesPreview?: unknown;
   calModalOpen?: unknown;
   createCalModalOpen?: unknown;
@@ -55,6 +57,8 @@ export function hasOpenEditor(state: {
     state.filesMkdirOpen ||
     state.filesTransfer ||
     state.filesDeletePaths ||
+    state.filesTrashDeleteId ||
+    state.filesEmptyTrashOpen ||
     state.filesPreview ||
     state.calModalOpen ||
     state.createCalModalOpen ||

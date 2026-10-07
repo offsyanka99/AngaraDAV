@@ -11,6 +11,8 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     title: "Calendar",
     paragraphs: [
       "Create and edit calendars, then share them with other AngaraDAV users.",
+      "Agenda lists events, open tasks on their due date, and notes that have a date, for the calendars you check. Month and week show events only.",
+      "An event can have one display reminder relative to its start. For a calendar you have checked, a notification appears when that time arrives. The time uses the clock from System settings. Click it to edit the event, or close it. Other reminders already on the event stay.",
       "CalDAV clients (Thunderbird, Apple Calendar, DAVx⁵, Home Assistant, …) keep using /dav.php/ — this portal is for management only.",
     ],
   },
@@ -72,7 +74,8 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     title: "Tasks",
     paragraphs: [
       "Tasks are CalDAV VTODO items stored in your calendars. They sync with Apple Reminders, Thunderbird, DAVx⁵, and other clients via /dav.php/.",
-      "Subtasks use RELATED-TO;RELTYPE=PARENT (same calendar). Add a subtask from a parent, or set Parent in the form. Deleting a parent keeps subtasks as top-level tasks (RELATED-TO is removed) unless you confirm Delete with subtasks.",
+      "Repeat uses the same daily, weekly, monthly, and yearly rule as events (RRULE) and needs a due date. The list shows one row per series. The due date is this occurrence. Marking the task done saves that occurrence as a completed task and moves the series to the next due date. The last occurrence is marked done on the series itself. Subtasks stay on the series.",
+      "Subtasks use RELATED-TO;RELTYPE=PARENT (same calendar). Add a subtask from a parent, or set Parent in the form. Deleting a parent keeps subtasks as top-level tasks (RELATED-TO is removed) unless you confirm Delete with subtasks. Completed occurrences are separate tasks and are not removed with the series.",
       "Click a column header to sort. Create tasks on any writable calendar that allows VTODO components.",
     ],
   },
@@ -93,7 +96,8 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
       "Click a file name or View to preview it: images, PDF, text, audio, and video open in a dialog. Other types offer a download instead. Download, create folders, copy, move, rename, and delete work for both files and folders. Use checkboxes to multi-select items for bulk copy, move, or delete.",
       "Copy and Move open a folder tree so you can pick the destination (Home or any subfolder) without typing a path.",
       "Same-folder copies get a “ (copy)” name so the original is never overwritten. Copies into another folder keep the original filename unless that name is already taken there.",
-      "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage.",
+      "Delete moves a file or folder to Trash for the retention period set by the administrator (30 days unless changed). Open Trash from the toolbar to restore an item, delete it now, or empty Trash. Restoring puts it back in its original folder. If that name is already there, the restored copy is named with “ (restored)”. A deleted folder is one Trash item and comes back with its contents. Trashed items still count toward the quota. WebDAV clients do not see a trash folder. Setting retention to 0 deletes immediately.",
+      "Quotas and size limits are configured by the administrator. Enable storage under Admin → AngaraDAV Settings → Enable WebDAV file storage. Trash retention is the separate “Trash retention (days)” setting.",
     ],
   },
   "address-books": {
@@ -160,8 +164,9 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
   "admin-configuration": {
     title: "Configuration",
     paragraphs: [
-      "Download a JSON backup of the editable system settings, or restore one after reviewing a diff. No passwords, secrets, or user/DAV data are ever included.",
-      "Reset to Default (below) wipes this instance entirely — config, database, and WebDAV files — and reopens the installer.",
+      "Settings backup and restore downloads a JSON backup of the editable system settings, or restores one after you review a diff. Passwords, secrets, and user/DAV data stay out of that file.",
+      "Data backup and restore downloads one archive: a SQLite snapshot or a PostgreSQL pg_dump, plus a tarball of the WebDAV file store. Restoring that archive replaces the live database and the file store. configuration.yaml stays in place, including the admin password and the encryption key.",
+      "Reset to Default wipes this instance entirely — config, database, and WebDAV files — and reopens the installer.",
     ],
   },
 };

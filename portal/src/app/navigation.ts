@@ -12,6 +12,7 @@ import {
   persistCalendarSelection,
   readStoredCalendarSelection,
 } from "./calendars/selectionPersist";
+import { agendaItemsFingerprint } from "./calendars/agendaItems";
 import { calendarEventsFingerprint } from "./calendars/loaders";
 import { firstEnabledUserTab, isUserTabEnabled } from "./session";
 import { onBackgroundSyncTabChange } from "./backgroundSync";
@@ -101,9 +102,16 @@ export async function activateTab(
       await o.loadContacts(state.selectedAbId);
     } else if (tab === "calendars") {
       if (reuseCalendar) {
-        const prev = calendarEventsFingerprint(state.monthEvents);
+        const prev =
+          calendarEventsFingerprint(state.monthEvents) +
+          "\n" +
+          agendaItemsFingerprint(state.agendaTasks, state.agendaNotes);
         await o.loadMonthEvents();
-        skipFinalRender = calendarEventsFingerprint(state.monthEvents) === prev;
+        const next =
+          calendarEventsFingerprint(state.monthEvents) +
+          "\n" +
+          agendaItemsFingerprint(state.agendaTasks, state.agendaNotes);
+        skipFinalRender = next === prev;
       } else {
         await o.loadMonthEvents();
       }

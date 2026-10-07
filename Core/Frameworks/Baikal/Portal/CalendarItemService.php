@@ -167,11 +167,15 @@ class CalendarItemService {
                 'DTSTAMP' => new \DateTime('now', new \DateTimeZone('UTC')),
                 'SUMMARY' => $summary,
             ]);
+            if (!$todo instanceof \Sabre\VObject\Component) {
+                throw new ApiException('Unable to build task', 500);
+            }
             if ($description !== '') {
                 $todo->DESCRIPTION = $description;
             }
             $this->applyTodoFields($todo, $fields, true);
             $this->applyParentRelation($todo, $fields, $calId, $uid, true);
+            $written = $this->serializeTodoWrite($vcal, $todo);
         } else {
             $journal = $vcal->add('VJOURNAL', [
                 'UID'     => $uid,
@@ -180,14 +184,27 @@ class CalendarItemService {
             ]);
             $this->writeDescription($journal, $description);
             $this->applyJournalFields($journal, $fields, true);
+            $written = [
+                'ics'                  => $vcal->serialize(),
+                'copyIcs'              => null,
+                'copyUri'              => null,
+                'occurrenceCompleted'  => false,
+            ];
+            $vcal->destroy();
         }
 
-        $serialized = $vcal->serialize();
-        $vcal->destroy();
-        $this->backend->createCalendarObject([$calId, $instanceId], $uri, $serialized);
+        $this->backend->createCalendarObject([$calId, $instanceId], $uri, $written['ics']);
+        if (is_string($written['copyIcs']) && is_string($written['copyUri'])) {
+            $this->backend->createCalendarObject([$calId, $instanceId], $written['copyUri'], $written['copyIcs']);
+        }
         $this->notifyCalendarPush($username, $instanceId, $calId);
 
-        return $this->getItem($username, $kind, $instanceId, $uri);
+        $created = $this->getItem($username, $kind, $instanceId, $uri);
+        if (!empty($written['occurrenceCompleted'])) {
+            $created['occurrenceCompleted'] = true;
+        }
+
+        return $created;
     }
 
     /**
@@ -260,12 +277,29 @@ class CalendarItemService {
             $comp->DTSTAMP = new \DateTime('now', new \DateTimeZone('UTC'));
         }
 
-        $serialized = $vcal->serialize();
-        $vcal->destroy();
-        $this->backend->updateCalendarObject([$calId, $instanceId], $uri, $serialized);
+        if ($kind === self::KIND_TASK) {
+            $written = $this->serializeTodoWrite($vcal, $comp);
+        } else {
+            $written = [
+                'ics'                 => $vcal->serialize(),
+                'copyIcs'             => null,
+                'copyUri'             => null,
+                'occurrenceCompleted' => false,
+            ];
+            $vcal->destroy();
+        }
+        $this->backend->updateCalendarObject([$calId, $instanceId], $uri, $written['ics']);
+        if (is_string($written['copyIcs']) && is_string($written['copyUri'])) {
+            $this->backend->createCalendarObject([$calId, $instanceId], $written['copyUri'], $written['copyIcs']);
+        }
         $this->notifyCalendarPush($username, $instanceId, $calId);
 
-        return $this->getItem($username, $kind, $instanceId, $uri);
+        $saved = $this->getItem($username, $kind, $instanceId, $uri);
+        if (!empty($written['occurrenceCompleted'])) {
+            $saved['occurrenceCompleted'] = true;
+        }
+
+        return $saved;
     }
 
     /**
@@ -553,6 +587,8 @@ class CalendarItemService {
             'priority'    => 0,
             'percent'     => 0,
             'completed'   => null,
+            'hasRrule'    => false,
+            'repeat'      => RecurrenceRule::empty(),
         ];
         if (trim($data) === '') {
             return $empty;
@@ -598,6 +634,7 @@ class CalendarItemService {
         $priority = isset($todo->PRIORITY) ? (int) (string) $todo->PRIORITY : 0;
         $percent = isset($todo->{'PERCENT-COMPLETE'}) ? (int) (string) $todo->{'PERCENT-COMPLETE'} : 0;
         $uid = isset($todo->UID) ? trim((string) $todo->UID) : '';
+        $repeat = RecurrenceRule::parse(isset($todo->RRULE) ? $todo->RRULE : null);
         $out = [
             'uid'         => $this->utf8($uid),
             'parentUid'   => $this->parseParentUid($todo),
@@ -608,6 +645,8 @@ class CalendarItemService {
             'priority'    => max(0, min(9, $priority)),
             'percent'     => max(0, min(100, $percent)),
             'completed'   => $completed,
+            'hasRrule'    => $repeat['freq'] !== '',
+            'repeat'      => $repeat,
         ];
         $vcal->destroy();
 
@@ -899,6 +938,9 @@ class CalendarItemService {
      * @param array<string, mixed> $fields
      */
     private function applyTodoFields($todo, array $fields, bool $isCreate): void {
+        $oldDue = $this->propInstant($todo, 'DUE');
+        $oldStart = $this->propInstant($todo, 'DTSTART');
+        $oldStartDateOnly = isset($todo->DTSTART) && !$todo->DTSTART->hasTime();
         if ($isCreate || array_key_exists('status', $fields)) {
             $status = strtoupper(trim((string) ($fields['status'] ?? 'NEEDS-ACTION')));
             $allowed = ['NEEDS-ACTION', 'IN-PROCESS', 'COMPLETED', 'CANCELLED'];
@@ -946,6 +988,22 @@ class CalendarItemService {
             } else {
                 $todo->{'PERCENT-COMPLETE'} = $pct;
             }
+        }
+        if (array_key_exists('repeat', $fields)) {
+            $this->writeRrule($todo, $fields['repeat']);
+        }
+        if (!isset($todo->RRULE) || trim((string) $todo->RRULE) === '') {
+            return;
+        }
+        if (!isset($todo->DUE)) {
+            throw new ApiException('A repeating task needs a due date', 400);
+        }
+        $newDue = $this->propInstant($todo, 'DUE');
+        if ($oldDue !== null && $oldStart !== null && $newDue !== null
+            && $oldDue->getTimestamp() !== $newDue->getTimestamp()) {
+            $this->writeTodoDate($todo, 'DTSTART', $oldStart->add($oldDue->diff($newDue)), $oldStartDateOnly);
+        } elseif (!isset($todo->DTSTART) && $newDue !== null) {
+            $this->writeTodoDate($todo, 'DTSTART', $newDue, !$todo->DUE->hasTime());
         }
     }
 
@@ -1085,6 +1143,185 @@ class CalendarItemService {
         }
 
         return $uri;
+    }
+
+    /**
+     * When a repeating VTODO is saved as COMPLETED, keep this occurrence as its
+     * own completed object (no RRULE, no RELATED-TO) and move the series to the
+     * next instance. The last instance stays on the series and drops RRULE.
+     *
+     * @param mixed $todo VTODO component
+     *
+     * @return array{ics: string, copyIcs: string|null, copyUri: string|null, occurrenceCompleted: bool}
+     */
+    private function serializeTodoWrite(VCalendar $vcal, $todo): array {
+        $copyIcs = null;
+        $copyUri = null;
+        $occurrenceCompleted = false;
+        try {
+            $status = strtoupper(trim((string) ($todo->STATUS ?? '')));
+            $rule = isset($todo->RRULE) ? trim((string) $todo->RRULE) : '';
+            if ($status === 'COMPLETED' && $rule !== '') {
+                if (!isset($todo->DUE) && !isset($todo->DTSTART)) {
+                    throw new ApiException('A repeating task needs a due date', 400);
+                }
+                if (!isset($todo->DTSTART) && isset($todo->DUE)) {
+                    $this->writeTodoDate($todo, 'DTSTART', $todo->DUE->getDateTime(), !$todo->DUE->hasTime());
+                }
+                $anchor = \DateTimeImmutable::createFromInterface($todo->DTSTART->getDateTime());
+                $next = RecurrenceRule::nextAfter($rule, $anchor);
+                $snapshot = $vcal->serialize();
+                if ($next === null) {
+                    unset($todo->RRULE);
+                    $this->markTodoCompleted($todo);
+                } else {
+                    $copyUid = UUIDUtil::getUUID();
+                    $copyUri = $this->objectUriFromUid($copyUid);
+                    $copyIcs = $this->completedOccurrenceDocument($snapshot, $copyUid);
+                    $this->moveSeriesToNext($todo, $next);
+                }
+                $occurrenceCompleted = true;
+            }
+            $ics = $vcal->serialize();
+        } finally {
+            $vcal->destroy();
+        }
+
+        return [
+            'ics'                  => $ics,
+            'copyIcs'              => $copyIcs,
+            'copyUri'              => $copyUri,
+            'occurrenceCompleted'  => $occurrenceCompleted,
+        ];
+    }
+
+    private function completedOccurrenceDocument(string $ics, string $uid): string {
+        try {
+            $vcal = Reader::read($ics, Reader::OPTION_FORGIVING);
+        } catch (\Throwable $e) {
+            throw new ApiException('Invalid calendar data for this item', 500);
+        }
+        if (!$vcal instanceof VCalendar) {
+            throw new ApiException('Invalid calendar object', 500);
+        }
+        $todo = null;
+        foreach ($vcal->getComponents() as $c) {
+            if (strtoupper($c->name) === 'VTODO') {
+                $todo = $c;
+                break;
+            }
+        }
+        if ($todo === null) {
+            $vcal->destroy();
+            throw new ApiException('Object is not a VTODO', 500);
+        }
+        $todo->UID = $uid;
+        unset($todo->RRULE, $todo->EXDATE, $todo->RDATE, $todo->{'RECURRENCE-ID'});
+        foreach ($todo->select('RELATED-TO') as $rel) {
+            $todo->remove($rel);
+        }
+        $this->markTodoCompleted($todo);
+        $todo->DTSTAMP = new \DateTime('now', new \DateTimeZone('UTC'));
+        $out = $vcal->serialize();
+        $vcal->destroy();
+
+        return $out;
+    }
+
+    /**
+     * @param mixed $todo VTODO component
+     */
+    private function moveSeriesToNext($todo, \DateTimeImmutable $next): void {
+        $dueDateOnly = isset($todo->DUE) && !$todo->DUE->hasTime();
+        $startDateOnly = isset($todo->DTSTART) && !$todo->DTSTART->hasTime();
+        $due = isset($todo->DUE) ? \DateTimeImmutable::createFromInterface($todo->DUE->getDateTime()) : null;
+        $start = isset($todo->DTSTART)
+            ? \DateTimeImmutable::createFromInterface($todo->DTSTART->getDateTime())
+            : $next;
+        $newDue = $due !== null ? $next->add($start->diff($due)) : null;
+        $parsed = RecurrenceRule::parse(isset($todo->RRULE) ? $todo->RRULE : null);
+        if ($parsed['count'] !== null) {
+            $parsed['count'] = max(1, $parsed['count'] - 1);
+            unset($todo->RRULE);
+            $rule = RecurrenceRule::build($parsed);
+            if ($rule !== null) {
+                $todo->add('RRULE', $rule);
+            }
+        }
+        $this->writeTodoDate($todo, 'DTSTART', $next, $startDateOnly);
+        if ($newDue !== null) {
+            $this->writeTodoDate($todo, 'DUE', $newDue, $dueDateOnly);
+        }
+        $todo->STATUS = 'NEEDS-ACTION';
+        unset($todo->COMPLETED);
+        $todo->{'PERCENT-COMPLETE'} = 0;
+        $todo->DTSTAMP = new \DateTime('now', new \DateTimeZone('UTC'));
+    }
+
+    /**
+     * @param mixed $todo VTODO component
+     */
+    private function markTodoCompleted($todo): void {
+        $todo->STATUS = 'COMPLETED';
+        $todo->COMPLETED = new \DateTime('now', new \DateTimeZone('UTC'));
+        $todo->{'PERCENT-COMPLETE'} = 100;
+    }
+
+    /**
+     * @param mixed $repeat
+     * @param mixed $todo   VTODO component
+     */
+    private function writeRrule($todo, $repeat): void {
+        unset($todo->RRULE);
+        if ($repeat === null || $repeat === '' || $repeat === false) {
+            return;
+        }
+        if (is_array($repeat)) {
+            $rule = RecurrenceRule::build($repeat);
+            if ($rule !== null) {
+                $todo->add('RRULE', $rule);
+            }
+
+            return;
+        }
+        if (is_string($repeat) && trim($repeat) !== '') {
+            $todo->add('RRULE', trim($repeat));
+        }
+    }
+
+    /**
+     * @param mixed $todo VTODO component
+     */
+    private function propInstant($todo, string $name): ?\DateTimeImmutable {
+        if (!isset($todo->{$name})) {
+            return null;
+        }
+        try {
+            return \DateTimeImmutable::createFromInterface($todo->{$name}->getDateTime());
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * @param mixed $todo VTODO component
+     */
+    private function writeTodoDate($todo, string $name, \DateTimeInterface $dt, bool $dateOnly): void {
+        $value = \DateTime::createFromInterface($dt);
+        if ($name === 'DTSTART') {
+            unset($todo->DTSTART);
+            $todo->DTSTART = $value;
+            if ($dateOnly) {
+                $todo->DTSTART['VALUE'] = 'DATE';
+            }
+
+            return;
+        }
+        unset($todo->DUE);
+        $todo->DUE = $value;
+        if ($dateOnly) {
+            $todo->DUE['VALUE'] = 'DATE';
+        }
     }
 
     private function objectUriFromUid(string $uid): string {

@@ -23,6 +23,12 @@ export type NoticeOptions = {
   action?: NoticeAction;
   /** Override auto-dismiss delay in ms; null keeps the toast until dismissed. */
   duration?: number | null;
+  /** Click or Enter on the toast body. The close button does not run this. */
+  onClick?: () => void;
+  /** Called once when the toast starts to leave, including close, click, and trim. */
+  onDismiss?: () => void;
+  /** Stay when the stack trims to the visible cap. The close button still dismisses it. */
+  pinned?: boolean;
 };
 
 type Toast = {
@@ -39,6 +45,10 @@ type Toast = {
   timer: ReturnType<typeof setTimeout> | null;
   leaving: boolean;
   action?: NoticeAction;
+  onClick?: () => void;
+  onDismiss?: () => void;
+  pinned: boolean;
+  dismissNotified: boolean;
 };
 
 const MAX_VISIBLE = 4;
@@ -83,6 +93,7 @@ export function mountNotifications(): void {
   document.body.append(host, politeRegion, assertiveRegion);
 
   host.addEventListener("click", onHostClick);
+  host.addEventListener("keydown", onHostKey);
   // Hover/focus propagates from the toasts even though .toasts is pointer-events:none.
   host.addEventListener("mouseenter", pauseAll);
   host.addEventListener("mouseleave", resumeAll);
@@ -109,18 +120,61 @@ function announce(type: FlashType, message: string): void {
   }, 50);
 }
 
+function toastIdFrom(el: HTMLElement | null): number | null {
+  const id = Number(el?.closest<HTMLElement>(".toast")?.dataset.toastId ?? "");
+  return Number.isFinite(id) ? id : null;
+}
+
+function activateToast(id: number, kind: "close" | "action" | "body"): void {
+  const toast = toasts.find((x) => x.id === id);
+  if (!toast || toast.leaving) return;
+  if (kind === "close") {
+    dismiss(id);
+    return;
+  }
+  if (kind === "action") {
+    const action = toast.action?.onClick;
+    dismiss(id);
+    action?.();
+    return;
+  }
+  if (!toast.onClick) return;
+  const click = toast.onClick;
+  dismiss(id);
+  click();
+}
+
 function onHostClick(ev: MouseEvent): void {
   const target = ev.target as HTMLElement | null;
-  const btn = target?.closest<HTMLElement>(".toast-close, .toast-action");
-  if (!btn) return;
-  const id = Number(btn.closest<HTMLElement>(".toast")?.dataset.toastId ?? "");
-  if (!Number.isFinite(id)) return;
+  if (!target) return;
+  const id = toastIdFrom(target);
+  if (id === null) return;
+  if (target.closest(".toast-close")) {
+    ev.preventDefault();
+    activateToast(id, "close");
+    return;
+  }
+  if (target.closest(".toast-action")) {
+    ev.preventDefault();
+    activateToast(id, "action");
+    return;
+  }
+  const toast = toasts.find((x) => x.id === id);
+  if (!toast?.onClick) return;
   ev.preventDefault();
-  const onClick = btn.classList.contains("toast-action")
-    ? toasts.find((x) => x.id === id)?.action?.onClick
-    : undefined;
-  dismiss(id);
-  onClick?.();
+  activateToast(id, "body");
+}
+
+function onHostKey(ev: KeyboardEvent): void {
+  if (ev.key !== "Enter" && ev.key !== " ") return;
+  const target = ev.target as HTMLElement | null;
+  if (!target || target.closest(".toast-close, .toast-action")) return;
+  const toastEl = target.closest<HTMLElement>(".toast-clickable");
+  if (!toastEl || (target !== toastEl && !toastEl.contains(target))) return;
+  const id = toastIdFrom(toastEl);
+  if (id === null) return;
+  ev.preventDefault();
+  activateToast(id, "body");
 }
 
 function startTimer(t: Toast): void {
@@ -151,6 +205,11 @@ function resumeAll(): void {
 function buildToast(t: Toast): void {
   const el = t.el;
   el.className = `toast toast-${t.type}`;
+  if (t.onClick) {
+    el.classList.add("toast-clickable");
+    el.tabIndex = 0;
+    el.title = "Open event";
+  }
   el.dataset.toastId = String(t.id);
 
   const text = document.createElement("span");
@@ -179,7 +238,7 @@ function buildToast(t: Toast): void {
 }
 
 function trim(): void {
-  const alive = toasts.filter((t) => !t.leaving);
+  const alive = toasts.filter((t) => !t.leaving && !t.pinned);
   for (let i = 0; i < alive.length - MAX_VISIBLE; i += 1) {
     dismiss(alive[i].id);
   }
@@ -192,7 +251,7 @@ function show(type: FlashType, message: string, opts: NoticeOptions = {}): numbe
   if (type !== "error") errorsSuppressed = false;
 
   const existing = toasts.find(
-    (t) => !t.leaving && t.type === type && t.message === text && !t.action,
+    (t) => !t.leaving && t.type === type && t.message === text && !t.action && !t.onClick,
   );
   if (existing) {
     existing.count += 1;
@@ -220,6 +279,10 @@ function show(type: FlashType, message: string, opts: NoticeOptions = {}): numbe
     timer: null,
     leaving: false,
     action: opts.action,
+    onClick: opts.onClick,
+    onDismiss: opts.onDismiss,
+    pinned: opts.pinned === true,
+    dismissNotified: false,
   };
   buildToast(t);
   toasts.push(t);
@@ -239,6 +302,10 @@ function dismiss(id: number): void {
   if (t.leaving) return;
   stopTimer(t);
   t.leaving = true;
+  if (!t.dismissNotified) {
+    t.dismissNotified = true;
+    t.onDismiss?.();
+  }
   t.el.classList.add("is-leaving");
   t.el.classList.remove("is-shown");
   setTimeout(() => {

@@ -39,6 +39,7 @@ class Standard extends \Baikal\Model\Config {
         "files_max_upload_mb"      => 1024,
         "files_quota_mb"           => 10240,
         "files_quarantine_days"    => 30,
+        "files_trash_days"         => 30,
         "tasks_enabled"            => true,
         "notes_enabled"            => false,
         "dav_auth_type"            => "Digest",

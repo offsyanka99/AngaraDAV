@@ -1,8 +1,9 @@
 /** Tasks tab UI (Phase 7). */
 import { esc, renderModal } from "../../ui";
-import { toLocalInputValue } from "../datetime";
+import { toDateInputValue, toLocalInputValue, ymd } from "../datetime";
 import { formatWhen, sortHeader } from "../format";
 import { itemKey } from "../keys";
+import { renderRepeatFieldset, repeatLabel } from "../repeatControl";
 import { infoTitle } from "../sectionInfo";
 import { renderListToolbar } from "../selectionToolbar";
 import type { TasksHost } from "./host";
@@ -25,16 +26,17 @@ function taskFilterSelect(
   return `<select class="task-col-filter" data-action="task-filter" data-col="${col}" aria-label="Filter by ${col}" ${busy ? "disabled" : ""}>${opts}</select>`;
 }
 
-export function renderTasksTab(host: TasksHost): string {
-  const statusLabel = (s: string) => {
-    const m: Record<string, string> = {
-      "NEEDS-ACTION": "To do",
-      "IN-PROCESS": "In progress",
-      COMPLETED: "Done",
-      CANCELLED: "Cancelled",
-    };
-    return m[s] || s;
+function taskStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    "NEEDS-ACTION": "To do",
+    "IN-PROCESS": "In progress",
+    COMPLETED: "Done",
+    CANCELLED: "Cancelled",
   };
+  return labels[status] || status;
+}
+
+export function renderTasksTab(host: TasksHost): string {
   const filters = normalizeTaskFilters(host.state.taskFilters);
   const listed = filterTasks(host.state.tasks, filters);
   const tree = tasksInTreeOrder(host, listed);
@@ -75,8 +77,12 @@ export function renderTasksTab(host: TasksHost): string {
               </td>
               <td class="col-task-title"><span class="task-title-inner">${marker}<span class="contact-name-primary">${esc(t.summary || t.uri)}</span></span>
                 ${t.readOnly ? '<span class="badge">read-only</span>' : ""}</td>
-              <td class="col-task-status"><span class="badge ${st}">${esc(statusLabel(t.status))}</span></td>
-              <td class="col-task-due muted small">${esc(formatWhen(t.due))}</td>
+              <td class="col-task-status"><span class="badge ${st}">${esc(taskStatusLabel(t.status))}</span></td>
+              <td class="col-task-due muted small">${esc(formatWhen(t.due))}${
+                t.hasRrule
+                  ? `<span class="badge task-repeat-badge" title="Due date of this occurrence">${esc(repeatLabel(t.repeat))}</span>`
+                  : ""
+              }</td>
               <td class="col-task-cal muted small">${esc(t.calendarName)}</td>
               <td class="col-task-pct muted small">${t.percent ? esc(String(t.percent)) + "%" : "—"}</td>
             </tr>`;
@@ -145,7 +151,7 @@ export function renderTasksTab(host: TasksHost): string {
       </div>`
     : "";
 
-  const modal = renderTaskModal(host, statusLabel);
+  const modal = renderTaskModal(host);
 
   return `<div class="portal-grid portal-grid-items">
     <section class="card contacts-main-card items-list-card">
@@ -221,13 +227,12 @@ export function renderTasksTab(host: TasksHost): string {
   </div>`;
 }
 
-function renderTaskModal(
-  host: TasksHost,
-  statusLabel: (s: string) => string,
-): string {
+export function renderTaskModal(host: TasksHost): string {
   if (!host.state.taskModalOpen || !host.state.editingTask) return "";
   const t = host.state.editingTask;
   const creating = host.state.creatingTask;
+  const rep = t.repeat ?? { freq: "", interval: 1, until: null, count: null, byDay: [], endMode: "never" as const };
+  const repeating = !!(t.hasRrule || rep.freq);
   const readOnly = !!(t.readOnly && !creating);
   const canWrite = creating || t.canWrite;
   const calOpts = host.state.taskCalendars
@@ -302,7 +307,7 @@ function renderTaskModal(
                   ${["NEEDS-ACTION", "IN-PROCESS", "COMPLETED", "CANCELLED"]
                     .map(
                       (s) =>
-                        `<option value="${s}" ${t.status === s ? "selected" : ""}>${esc(statusLabel(s))}</option>`,
+                        `<option value="${s}" ${t.status === s ? "selected" : ""}>${esc(taskStatusLabel(s))}</option>`,
                     )
                     .join("")}
                 </select>
@@ -314,9 +319,26 @@ function renderTaskModal(
                 value: toLocalInputValue(t.due),
                 dateOnly: false,
                 disabled: readOnly,
-                allowClear: true,
+                required: repeating,
+                allowClear: !repeating,
               })}
             </div>
+            ${renderRepeatFieldset({
+              repeat: rep,
+              readOnly,
+              untilFallback: toDateInputValue(t.due) || ymd(new Date()),
+              hintHtml: `<p class="muted small" style="margin:0.65rem 0 0">Completing the task saves this occurrence as done and moves the due date to the next one. The rule applies to the whole series. Subtasks stay on the series.</p>`,
+              renderUntil: (value, disabled) =>
+                host.renderPortalDateTimeField({
+                  field: "until",
+                  name: "repeatUntil",
+                  label: "Until",
+                  value,
+                  dateOnly: true,
+                  disabled,
+                  allowClear: true,
+                }),
+            })}
             <div class="form-grid form-grid-2">
               <label>Priority (0–9)
                 <input type="number" name="priority" min="0" max="9" value="${esc(String(t.priority || 0))}" ${readOnly ? "readonly" : ""} />

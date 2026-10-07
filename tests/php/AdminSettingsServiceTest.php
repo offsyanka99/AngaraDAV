@@ -66,6 +66,16 @@ try {
     assert_true($get['writable'] === true, 'writable');
     assert_true($get['push_files_enabled'] === false, 'push_files_enabled defaults to false');
     assert_true($get['push_max_subscriptions_per_principal'] === 50, 'per-user push subscription default is 50');
+    assert_true((int) $get['files_trash_days'] === 30, 'trash retention defaults to 30 when unset');
+
+    $trashDays = $svc->updateSystemSettings(['files_trash_days' => 10000]);
+    assert_true((int) $trashDays['files_trash_days'] === 10000, 'trash retention stores 10000');
+    assert_true((int) Yaml::parseFile($path)['system']['files_trash_days'] === 10000, 'trash retention is written to YAML');
+    $trashClamped = $svc->updateSystemSettings(['files_trash_days' => 999999]);
+    assert_true((int) $trashClamped['files_trash_days'] === 36500, 'trash retention clamps to 36500');
+    $trashZero = $svc->updateSystemSettings(['files_trash_days' => 0]);
+    assert_true((int) $trashZero['files_trash_days'] === 0, 'trash retention allows 0');
+    $svc->updateSystemSettings(['files_trash_days' => 30]);
 
     $pushFiles = $svc->updateSystemSettings([
         'push_files_enabled'                   => 'true',

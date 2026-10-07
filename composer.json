@@ -15,7 +15,7 @@
         "WebDAV-push"
     ],
     "homepage": "https://github.com/offsyanka99/AngaraDAV",
-    "license": "GPL-3.0-only",
+    "license": "GPL-2.0-or-later",
     "require": {
         "php": "^8.4",
         "sabre/dav": "~4.7.0",
@@ -62,11 +62,16 @@
             "php-cs-fixer fix"
         ],
         "phpstan": [
-            "phpstan analyse Core html"
+            "phpstan analyse -c phpstan.neon Core html",
+            "phpstan analyse -c phpstan-portal.neon"
+        ],
+        "php-test": [
+            "php scripts/run-php-tests.php"
         ],
         "test": [
             "composer cs-fixer",
-            "composer phpstan"
+            "composer phpstan",
+            "composer php-test"
         ],
         "apply-vendor-patches": [
             "sh scripts/apply-vendor-patches.sh"

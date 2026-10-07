@@ -51,13 +51,21 @@ export function tasksInTreeOrder(_host: TasksHost, list: TaskItem[]): { task: Ta
 
 /** UIDs that cannot be chosen as parent of `self` (self + descendants). */
 
+/** Tasks tab uses the loaded list. The agenda editor uses the unfiltered agenda fetch. */
+function taskRecords(host: TasksHost): TaskItem[] {
+  if (host.state.activeTab !== "tasks" && host.state.agendaTasks.length > 0) {
+    return host.state.agendaTasks;
+  }
+  return host.state.tasks;
+}
+
 export function taskDescendantUids(host: TasksHost, selfUid: string): Set<string> {
   const blocked = new Set<string>([selfUid]);
   if (!selfUid) return blocked;
   let grew = true;
   while (grew) {
     grew = false;
-    for (const t of host.state.tasks) {
+    for (const t of taskRecords(host)) {
       if (t.parentUid && blocked.has(t.parentUid) && t.uid && !blocked.has(t.uid)) {
         blocked.add(t.uid);
         grew = true;
@@ -76,7 +84,8 @@ export function taskDescendantCount(host: TasksHost, selfUid: string): number {
 export function parentTaskOptions(host: TasksHost, forTask: TaskItem, creating: boolean): string {
   const calInstance = forTask.instanceId;
   const blocked = creating || !forTask.uid ? new Set<string>() : taskDescendantUids(host, forTask.uid);
-  const candidates = host.state.tasks.filter(
+  const records = taskRecords(host);
+  const candidates = records.filter(
     (x) =>
       x.uid &&
       x.instanceId === calInstance &&
@@ -94,7 +103,7 @@ export function parentTaskOptions(host: TasksHost, forTask: TaskItem, creating: 
   ];
   // Keep selected parent visible even if filtered out of list (e.g. other calendar)
   if (selected && !candidates.some((x) => x.uid === selected)) {
-    const orphan = host.state.tasks.find((x) => x.uid === selected);
+    const orphan = records.find((x) => x.uid === selected);
     opts.push(
       `<option value="${esc(selected)}" selected>${esc(orphan?.summary || selected)} (current)</option>`,
     );

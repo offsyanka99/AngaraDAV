@@ -1,8 +1,10 @@
 /** Tasks bulk + save handlers (Phase 7). */
-import { api } from "../../api";
-import { entityFlash } from "../format";
+import { api, type TaskItem } from "../../api";
+import { entityFlash, flashLabel, formatWhen } from "../format";
 import { itemKey } from "../keys";
+import { readRepeatFromForm } from "../repeatControl";
 import type { TasksHost } from "./host";
+import { loadAgendaItems } from "../calendars/loaders";
 import { loadTasks } from "./loaders";
 import { writableCheckedTasks } from "./tree";
 
@@ -30,6 +32,8 @@ export function syncEditingTaskFromForm(host: TasksHost, form: HTMLFormElement):
     priority: Number(fd.get("priority") ?? host.state.editingTask.priority ?? 0),
     percent: Number(fd.get("percent") ?? host.state.editingTask.percent ?? 0),
     parentUid: parentRaw === "" ? null : parentRaw,
+    repeat: readRepeatFromForm(fd),
+    hasRrule: !!String(fd.get("repeatFreq") ?? "").trim(),
   };
 }
 
@@ -174,6 +178,12 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
   const percent = Number(fd.get("percent") ?? 0);
   const parentRaw = String(fd.get("parentUid") ?? "").trim();
   const parentUid = parentRaw === "" ? null : parentRaw;
+  const repeat = readRepeatFromForm(fd);
+  if (repeat.freq && !due) {
+    host.setFlash("error", "A repeating task needs a due date");
+    host.render();
+    return;
+  }
   if (host.state.editingTask) {
     const instanceRaw = fd.get("instanceId");
     const instanceId =
@@ -190,6 +200,8 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
       priority,
       percent,
       parentUid,
+      repeat,
+      hasRrule: !!repeat.freq,
     };
   }
   host.state.busy = true;
@@ -210,6 +222,7 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
         priority,
         percent,
         parentUid,
+        repeat,
       });
       host.state.creatingTask = false;
       host.state.selectedTaskKey = itemKey(res.task.instanceId, res.task.uri);
@@ -217,7 +230,9 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
       host.state.taskModalOpen = false;
       host.setFlash(
         "success",
-        entityFlash(parentUid ? "Subtask" : "Task", res.task.summary || summary, "created"),
+        res.task.occurrenceCompleted
+          ? taskSaveFlash(res.task, summary)
+          : entityFlash(parentUid ? "Subtask" : "Task", res.task.summary || summary, "created"),
       );
     } else if (host.state.editingTask) {
       const res = await api.updateTask(host.state.editingTask.instanceId, host.state.editingTask.uri, {
@@ -228,17 +243,33 @@ export async function onSaveTask(host: TasksHost, form: HTMLFormElement) {
         priority,
         percent,
         parentUid,
+        repeat,
       });
       host.state.editingTask = null;
       host.state.taskModalOpen = false;
       host.state.selectedTaskKey = itemKey(res.task.instanceId, res.task.uri);
-      host.setFlash("success", entityFlash("Task", res.task.summary || summary, "saved"));
+      host.setFlash("success", taskSaveFlash(res.task, summary));
     }
     await loadTasks(host);
+    if (host.state.activeTab === "calendars" && host.state.calView === "agenda") {
+      await loadAgendaItems(host);
+    }
   } catch (e) {
     host.setFlash("error", e instanceof Error ? e.message : "Save failed");
   } finally {
     host.state.busy = false;
     host.render();
   }
+}
+
+function taskSaveFlash(task: TaskItem, fallbackName: string): string {
+  const name = flashLabel(task.summary || fallbackName);
+  const quoted = name ? `“${name}”` : "this task";
+  if (task.occurrenceCompleted && task.hasRrule) {
+    return `Completed this occurrence of ${quoted}. Next due ${formatWhen(task.due)}.`;
+  }
+  if (task.occurrenceCompleted) {
+    return `Completed the last occurrence of ${quoted}.`;
+  }
+  return entityFlash("Task", task.summary || fallbackName, "saved");
 }

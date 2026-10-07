@@ -64,6 +64,10 @@ export function renderFilesTab(host: FilesHost): string {
       ? Math.min(100, Math.round((100 * st.usedBytes) / st.quotaBytes))
       : 0;
 
+  if (host.state.filesView === "trash") {
+    return renderFilesTrash(host, quotaLabel, quotaPct);
+  }
+
   const visibleEntries = filterAndSortEntries(host.state.filesEntries, {
     search: host.state.filesSearch,
     type: host.state.filesTypeFilter,
@@ -178,12 +182,17 @@ export function renderFilesTab(host: FilesHost): string {
           const paths = host.state.filesDeletePaths;
           const multi = paths.length > 1;
           const first = host.state.filesEntries.find((x) => x.path === paths[0]);
+          const days = host.state.filesStatus?.trashDays ?? 30;
+          const kept = days > 0;
+          const dayLabel = days === 1 ? "1 day" : `${days} days`;
           const title = multi
-            ? `Delete ${paths.length} items`
-            : `Delete ${first?.type === "dir" ? "folder" : "file"}`;
-          const body = multi
-            ? `<p style="margin:0 0 0.75rem">Delete <strong>${paths.length}</strong> selected items? Folders are removed with their contents. This cannot be undone.</p>
-               <ul class="files-delete-list muted small">
+            ? kept
+              ? `Move ${paths.length} items to Trash`
+              : `Delete ${paths.length} items`
+            : kept
+              ? `Move ${first?.type === "dir" ? "folder" : "file"} to Trash`
+              : `Delete ${first?.type === "dir" ? "folder" : "file"}`;
+          const list = `<ul class="files-delete-list muted small">
                  ${paths
                    .slice(0, 12)
                    .map((p) => {
@@ -192,11 +201,26 @@ export function renderFilesTab(host: FilesHost): string {
                    })
                    .join("")}
                  ${paths.length > 12 ? `<li>…and ${paths.length - 12} more</li>` : ""}
-               </ul>`
-            : `<p style="margin:0">Delete <strong>${esc(first?.name ?? paths[0])}</strong>?${
-                first?.type === "dir"
-                  ? " This removes the folder and everything inside it."
-                  : ""
+               </ul>`;
+          const body = multi
+            ? `${
+                kept
+                  ? `<p style="margin:0 0 0.75rem">Move <strong>${paths.length}</strong> selected items to Trash? Folders move with their contents. You can restore them for ${dayLabel}. Trashed items still count toward your quota.</p>`
+                  : `<p style="margin:0 0 0.75rem">Delete <strong>${paths.length}</strong> selected items? Folders are removed with their contents. This cannot be undone.</p>`
+              }
+               ${list}`
+            : `<p style="margin:0">${kept ? "Move" : "Delete"} <strong>${esc(first?.name ?? paths[0])}</strong>${
+                kept
+                  ? ` to Trash?${
+                      first?.type === "dir"
+                        ? " The folder and everything inside it move together."
+                        : ""
+                    } You can restore it for ${dayLabel}. It still counts toward your quota.`
+                  : `?${
+                      first?.type === "dir"
+                        ? " This removes the folder and everything inside it."
+                        : ""
+                    } This cannot be undone.`
               }</p>`;
           return renderModal({
             id: "files-delete-modal",
@@ -208,7 +232,7 @@ export function renderFilesTab(host: FilesHost): string {
             footer: [
               { label: "Cancel", action: "files-delete-close", variant: "ghost" },
               {
-                label: "Delete",
+                label: (host.state.filesStatus?.trashDays ?? 30) > 0 ? "Move to Trash" : "Delete",
                 action: "files-delete-confirm",
                 variant: "danger",
                 disabled: host.state.busy,
@@ -414,6 +438,7 @@ export function renderFilesTab(host: FilesHost): string {
             <button type="button" class="btn btn-small btn-danger" data-action="files-bulk-delete" ${host.state.busy ? "disabled" : ""}>Delete</button>
           </div>`
       : `<div class="files-toolbar-actions">
+            <button type="button" class="btn btn-ghost btn-small" data-action="files-trash-open" ${host.state.busy || host.state.filesLoading ? "disabled" : ""}>Trash</button>
             <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${host.state.busy || host.state.filesLoading ? "disabled" : ""}>Refresh</button>
             <button type="button" class="btn btn-ghost btn-small" data-action="files-mkdir" ${host.state.busy ? "disabled" : ""}>New folder</button>
             ${uploadMenu}
@@ -483,5 +508,149 @@ export function renderFilesTab(host: FilesHost): string {
     ${transferModal}
     ${mkdirModal}
     ${uploadConflictModal}
+  </div>`;
+}
+
+function renderFilesTrash(host: FilesHost, quotaLabel: string, quotaPct: number): string {
+  const days = host.state.filesStatus?.trashDays ?? 30;
+  const query = host.state.filesSearch.trim().toLowerCase();
+  const items = host.state.filesTrash.filter((item) => {
+    if (!query) return true;
+    return item.name.toLowerCase().includes(query) || item.path.toLowerCase().includes(query);
+  });
+  const direction = host.state.filesOrder === "asc" ? 1 : -1;
+  items.sort((a, b) => {
+    if (host.state.filesSort === "size") return (a.size - b.size) * direction;
+    if (host.state.filesSort === "mtime") return (a.deletedAt - b.deletedAt) * direction;
+    return a.name.localeCompare(b.name) * direction;
+  });
+  const filtered = items.length !== host.state.filesTrash.length;
+  const rows =
+    host.state.filesLoading && host.state.filesTrash.length === 0
+      ? `<tr><td colspan="6" class="muted">Loading…</td></tr>`
+      : host.state.filesTrash.length === 0
+        ? `<tr><td colspan="6" class="muted">Trash is empty.</td></tr>`
+        : items.length === 0
+          ? `<tr><td colspan="6" class="muted">No items match this search.</td></tr>`
+          : items
+              .map((item) => {
+                const icon = item.directory ? "📁" : "📄";
+                const size = formatBytes(item.size);
+                return `<tr class="files-row">
+              <td class="files-col-name">
+                <span class="files-name-btn">
+                  <span class="files-icon" aria-hidden="true">${icon}</span>${esc(item.name)}
+                </span>
+              </td>
+              <td class="files-col-path mono hide-sm">${esc(item.path)}</td>
+              <td class="files-col-size mono">${size}</td>
+              <td class="files-col-mtime hide-sm">${esc(formatMtime(item.deletedAt))}</td>
+              <td class="files-col-mtime hide-sm">${days > 0 ? esc(formatMtime(item.expiresAt)) : "Maintenance"}</td>
+              <td class="files-col-actions">
+                <button type="button" class="btn btn-ghost btn-small" data-action="files-trash-restore" data-id="${item.id}" ${host.state.busy ? "disabled" : ""}>Restore</button>
+                <button type="button" class="btn btn-small btn-danger" data-action="files-trash-delete-open" data-id="${item.id}" ${host.state.busy ? "disabled" : ""}>Delete</button>
+              </td>
+            </tr>`;
+              })
+              .join("");
+  const hint =
+    days > 0
+      ? `Deleted files and folders stay here for ${days === 1 ? "1 day" : `${days} days`} and still count toward your quota. Restore puts an item back in its original folder. If that name is taken, the restored copy is named with “ (restored)”. WebDAV clients do not see Trash.`
+      : "Trash retention is 0 days, so new deletes are removed immediately. Items already here are removed on the next maintenance run and still count toward your quota until then.";
+  const deleteNow =
+    host.state.filesTrashDeleteId !== null
+      ? (() => {
+          const item = host.state.filesTrash.find((row) => row.id === host.state.filesTrashDeleteId);
+          return renderModal({
+            id: "files-trash-delete-modal",
+            title: "Delete now",
+            titleId: "files-trash-delete-title",
+            closeAction: "files-trash-delete-close",
+            size: "sm",
+            body: `<p style="margin:0">Permanently delete <strong>${esc(item?.name ?? "this item")}</strong>? This cannot be undone.</p>`,
+            footer: [
+              { label: "Cancel", action: "files-trash-delete-close", variant: "ghost" },
+              {
+                label: "Delete",
+                action: "files-trash-delete-confirm",
+                variant: "danger",
+                disabled: host.state.busy,
+              },
+            ],
+          });
+        })()
+      : "";
+  const emptyModal = host.state.filesEmptyTrashOpen
+    ? renderModal({
+        id: "files-trash-empty-modal",
+        title: "Empty trash",
+        titleId: "files-trash-empty-title",
+        closeAction: "files-trash-empty-close",
+        size: "sm",
+        body: `<p style="margin:0">Permanently delete everything in Trash? This cannot be undone.</p>`,
+        footer: [
+          { label: "Cancel", action: "files-trash-empty-close", variant: "ghost" },
+          {
+            label: "Empty trash",
+            action: "files-trash-empty-confirm",
+            variant: "danger",
+            disabled: host.state.busy,
+          },
+        ],
+      })
+    : "";
+
+  return `<div class="portal-grid portal-grid-files">
+    <section class="card files-panel">
+      <div class="files-head">
+        ${infoTitle("Files", "files", "h1")}
+        <div class="files-quota muted small" title="Storage usage (application quota)">
+          <div class="files-quota-bar" role="progressbar" aria-valuenow="${quotaPct}" aria-valuemin="0" aria-valuemax="100">
+            <div class="files-quota-fill" style="width:${quotaPct}%"></div>
+          </div>
+          <span>${esc(quotaLabel)}</span>
+        </div>
+      </div>
+      <div class="files-toolbar">
+        <nav class="files-breadcrumb" aria-label="Trash">
+          <button type="button" class="files-crumb" data-action="files-trash-close" ${host.state.busy ? "disabled" : ""}>Files</button>
+          <span class="files-crumb-sep" aria-hidden="true">/</span>
+          <span class="files-crumb">Trash</span>
+        </nav>
+        <div class="files-toolbar-actions">
+          <button type="button" class="btn btn-ghost btn-small" data-action="files-refresh" ${host.state.busy || host.state.filesLoading ? "disabled" : ""}>Refresh</button>
+          <button type="button" class="btn btn-small btn-danger" data-action="files-trash-empty-open" ${host.state.busy || host.state.filesTrash.length === 0 ? "disabled" : ""}>Empty trash</button>
+        </div>
+      </div>
+      <p class="muted small" style="margin:0 0 0.75rem">${esc(hint)}</p>
+      <div class="files-filter-bar">
+        <input type="search" class="files-search" data-action="files-search" placeholder="Search trash…"
+          value="${esc(host.state.filesSearch)}" aria-label="Search trash" ${host.state.busy ? "disabled" : ""} />
+      </div>
+      <div class="table-wrap files-table-wrap">
+        <table class="files-table">
+          <thead>
+            <tr>
+              ${sortHeader("Name", "name", host.state.filesSort, host.state.filesOrder, "file", "files-col-name")}
+              <th class="files-col-path hide-sm">Original location</th>
+              ${sortHeader("Size", "size", host.state.filesSort, host.state.filesOrder, "file", "files-col-size")}
+              ${sortHeader("Deleted", "mtime", host.state.filesSort, host.state.filesOrder, "file", "files-col-mtime hide-sm")}
+              <th class="files-col-mtime hide-sm">Expires</th>
+              <th class="files-col-actions" aria-label="Actions"></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="files-status-bar muted small" role="status" aria-live="polite">
+        ${
+          filtered
+            ? `${items.length} shown of ${host.state.filesTrash.length}`
+            : `${host.state.filesTrash.length} item${host.state.filesTrash.length === 1 ? "" : "s"}`
+        }
+      </div>
+    </section>
+    ${deleteNow}
+    ${emptyModal}
   </div>`;
 }

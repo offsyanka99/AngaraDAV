@@ -235,6 +235,8 @@ describe("hasOpenEditor", () => {
     assert.equal(hasOpenEditor({ ...closed, filesMkdirOpen: true }), true);
     assert.equal(hasOpenEditor({ ...closed, filesTransfer: { op: "copy", paths: ["a"] } }), true);
     assert.equal(hasOpenEditor({ ...closed, filesDeletePaths: ["a"] }), true);
+    assert.equal(hasOpenEditor({ ...closed, filesTrashDeleteId: 4 }), true);
+    assert.equal(hasOpenEditor({ ...closed, filesEmptyTrashOpen: true }), true);
     assert.equal(hasOpenEditor({ ...closed, filesPreview: { path: "a" } }), true);
     assert.equal(hasOpenEditor({ ...closed, calModalOpen: true }), true);
     assert.equal(hasOpenEditor({ ...closed, createCalModalOpen: true }), true);

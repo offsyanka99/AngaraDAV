@@ -132,6 +132,7 @@ export type AdminSystemSettings = {
   files_max_upload_mb: number;
   files_quota_mb: number;
   files_quarantine_days: number;
+  files_trash_days?: number;
   tasks_enabled: boolean;
   notes_enabled: boolean;
   invite_from: string;
@@ -275,6 +276,11 @@ export type CalendarEvent = {
   start: string;
   end: string | null;
   allDay: boolean;
+  /**
+   * Preset minutes before the start for the series display reminder.
+   * null when there is no preset (none, or a custom display alarm).
+   */
+  reminderMinutes: number | null;
   /** Set client-side when merging multi-calendar month views */
   instanceId?: number;
 };
@@ -305,6 +311,10 @@ export type CalendarEventDetail = {
   allDay: boolean;
   hasRrule: boolean;
   repeat: EventRepeat;
+  /** Minutes before the start for the portal display reminder. null when none or custom. */
+  reminderMinutes: number | null;
+  /** A display reminder is stored that is not one of the portal presets. */
+  reminderCustom: boolean;
   readOnly: boolean;
   canWrite: boolean;
 };
@@ -319,6 +329,8 @@ export type EventWriteBody = {
   /** Move to another calendar (instance id) */
   instanceId?: number;
   repeat?: EventRepeat | null;
+  /** Preset minutes before start, null to clear the portal display reminder, or "keep". */
+  reminder?: number | "keep" | null;
 };
 
 export type Share = {
@@ -436,6 +448,11 @@ export type TaskItem = {
   priority: number;
   percent: number;
   completed: string | null;
+  /** True when this VTODO stores an RRULE. Due is the current open occurrence. */
+  hasRrule: boolean;
+  repeat: EventRepeat;
+  /** Set on the save response when completing a repeating task advanced or closed the series. */
+  occurrenceCompleted?: boolean;
   lastmodified: number;
   readOnly: boolean;
   canWrite: boolean;
@@ -472,6 +489,7 @@ export type TaskWriteBody = {
   percent?: number;
   /** Parent VTODO UID (same calendar); null/"" for top-level */
   parentUid?: string | null;
+  repeat?: EventRepeat | null;
 };
 
 export type NoteWriteBody = {
@@ -491,6 +509,18 @@ export type FilesStatus = {
   quotaBytes: number;
   usedBytes: number;
   availableBytes: number;
+  /** Days deleted files stay in Trash. 0 deletes immediately. */
+  trashDays?: number;
+};
+
+export type TrashItem = {
+  id: number;
+  name: string;
+  path: string;
+  directory: boolean;
+  size: number;
+  deletedAt: number;
+  expiresAt: number;
 };
 
 export type FileEntry = {

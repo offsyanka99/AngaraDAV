@@ -68,6 +68,8 @@ jobs:
         run: php tests/php/AdminAuthzRoutesTest.php
       - name: Admin settings backup unit test
         run: php tests/php/AdminBackupServiceTest.php
+      - name: Admin data export unit test
+        run: php tests/php/AdminDataExportServiceTest.php
       - name: Admin capabilities unit test
         run: php tests/php/AdminCapabilitiesServiceTest.php
       - name: Admin push subscriptions unit test
@@ -156,3 +158,19 @@ jobs:
           BAIKAL_TEST_PGSQL_USER: baikal
           BAIKAL_TEST_PGSQL_PASSWORD: baikal
         run: php tests/php/PushSchemaPgsqlTest.php
+
+  portal:
+    name: Portal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      - name: Test and build
+        working-directory: portal
+        run: npm ci && npm test && npm run build

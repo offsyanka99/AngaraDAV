@@ -90,6 +90,7 @@ export function renderAdminSettingsShell(host: AdminHost): string {
         ${num("files_max_upload_mb", s.files_max_upload_mb, "Max file size (MB)")}
         ${num("files_quota_mb", s.files_quota_mb, "Quota per user (MB)", "0 = unlimited")}
         ${num("files_quarantine_days", s.files_quarantine_days, "Deleted user file retention (days)")}
+        ${num("files_trash_days", s.files_trash_days ?? 30, "Trash retention (days)", "How long deleted files and folders stay in Trash. 0 deletes immediately. Trashed items count toward the quota.")}
 
         <h3 class="admin-subsection-title">Session & portal</h3>
         ${num("session_max_age_minutes", s.session_max_age_minutes, "Session idle timeout (minutes)", "Portal session")}
@@ -221,6 +222,7 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     files_max_upload_mb: Number(fd.get("files_max_upload_mb") ?? 0),
     files_quota_mb: Number(fd.get("files_quota_mb") ?? 0),
     files_quarantine_days: Number(fd.get("files_quarantine_days") ?? 0),
+    files_trash_days: Number(fd.get("files_trash_days") ?? 30),
     session_max_age_minutes: Number(fd.get("session_max_age_minutes") ?? 15),
     portal_sync_poll_seconds: Number(fd.get("portal_sync_poll_seconds") ?? 30),
     portal_log_level: String(fd.get("portal_log_level") ?? "off"),

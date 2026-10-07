@@ -17,7 +17,10 @@ export function filesItemMenuBlocked(state: AppState): boolean {
     state.filesMkdirOpen ||
     state.filesPreview ||
     state.filesUploadConflict ||
-    state.filesUploadProgress
+    state.filesUploadProgress ||
+    state.filesView === "trash" ||
+    state.filesTrashDeleteId !== null ||
+    state.filesEmptyTrashOpen
   );
 }
 

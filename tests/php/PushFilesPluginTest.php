@@ -102,6 +102,7 @@ foreach (explode(';', (string) file_get_contents($root . '/Core/Resources/Db/SQL
 }
 $pdo->exec("INSERT INTO users (username, digesta1) VALUES ('alice', ''), ('bob', '')");
 $pdo->exec("INSERT INTO principals (uri, displayname) VALUES ('principals/alice', 'Alice'), ('principals/bob', 'Bob')");
+\Baikal\Core\Files\SchemaManager::ensure($pdo);
 $fileConfig = new FileStorageConfig([
     'system' => ['files_enabled' => true, 'files_storage_path' => $tmp . '/storage'],
 ]);

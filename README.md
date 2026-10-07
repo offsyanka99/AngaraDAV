@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.5.6 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
+**Version:** 2.5.7 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.6`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.7`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 
@@ -15,12 +15,12 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.6`, `sha-…`) · linux/
 
 | In the portal (`/portal/`) | On the wire |
 |----------------------------|-------------|
-| **Calendar** — month / week / agenda, search, share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
+| **Calendar** — month / week / agenda (events, open tasks due, dated notes), search, display reminders (a notification when one is due), share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
 | **Contacts** — address books, search, photos, import/export `.vcf` | CardDAV (`/dav.php/`, `/card.php/`) |
-| **Tasks** — VTODO, subtasks, bulk edit, column filters | CalDAV |
+| **Tasks** — VTODO, subtasks, repeating tasks, bulk edit, column filters | CalDAV |
 | **Notes** — VJOURNAL rich text in a modal (H1–H3, quote, lists, checkboxes, strikethrough, inline code; jtx Markdown in `DESCRIPTION`) | CalDAV |
-| **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename | WebDAV `/dav.php/files/{username}/` |
-| **Administration** — users, system settings, database, settings backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
+| **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename, Trash (restore, delete now, empty) | WebDAV `/dav.php/files/{username}/` |
+| **Administration** — users, system settings, database, settings backup/restore, data backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
 | **WebDAV-Push** (optional) — near-real-time change notices for calendars, contacts, and (opt-in) file folders (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
 
 Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `configuration.yaml`. Tabs follow Admin **DAV services** toggles.
@@ -125,6 +125,6 @@ Admin role: env `ANGARA_PORTAL_ADMIN_USERS` or `PORTAL_ADMIN_USERS`, else YAML `
 
 ## Credits
 
-Derived from [Baïkal](https://sabre.io/baikal/) 0.11.1 by [Jérôme Schneider](https://github.com/jeromeschneider) / Net Gusto and [fruux](https://fruux.com/), powered by [SabreDAV](https://sabre.io/). GPL license and copyright notices are preserved.
+Derived from [Baïkal](https://sabre.io/baikal/) 0.11.1 by [Jérôme Schneider](https://github.com/jeromeschneider) / Net Gusto and [fruux](https://fruux.com/), powered by [SabreDAV](https://sabre.io/). GPL license and copyright notices are preserved. Source headers grant GPL version 2 or any later version. `composer.json` uses the SPDX identifier `GPL-2.0-or-later`. [LICENSE](LICENSE) is the GPL version 3 text, which that grant allows.
 
 Contact: [hummersoft@mailbox.org](mailto:hummersoft@mailbox.org)

@@ -10,6 +10,31 @@ import { captureSyncSnapshot } from "../backgroundSync";
 export async function loadFiles(host: FilesHost): Promise<void> {
   host.state.filesLoading = true;
   try {
+    if (host.state.filesView === "trash") {
+      log.debug("loadFiles", { view: "trash" });
+      const [status, trash] = await Promise.all([
+        api.filesStatus(),
+        api.filesTrash().catch((e) => {
+          if (e instanceof ApiError && (e.status === 503 || e.status === 404)) {
+            return { days: 0, items: [] };
+          }
+          throw e;
+        }),
+      ]);
+      host.state.filesStatus = status.ready ? { ...status, trashDays: trash.days } : status;
+      host.state.filesTrash = status.ready ? trash.items : [];
+      host.state.filesEntries = [];
+      host.state.checkedFilePaths = [];
+      closeFilesItemMenu(host);
+      log.event("loadFiles", {
+        view: "trash",
+        count: host.state.filesTrash.length,
+        enabled: status.enabled,
+        ready: status.ready,
+      });
+      await captureSyncSnapshot(host);
+      return;
+    }
     log.debug("loadFiles", { path: host.state.filesPath });
     const [status, list] = await Promise.all([
       api.filesStatus(),

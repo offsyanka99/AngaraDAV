@@ -6,6 +6,7 @@ use Baikal\Portal\Admin\AdminAudit;
 use Baikal\Portal\Admin\AdminBackupService;
 use Baikal\Portal\Admin\AdminCapabilitiesService;
 use Baikal\Portal\Admin\AdminDashboardService;
+use Baikal\Portal\Admin\AdminDataExportService;
 use Baikal\Portal\Admin\AdminPushSubscriptionService;
 use Baikal\Portal\Admin\AdminSettingsService;
 use Baikal\Portal\Admin\AdminUserResourceService;
@@ -30,6 +31,7 @@ class App {
     private AdminUserResourceService $adminResources;
     private AdminSettingsService $adminSettings;
     private AdminBackupService $adminBackup;
+    private AdminDataExportService $adminDataExport;
     private CalendarService $calendars;
     private EventService $events;
     private ShareService $shares;
@@ -75,6 +77,7 @@ class App {
             $this->portalSpecificDir()
         );
         $this->adminBackup = new AdminBackupService($this->adminSettings, $this->portalSpecificDir());
+        $this->adminDataExport = new AdminDataExportService($config, $this->portalSpecificDir());
         $calendarStore = new CalendarStore($pdo);
         $this->calendarImport = new CalendarImportService($calendarStore);
         $this->calendars = new CalendarService($calendarStore, $this->calendarImport);
@@ -790,6 +793,124 @@ class App {
             throw new ApiException('Method not allowed', 405);
         }
 
+        // Data backup: SQLite snapshot or pg_dump, plus a tarball of the file store.
+        if ($adminPath === '/admin/data-export' || $adminPath === '/admin/data-export/') {
+            if ($method !== 'POST') {
+                throw new ApiException('Method not allowed', 405);
+            }
+            $this->http->jsonBody();
+            try {
+                $export = $this->adminDataExport->build();
+                $this->http->streamFileDownload(
+                    $export['path'],
+                    $export['filename'],
+                    'application/gzip',
+                    $export['size'],
+                    '"' . $export['size'] . '"'
+                );
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'export-data-backup',
+                    'system',
+                    'ok',
+                    [
+                        'backend' => $export['backend'],
+                        'bytes'   => $export['size'],
+                    ]
+                );
+                $this->portalServerLog(
+                    'admin data export ok user=' . $adminUser
+                    . ' backend=' . $export['backend']
+                    . ' bytes=' . $export['size'],
+                    'info'
+                );
+            } catch (ApiException $e) {
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'export-data-backup',
+                    'system',
+                    'error:' . $e->getStatus(),
+                    ['msg' => $e->getMessage()]
+                );
+                $this->portalServerLog(
+                    'admin data export failed user=' . $adminUser
+                    . ' status=' . $e->getStatus()
+                    . ' error=' . $e->getMessage(),
+                    $e->getStatus() >= 500 ? 'error' : 'warn'
+                );
+                throw $e;
+            } finally {
+                $this->adminDataExport->cleanup();
+            }
+
+            return [];
+        }
+
+        // Data restore: replace the database and file store from an angaradav-data archive.
+        if ($adminPath === '/admin/data-restore' || $adminPath === '/admin/data-restore/') {
+            if ($method !== 'POST') {
+                throw new ApiException('Method not allowed', 405);
+            }
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+            $confirm = isset($_POST['confirm'])
+                && (string) $_POST['confirm'] !== ''
+                && (string) $_POST['confirm'] !== '0'
+                && (string) $_POST['confirm'] !== 'false';
+            if (!$confirm) {
+                throw new ApiException('Confirmation required to restore the database and file store', 400);
+            }
+            $upload = $_FILES['archive'] ?? null;
+            if (!is_array($upload)) {
+                throw new ApiException('Choose a data backup file', 400);
+            }
+            $uploadError = (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($uploadError !== UPLOAD_ERR_OK) {
+                throw new ApiException($this->uploadErrorMessage($uploadError), 400);
+            }
+            $tmp = (string) ($upload['tmp_name'] ?? '');
+            if ($tmp === '' || !is_uploaded_file($tmp)) {
+                throw new ApiException('Choose a data backup file', 400);
+            }
+            try {
+                $restored = $this->adminDataExport->restore($tmp);
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'restore-data-backup',
+                    'system',
+                    'ok',
+                    [
+                        'backend' => $restored['backend'],
+                        'bytes'   => $restored['bytes'],
+                    ]
+                );
+                $this->portalServerLog(
+                    'admin data restore ok user=' . $adminUser
+                    . ' backend=' . $restored['backend']
+                    . ' bytes=' . $restored['bytes'],
+                    'info'
+                );
+
+                return ['data' => $restored];
+            } catch (ApiException $e) {
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'restore-data-backup',
+                    'system',
+                    'error:' . $e->getStatus(),
+                    ['msg' => $e->getMessage()]
+                );
+                $this->portalServerLog(
+                    'admin data restore failed user=' . $adminUser
+                    . ' status=' . $e->getStatus()
+                    . ' error=' . $e->getMessage(),
+                    $e->getStatus() >= 500 ? 'error' : 'warn'
+                );
+                throw $e;
+            }
+        }
+
         // Settings restore: apply the "changed" keys from a previously exported backup
         if ($adminPath === '/admin/settings/restore' || $adminPath === '/admin/settings/restore/') {
             if ($method === 'POST') {
@@ -1225,6 +1346,49 @@ class App {
             );
 
             return $list;
+        }
+
+        if ($method === 'GET' && $path === '/files/trash') {
+            $list = $this->files->listTrash($username);
+            $this->portalServerLog(
+                sprintf('files trash count=%d user=%s', count($list['items']), $username),
+                'debug'
+            );
+
+            return $list;
+        }
+
+        if ($method === 'POST' && $path === '/files/trash/restore') {
+            $body = $this->http->jsonBody();
+            $restored = $this->files->restoreTrash($username, (int) ($body['id'] ?? 0));
+            $this->portalServerLog(
+                'files trash restore path=' . $restored['path'] . ' user=' . $username,
+                'info'
+            );
+
+            return $restored;
+        }
+
+        if ($method === 'POST' && $path === '/files/trash/delete') {
+            $body = $this->http->jsonBody();
+            $id = (int) ($body['id'] ?? 0);
+            $this->files->deleteTrash($username, $id);
+            $this->portalServerLog(
+                'files trash delete id=' . $id . ' user=' . $username,
+                'info'
+            );
+
+            return ['ok' => true];
+        }
+
+        if ($method === 'POST' && $path === '/files/trash/empty') {
+            $result = $this->files->emptyTrash($username);
+            $this->portalServerLog(
+                'files trash empty removed=' . $result['removed'] . ' user=' . $username,
+                'info'
+            );
+
+            return $result;
         }
 
         if ($method === 'POST' && $path === '/files/mkdir') {

@@ -44,6 +44,7 @@ class AdminSettingsService {
         'files_max_upload_mb',
         'files_quota_mb',
         'files_quarantine_days',
+        'files_trash_days',
         'tasks_enabled',
         'notes_enabled',
         'invite_from',
@@ -929,6 +930,7 @@ class AdminSettingsService {
                 return max(0, min(1073741824, (int) $value));
 
             case 'files_quarantine_days':
+            case 'files_trash_days':
                 return max(0, min(36500, (int) $value));
 
             case 'session_max_age_minutes':
@@ -1020,6 +1022,7 @@ class AdminSettingsService {
             'files_max_upload_mb'     => 1024,
             'files_quota_mb'          => 10240,
             'files_quarantine_days'   => 30,
+            'files_trash_days'        => 30,
             'tasks_enabled'           => true,
             'notes_enabled'           => false,
             'invite_from'             => '',

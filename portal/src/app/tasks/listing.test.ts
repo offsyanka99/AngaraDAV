@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TaskItem } from "../../api.ts";
+import { repeatLabel } from "../repeatControl.ts";
 import { DEFAULT_TASK_FILTERS, filterTasks, isOpenTaskStatus, taskMatchesFilters } from "./listing.ts";
 
 function task(over: Partial<TaskItem> & Pick<TaskItem, "uri">): TaskItem {
@@ -18,6 +19,8 @@ function task(over: Partial<TaskItem> & Pick<TaskItem, "uri">): TaskItem {
     priority: 0,
     percent: 0,
     completed: null,
+    hasRrule: false,
+    repeat: { freq: "", interval: 1, until: null, count: null, byDay: [] },
     lastmodified: 0,
     readOnly: false,
     canWrite: true,
@@ -60,6 +63,13 @@ describe("task column filters", () => {
     const due = task({ uri: "d", due: "2026-08-20T15:00:00" });
     assert.equal(taskMatchesFilters(due, { ...DEFAULT_TASK_FILTERS, due: "today" }, now), true);
     assert.equal(taskMatchesFilters(open, { ...DEFAULT_TASK_FILTERS, due: "today" }, now), false);
+  });
+
+  it("repeat label", () => {
+    assert.equal(repeatLabel({ freq: "" }), "");
+    assert.equal(repeatLabel({ freq: "WEEKLY", interval: 1 }), "Weekly");
+    assert.equal(repeatLabel({ freq: "DAILY", interval: 2 }), "Every 2 days");
+    assert.equal(repeatLabel({ freq: "WEEKLY", interval: 1, byDay: ["MO", "WE"] }), "Weekly (MO, WE)");
   });
 
   it("percent partial", () => {

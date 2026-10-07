@@ -2,8 +2,10 @@
  * Calendars tab main HTML (Phase 8 extract from renderHome).
  */
 import { esc, renderConfirmCheckbox, renderModal } from "../../ui";
-import { infoTitle } from "../sectionInfo";
+import { renderNoteModal } from "../notes/render";
 import type { AppOrchestrator } from "../orchestrator";
+import { infoTitle } from "../sectionInfo";
+import { renderTaskModal } from "../tasks/render";
 
 export function renderCalendarsHome(o: AppOrchestrator): string {
   const { state } = o;
@@ -338,6 +340,8 @@ export function renderCalendarsHome(o: AppOrchestrator): string {
     ${createCalModal}
     ${calModal}
     ${deleteModal}
-    ${o.renderEventModal()}`;
+    ${o.renderEventModal()}
+    ${renderTaskModal(o.tasksHost)}
+    ${renderNoteModal(o.notesHost)}`;
 }
 

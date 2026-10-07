@@ -6,9 +6,11 @@ export const TAB_STORAGE_KEY = "angaradav-portal-tab";
 export const ADMIN_PAGE_STORAGE_KEY = "angaradav-portal-admin-page";
 /** localStorage key prefix; full key is `${prefix}:${username}`. */
 export const CAL_SELECTION_STORAGE_KEY = "angaradav-portal-cal-selection";
+/** sessionStorage list of reminder toasts the user closed or opened this tab. */
+export const REMINDER_SEEN_STORAGE_KEY = "angaradav-portal-reminders-seen";
 
 /** Fallback when /api/ui has not returned yet (or offline). */
-export const APP_VERSION_FALLBACK = "2.5.6";
+export const APP_VERSION_FALLBACK = "2.5.7";
 
 export function splitAppVersion(full: string): { version: string; build: string } {
   const v = (full || APP_VERSION_FALLBACK).trim();

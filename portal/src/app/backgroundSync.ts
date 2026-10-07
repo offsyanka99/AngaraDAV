@@ -6,6 +6,7 @@ import { api, type SyncStatus } from "../api";
 import { log } from "../log";
 import type { AppState } from "./context";
 import { disposeFilesPreviewState, resetFilesTransferTreeState } from "./files/stateReset";
+import { setEventReminderInterval } from "./calendars/eventReminderPoller";
 import { notify } from "./notify";
 import {
   clampPollSeconds,
@@ -183,6 +184,8 @@ function closeOpenEditor(state: AppState): void {
   state.filesRenamePath = null;
   state.filesMkdirOpen = false;
   state.filesDeletePaths = null;
+  state.filesTrashDeleteId = null;
+  state.filesEmptyTrashOpen = false;
   resetFilesTransferTreeState(state);
   disposeFilesPreviewState(state);
   state.calModalOpen = false;
@@ -270,6 +273,7 @@ export function onBackgroundSyncTabChange(): void {
 
 export function setBackgroundSyncInterval(seconds: unknown): void {
   applyPollSeconds(seconds);
+  setEventReminderInterval(seconds);
 }
 
 function detachPoller(): void {

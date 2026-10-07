@@ -255,6 +255,13 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     return;
   }
 
+  if (action === "admin-data-restore-file" && el instanceof HTMLInputElement) {
+    const file = el.files?.[0] ?? null;
+    el.value = "";
+    if (file) admin.onAdminDataRestoreFileSelected(o.adminHost, file);
+    return;
+  }
+
   if (action === "files-upload-pick-files" && el instanceof HTMLInputElement) {
     files.onFilesUploadInput(o.filesHost, el, false);
     return;
@@ -316,7 +323,14 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
         ...state.editingEvent,
         repeat: calendars.readRepeatFromForm(fd),
         hasRrule: !!String(fd.get("repeatFreq") ?? "").trim(),
+        ...calendars.reminderFromForm(fd),
       };
+      render();
+      return;
+    }
+    const taskForm = el.closest<HTMLFormElement>('[data-form="task"]');
+    if (taskForm && state.editingTask) {
+      o.syncEditingTaskFromForm(taskForm);
       render();
     }
     return;
@@ -830,6 +844,12 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   }
   if (state.filesPreview !== null) {
     files.closeFilesPreview(o.filesHost);
+    render();
+    return;
+  }
+  if (state.filesTrashDeleteId !== null || state.filesEmptyTrashOpen) {
+    state.filesTrashDeleteId = null;
+    state.filesEmptyTrashOpen = false;
     render();
     return;
   }

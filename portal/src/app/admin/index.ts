@@ -44,6 +44,7 @@ export {
   renderAdminConfigurationShell,
   renderAdminResetModal,
   onAdminBackupDownload,
+  onAdminDataRestoreFileSelected,
   onAdminRestoreFileSelected,
   onAdminRestoreDiscard,
   onAdminRestoreApply,

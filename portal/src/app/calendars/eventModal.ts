@@ -10,63 +10,12 @@ import {
   toLocalInputValue,
   ymd,
 } from "../datetime";
+import { defaultRepeat, readRepeatFromForm, renderRepeatFieldset, repeatEndMode } from "../repeatControl";
 import type { CalendarsHost } from "./host";
+import { REMINDER_PRESETS, reminderFromForm } from "./reminder";
 
-export function defaultRepeat(): {
-  freq: string;
-  interval: number;
-  until: string | null;
-  count: number | null;
-  byDay: string[];
-  endMode: "never" | "until" | "count";
-} {
-  return { freq: "", interval: 1, until: null, count: null, byDay: [], endMode: "never" };
-}
-
-export function repeatEndMode(rep: {
-  until?: string | null;
-  count?: number | null;
-  endMode?: "never" | "until" | "count";
-}): "never" | "until" | "count" {
-  if (rep.endMode === "until" || rep.endMode === "count" || rep.endMode === "never") {
-    return rep.endMode;
-  }
-  if (rep.until) return "until";
-  if (rep.count) return "count";
-  return "never";
-}
-
-export function readRepeatFromForm(fd: FormData): {
-  freq: string;
-  interval: number;
-  until: string | null;
-  count: number | null;
-  byDay: string[];
-  endMode: "never" | "until" | "count";
-} {
-  const freq = String(fd.get("repeatFreq") ?? "").trim().toUpperCase();
-  if (!freq) {
-    return { freq: "", interval: 1, until: null, count: null, byDay: [], endMode: "never" };
-  }
-  const interval = Math.max(1, Math.min(99, Number(fd.get("repeatInterval") ?? 1) || 1));
-  const rawEnd = String(fd.get("repeatEndMode") ?? "never");
-  const endMode: "never" | "until" | "count" =
-    rawEnd === "until" || rawEnd === "count" ? rawEnd : "never";
-  let until: string | null = null;
-  let count: number | null = null;
-  if (endMode === "until") {
-    const u = String(fd.get("repeatUntil") ?? "").trim();
-    until = u ? u.slice(0, 10) : null;
-  } else if (endMode === "count") {
-    const c = Number(fd.get("repeatCount") ?? 0);
-    count = Number.isFinite(c) && c > 0 ? Math.min(999, Math.round(c)) : 10;
-  }
-  const byDay = fd
-    .getAll("repeatByDay")
-    .map((v) => String(v).toUpperCase())
-    .filter(Boolean);
-  return { freq, interval, until, count, byDay, endMode };
-}
+export { defaultRepeat, readRepeatFromForm, repeatEndMode } from "../repeatControl";
+export { reminderFromForm, reminderPayload } from "./reminder";
 
 export function renderEventModal(host: CalendarsHost): string {
   if (!host.state.eventModalOpen || !host.state.editingEvent) return "";
@@ -104,20 +53,9 @@ export function renderEventModal(host: CalendarsHost): string {
       endVal = toLocalInputValue(e.end);
     }
   }
-  const weekDays: { code: string; label: string }[] = [
-    { code: "MO", label: "Mon" },
-    { code: "TU", label: "Tue" },
-    { code: "WE", label: "Wed" },
-    { code: "TH", label: "Thu" },
-    { code: "FR", label: "Fri" },
-    { code: "SA", label: "Sat" },
-    { code: "SU", label: "Sun" },
-  ];
-  const byDay = new Set((rep.byDay || []).map((d) => d.toUpperCase()));
   const endMode = repeatEndMode(rep);
   // Series end date (Until) replaces the event End control; Start stays editable
   const endDisabledByRepeat = !!freq && endMode === "until";
-  const untilVal = rep.until || (endMode === "until" ? toDateInputValue(e.start) || ymd(new Date()) : "");
   return `<div class="cal-modal" id="event-edit-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
     <div class="cal-modal-backdrop" data-action="close-event-modal"></div>
     <div class="cal-modal-card">
@@ -172,68 +110,36 @@ export function renderEventModal(host: CalendarsHost): string {
               allowClear: !endDisabledByRepeat,
             })}
           </div>
-          <fieldset class="event-repeat" ${ro ? "disabled" : ""}>
-            <legend class="event-repeat-legend">Repeat</legend>
-            <div class="form-grid form-grid-2">
-              <label>Frequency
-                <select name="repeatFreq" data-action="event-repeat-freq">
-                  <option value="" ${!freq ? "selected" : ""}>Does not repeat</option>
-                  <option value="DAILY" ${freq === "DAILY" ? "selected" : ""}>Daily</option>
-                  <option value="WEEKLY" ${freq === "WEEKLY" ? "selected" : ""}>Weekly</option>
-                  <option value="MONTHLY" ${freq === "MONTHLY" ? "selected" : ""}>Monthly</option>
-                  <option value="YEARLY" ${freq === "YEARLY" ? "selected" : ""}>Yearly</option>
-                </select>
-              </label>
-              <label>Every
-                <input type="number" name="repeatInterval" min="1" max="99" value="${esc(String(rep.interval || 1))}" ${!freq ? "disabled" : ""} />
-              </label>
-            </div>
-            ${
-              freq === "WEEKLY"
-                ? `<div class="event-byday" role="group" aria-label="Days of week">
-                    ${weekDays
-                      .map(
-                        (d) =>
-                          `<label class="checkbox event-byday-item">
-                            <input type="checkbox" name="repeatByDay" value="${d.code}" ${byDay.has(d.code) ? "checked" : ""} />
-                            ${d.label}
-                          </label>`,
-                      )
-                      .join("")}
-                  </div>`
-                : ""
-            }
-            ${
-              freq
-                ? `<div class="form-grid form-grid-2" style="margin-top:0.5rem">
-                    <label>Ends
-                      <select name="repeatEndMode" data-action="event-repeat-end">
-                        <option value="never" ${endMode === "never" ? "selected" : ""}>Never</option>
-                        <option value="until" ${endMode === "until" ? "selected" : ""}>On date</option>
-                        <option value="count" ${endMode === "count" ? "selected" : ""}>After count</option>
-                      </select>
-                    </label>
-                    ${
-                      endMode === "until"
-                        ? host.renderPortalDateTimeField({
-                            field: "until",
-                            name: "repeatUntil",
-                            label: "Until",
-                            value: untilVal,
-                            dateOnly: true,
-                            disabled: ro,
-                            allowClear: true,
-                          })
-                        : endMode === "count"
-                          ? `<label>Occurrences
-                              <input type="number" name="repeatCount" min="1" max="999" value="${esc(String(rep.count || 10))}" />
-                            </label>`
-                          : `<span></span>`
-                    }
-                  </div>`
-                : ""
-            }
-          </fieldset>
+          <label>Reminder
+            <select name="reminder" ${ro ? "disabled" : ""}>
+              <option value="" ${!e.reminderCustom && (e.reminderMinutes === null || e.reminderMinutes === undefined) ? "selected" : ""}>None</option>
+              ${
+                e.reminderCustom
+                  ? `<option value="keep" selected>Custom (kept)</option>`
+                  : ""
+              }
+              ${REMINDER_PRESETS.map(
+                (p) =>
+                  `<option value="${p.minutes}" ${!e.reminderCustom && e.reminderMinutes === p.minutes ? "selected" : ""}>${esc(p.label)}</option>`,
+              ).join("")}
+            </select>
+            <span class="muted small">Display reminder relative to the start. If this calendar is checked, the portal notifies you when it is due. Other reminders already on the event stay.</span>
+          </label>
+          ${renderRepeatFieldset({
+            repeat: rep,
+            readOnly: ro,
+            untilFallback: toDateInputValue(e.start) || ymd(new Date()),
+            renderUntil: (value, disabled) =>
+              host.renderPortalDateTimeField({
+                field: "until",
+                name: "repeatUntil",
+                label: "Until",
+                value,
+                dateOnly: true,
+                disabled,
+                allowClear: true,
+              }),
+          })}
           <div class="form-actions-row" style="margin-top:0.5rem">
             ${
               !ro
@@ -270,6 +176,8 @@ function blankEventBase(
     location: "",
     hasRrule: false,
     repeat: defaultRepeat(),
+    reminderMinutes: null,
+    reminderCustom: false,
     readOnly: false,
     canWrite: true,
   };
@@ -318,6 +226,7 @@ export function syncEditingEventFromForm(host: CalendarsHost, form: HTMLFormElem
     end: String(fd.get("end") ?? host.state.editingEvent.end ?? "") || null,
     repeat: readRepeatFromForm(fd),
     hasRrule: !!String(fd.get("repeatFreq") ?? "").trim(),
+    ...reminderFromForm(fd),
   };
 }
 

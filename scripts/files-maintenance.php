@@ -30,6 +30,7 @@ $pdo = \Baikal\Core\Bootstrap::pdo();
 if (!SchemaManager::exists($pdo)) {
     exit(0);
 }
+SchemaManager::ensure($pdo);
 
 $lockPath = rtrim($fileConfig->getStoragePath(), '/\\') . '/maintenance.lock';
 $lockHandle = @fopen($lockPath, 'c');
@@ -47,7 +48,9 @@ if (!$purge && !$cleanup) {
 
 $repository = new HomeRepository($pdo, $fileConfig);
 $purged = $purge ? $repository->purgeExpiredQuarantine() : 0;
+$trashed = $purge ? $repository->purgeExpiredTrash() : 0;
 $removed = $cleanup ? $repository->cleanupTemporaryFiles() : 0;
 
 echo 'Purged homes: ' . $purged . PHP_EOL;
+echo 'Purged trash items: ' . $trashed . PHP_EOL;
 echo 'Removed temporary uploads: ' . $removed . PHP_EOL;

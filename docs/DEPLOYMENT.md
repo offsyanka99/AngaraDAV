@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.6`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.7`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 
@@ -31,7 +31,26 @@ Back up **all** of these together as one consistency set:
 - The `file_homes` table maps users to random directory names. Restoring only the database or only the file tree is incomplete.
 - `database.encryption_key` decrypts stored WebDAV-Push subscriptions. `Specific/push_vapid.json` is the server's Push identity. Do not rotate either casually.
 
-**Administration → Configuration** can export/restore a JSON backup of the editable system settings. It contains no secrets, database credentials, users, or DAV data, so it does not replace a volume backup.
+**Administration → Configuration** can export/restore a JSON backup of the editable system settings. That file has the settings shown on System settings. Passwords, database credentials, users, and DAV data stay out of it, so it does not replace a volume backup.
+
+**Data backup** on the same tab downloads one `angaradav-data-<UTC stamp>.tar.gz` for a signed-in Admin (`POST /api/admin/data-export`). The archive contains:
+
+- `database.sqlite` when the backend is SQLite (a consistent snapshot), or `database.sql` when the backend is PostgreSQL (`pg_dump --no-owner --no-acl`)
+- `files.tar` of the WebDAV file storage root (`Specific/files`, or `files_storage_path` / `ANGARA_FILES_STORAGE_PATH` when set). The top-level `tmp/` upload directory is left out. Symbolic links are stored as links.
+
+Leave `configuration.yaml` on the config volume. The admin password, the database password, and `database.encryption_key` stay in that file. `Specific/push_vapid.json` stays in `Specific/`. Restore the database and `files.tar` from the same archive, because `file_homes` maps each user to a random directory name.
+
+On TrueNAS, dataset snapshots of the mounts above remain the way to capture `configuration.yaml` and to keep a schedule. The portal button is the one-shot export of the database and the file store.
+
+A second data backup or restore is refused with HTTP 409 while one is already running. The Docker image includes `postgresql-client`, which provides `pg_dump` and `psql`.
+
+**Data backup and restore** on the same tab (`POST /api/admin/data-restore`) puts an `angaradav-data-*.tar.gz` back while AngaraDAV is running. Choose the archive, confirm that it replaces the current database and WebDAV file store, and the page reloads when the restore finishes. `configuration.yaml` is not in the archive and is not changed. The upload limit is the image PHP limit (1G). If a restore stops halfway, the previous file store may still be in `.angara-restore-aside` inside the file storage directory; move it back before trying again.
+
+Restore with AngaraDAV stopped:
+
+1. Replace the SQLite file (`Specific/db/db.sqlite`, or the configured `sqlite_file`) with `database.sqlite`, or load `database.sql` with `psql`.
+2. Extract `files.tar` into the file storage root. In Docker that tree is owned by UID/GID 101.
+3. Keep the existing config volume, including `database.encryption_key`, and keep `Specific/push_vapid.json`.
 
 ## TrueNAS SCALE
 
@@ -210,7 +229,7 @@ docker exec angaradav grep 'admin audit' /var/www/baikal/Specific/portal_debug.l
 | **Basic** | Same digest table | Only over HTTPS |
 | **Apache** | Web server auth | When a reverse proxy authenticates users |
 
-Tasks are **VTODO** and notes are **VJOURNAL** on CalDAV calendars; there is no separate endpoint.
+Tasks are **VTODO** and notes are **VJOURNAL** on CalDAV calendars; there is no separate endpoint. A repeating task stores one `RRULE` on that `VTODO`. Completing an occurrence writes that occurrence as its own completed task, then moves the series due date to the next one. The last occurrence is marked done on the series. Agenda on the Calendar tab lists those open tasks on their due date, and notes that have a date, for the calendars checked there, in the same window as events. An event can store one display reminder: at the start, or 5 minutes, 15 minutes, 30 minutes, 1 hour, 1 day, or 1 week before. Other alarms already on the event stay. While a user is signed in, with that calendar checked, the portal shows a notification when the reminder is due. Clicking it opens the event. Closing it hides that reminder until the browser tab is closed.
 
 - A `401` followed by `207` on `PROPFIND`/`REPORT` is normal Digest negotiation, not a failed sync.
 - Expected DAV `4xx` responses appear in the nginx access log but not in PHP/FastCGI error logs. Build Fail2Ban rules for DAV from repeated terminal `401`s in the access log.
@@ -248,7 +267,8 @@ system:
   files_storage_path: ''          # empty = /var/www/baikal/Specific/files
   files_max_upload_mb: 1024
   files_quota_mb: 10240           # 0 = unlimited
-  files_quarantine_days: 30
+  files_quarantine_days: 30       # deleted user homes
+  files_trash_days: 30             # per-file Trash; 0 deletes immediately
 ```
 
 Clients connect to `https://host/dav.php/files/USERNAME/`. `/cal.php/` and `/card.php/` never expose files. The portal **Files** tab uses the same home.
@@ -290,12 +310,13 @@ Raising only the admin setting does nothing past the nginx/PHP ceilings. Filesys
 
 - Uploads go to private temp files and are renamed into place only after size and quota checks.
 - Per-home locks serialize quota-sensitive writes, copies, moves, and deletes. Symlinks are never followed.
-- Deleting a user moves the home to quarantine; a recreated username gets a new empty home.
+- Deleting a user moves the home to quarantine; a recreated username gets a new empty home. That user's Trash is moved into the quarantined home and is removed with it.
+- Deleting a file or folder from the portal or from WebDAV moves it to Trash for `files_trash_days` (default 30). 0 skips Trash and deletes immediately. Trash bytes count toward the quota. Restore is in the portal Files tab. WebDAV clients do not see a trash folder. Properties and locks on the deleted path are not restored.
 - Disabling the feature does not delete homes or metadata.
 
 ### Maintenance
 
-The Docker image purges expired quarantine (`files_quarantine_days`) and upload temporaries older than 24 hours every `ANGARA_FILES_MAINTENANCE_INTERVAL_SECONDS` (default hourly). On source installs, schedule it yourself:
+The Docker image purges expired quarantine (`files_quarantine_days`), Trash items older than `files_trash_days`, and upload temporaries older than 24 hours every `ANGARA_FILES_MAINTENANCE_INTERVAL_SECONDS` (default hourly). Trash age is measured from when the item was deleted, using the retention value at purge time. On source installs, schedule it yourself:
 
 ```bash
 php scripts/files-maintenance.php                  # both tasks
@@ -307,7 +328,7 @@ A lock file prevents overlapping runs.
 
 ### Scope
 
-Private class-2 WebDAV drive: properties, locks, quotas, ranges, copy/move (passes WebDAV Litmus 0.13). Not provided: sharing between users, public links, trash/versions, full-text search, chunked-upload protocols, or RFC 6578 sync for files. WebDAV-Push for file folders is optional; see [WebDAV-Push](#webdav-push).
+Private class-2 WebDAV drive: properties, locks, quotas, ranges, copy/move (passes WebDAV Litmus 0.13), and per-user Trash for files and folders. Not provided: sharing between users, public links, file versions, full-text search, chunked-upload protocols, or RFC 6578 sync for files. WebDAV-Push for file folders is optional; see [WebDAV-Push](#webdav-push).
 
 ## WebDAV-Push
 
@@ -409,6 +430,7 @@ After install, `Specific/INSTALL_DISABLED` exists and `/portal/install/` reports
 - **To 2.5.3:** the push queue gains three columns automatically on first use (SQLite and PostgreSQL); no manual SQL. If you plan to use Push for file storage, raise **Max push subscriptions per user** (see [WebDAV-Push](#webdav-push)).
 - **To 2.5.5:** no schema change. Push registration is returned as 204 with `Location` and `Expires`. Clients that recorded HTTP 302 should register again. Subscriptions stored during those failed registrations expire on their own.
 - **To 2.5.6:** no schema change. Administration → Subscriptions lists and removes WebDAV-Push subscriptions while WebDAV-Push is on. The endpoint URL and keys are not shown.
+- **To 2.5.7:** `file_trash` is created automatically on first use (SQLite and PostgreSQL); no manual SQL. Portal and WebDAV delete of files and folders use Trash for `files_trash_days` (default 30; 0 deletes immediately). This release also adds repeating tasks, agenda rows for open tasks and dated notes, one event display reminder, a portal notification when that reminder is due, and Administration → Configuration data backup and restore of the database and WebDAV file store. `configuration.yaml` is not in that archive.
 - **Source installs:** `composer install` (requires the `patch` command; it applies [patches/](../patches/README.md)), rebuild the portal (`make portal`), then restart PHP-FPM and the Push worker.
 
 ## Source installs

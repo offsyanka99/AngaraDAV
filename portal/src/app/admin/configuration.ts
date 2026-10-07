@@ -1,5 +1,5 @@
 /**
- * Admin Configuration: settings backup/restore + Danger zone (moved from settings.ts).
+ * Admin Configuration: settings backup/restore, data backup/restore, and Danger zone.
  */
 import { api } from "../../api";
 import type { AdminSettingsBackup } from "../../api";
@@ -16,15 +16,39 @@ import {
   adminStatusLabel,
 } from "./meta";
 
+const DATA_RESTORE_NOTICE_KEY = "angaradav-portal-data-restored";
+let dataRestoreNotice: boolean | null = null;
+
+function dataRestoreNoticeHtml(): string {
+  if (dataRestoreNotice === null) {
+    dataRestoreNotice = false;
+    try {
+      if (sessionStorage.getItem(DATA_RESTORE_NOTICE_KEY) === "1") {
+        sessionStorage.removeItem(DATA_RESTORE_NOTICE_KEY);
+        dataRestoreNotice = true;
+      }
+    } catch {
+      dataRestoreNotice = false;
+    }
+  }
+  return dataRestoreNotice
+    ? `<p class="flash flash-success">Database and file store restored.</p>`
+    : "";
+}
+
 export function renderAdminConfigurationShell(host: AdminHost): string {
   const meta = adminPageMeta(host, "configuration");
   if (meta && meta.available === false) {
     return adminComingSoonBanner(host, "configuration");
   }
+  const dataBusy = host.state.adminDataExportBusy || host.state.adminDataRestoreBusy;
+  const dataFile = host.state.adminDataRestoreFile;
+  const canRestoreData = !!dataFile && host.state.adminDataRestoreConfirm && !dataBusy;
   return `
+    ${dataRestoreNoticeHtml()}
     <section class="card">
       <div class="section-header">
-        ${infoTitle("Backup", "admin-configuration")}
+        ${infoTitle("Settings backup and restore", "admin-configuration")}
         ${meta ? `<span class="badge ${adminStatusBadgeClass(host, meta.status)}">${esc(adminStatusLabel(host, meta.status))}</span>` : ""}
       </div>
       <p class="muted small">
@@ -38,19 +62,14 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
           ${host.state.adminBackupBusy ? "Preparing…" : "Download backup"}
         </button>
       </div>
-    </section>
-
-    <section class="card">
-      <div class="section-header">
-        <h2>Restore</h2>
-      </div>
+      <p style="margin-top:1.25rem"><strong>Restore settings</strong></p>
       <p class="muted small">
-        Pick a backup file to preview the changes it would make. Nothing is written until you
+        Choose a settings backup to preview the changes it would make. Nothing is written until you
         review the diff and confirm.
       </p>
       <div class="form-actions-row" style="margin-top:0.75rem">
         <label class="btn btn-ghost btn-small" style="cursor:pointer">
-          Choose backup file…
+          Choose settings backup…
           <input type="file" accept="application/json,.json" data-action="admin-restore-file"
             style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" ${host.state.adminRestoreApplying ? "disabled" : ""} />
         </label>
@@ -63,6 +82,60 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
       </div>
       ${host.state.adminRestoreError ? `<p class="flash flash-error">${esc(host.state.adminRestoreError)}</p>` : ""}
       ${renderAdminRestorePreview(host)}
+    </section>
+
+    <section class="card">
+      <div class="section-header">
+        <h2>Data backup and restore</h2>
+      </div>
+      <p class="muted small">
+        Download one archive of the database and the WebDAV file store.
+        SQLite is a consistent copy of the database file. PostgreSQL is a
+        <span class="mono">pg_dump</span>. The file store is a tarball of the
+        configured storage directory (usually <span class="mono">Specific/files</span>),
+        without the upload temporary folder.
+      </p>
+      <p class="muted small">
+        <span class="mono">configuration.yaml</span> stays in place. It holds the admin password
+        and the encryption key. Restoring a data backup replaces the live database and the file store
+        with that archive.
+      </p>
+      ${host.state.adminDataExportError ? `<p class="flash flash-error">${esc(host.state.adminDataExportError)}</p>` : ""}
+      <div class="form-actions-row" style="margin-top:0.75rem">
+        <button type="button" class="btn btn-primary" data-action="admin-data-export-download" ${dataBusy ? "disabled" : ""}>
+          ${host.state.adminDataExportBusy ? "Preparing…" : "Download data backup"}
+        </button>
+      </div>
+      <p style="margin-top:1.25rem"><strong>Restore data</strong></p>
+      <p class="muted small">
+        Choose a data backup. This replaces users, calendars, contacts, and WebDAV files.
+        The admin password and <span class="mono">configuration.yaml</span> stay.
+      </p>
+      ${host.state.adminDataRestoreError ? `<p class="flash flash-error">${esc(host.state.adminDataRestoreError)}</p>` : ""}
+      <div class="form-actions-row" style="margin-top:0.75rem">
+        <label class="btn btn-ghost btn-small" style="cursor:pointer">
+          Choose data backup…
+          <input type="file" accept=".tar.gz,application/gzip,application/x-gzip" data-action="admin-data-restore-file"
+            style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" ${dataBusy ? "disabled" : ""} />
+        </label>
+        ${dataFile ? `<span class="muted small">${esc(dataFile.name)}</span>` : ""}
+        ${
+          dataFile
+            ? `<button type="button" class="btn btn-ghost btn-small" data-action="admin-data-restore-discard" ${dataBusy ? "disabled" : ""}>Discard</button>`
+            : ""
+        }
+      </div>
+      ${renderConfirmCheckbox({
+        action: "admin-data-restore-toggle",
+        label: "Replace the current database and WebDAV file store",
+        checked: host.state.adminDataRestoreConfirm,
+        disabled: dataBusy || !dataFile,
+      })}
+      <div class="form-actions-row" style="margin-top:0.75rem">
+        <button type="button" class="btn btn-danger" data-action="admin-data-restore" ${canRestoreData ? "" : "disabled"}>
+          ${host.state.adminDataRestoreBusy ? "Restoring…" : "Restore data backup"}
+        </button>
+      </div>
     </section>
 
     <section class="card card-danger-zone">
@@ -186,6 +259,23 @@ export async function onAdminBackupDownload(host: AdminHost): Promise<void> {
   }
 }
 
+export async function onAdminDataExportDownload(host: AdminHost): Promise<void> {
+  host.state.adminDataExportBusy = true;
+  host.state.adminDataExportError = null;
+  host.render();
+  try {
+    const res = await api.adminDataExport();
+    await saveBlobAsFile(res.blob, res.filename || "angaradav-data.tar.gz");
+    log.event("admin.data.export-download");
+    host.setFlash("success", "Data backup downloaded");
+  } catch (e) {
+    host.state.adminDataExportError = e instanceof Error ? e.message : "Data backup failed";
+  } finally {
+    host.state.adminDataExportBusy = false;
+    host.render();
+  }
+}
+
 export async function onAdminRestoreFileSelected(host: AdminHost, file: File): Promise<void> {
   host.state.adminRestoreFileName = file.name;
   host.state.adminRestoreDoc = null;
@@ -251,5 +341,45 @@ export async function onAdminRestoreApply(host: AdminHost): Promise<void> {
   } finally {
     host.state.adminRestoreApplying = false;
     host.render();
+  }
+}
+
+export function onAdminDataRestoreFileSelected(host: AdminHost, file: File): void {
+  host.state.adminDataRestoreFile = file;
+  host.state.adminDataRestoreError = null;
+  host.render();
+}
+
+export function onAdminDataRestoreDiscard(host: AdminHost): void {
+  host.state.adminDataRestoreFile = null;
+  host.state.adminDataRestoreConfirm = false;
+  host.state.adminDataRestoreError = null;
+  host.render();
+}
+
+export async function onAdminDataRestore(host: AdminHost): Promise<void> {
+  const file = host.state.adminDataRestoreFile;
+  if (!file || !host.state.adminDataRestoreConfirm || host.state.adminDataRestoreBusy) return;
+  host.state.adminDataRestoreBusy = true;
+  host.state.adminDataRestoreError = null;
+  host.render();
+  let reloading = false;
+  try {
+    await api.adminDataRestore(file);
+    log.event("admin.data.restore");
+    try {
+      sessionStorage.setItem(DATA_RESTORE_NOTICE_KEY, "1");
+    } catch {
+      /* the restored data still loads after a manual reload */
+    }
+    reloading = true;
+    window.location.reload();
+  } catch (e) {
+    host.state.adminDataRestoreError = e instanceof Error ? e.message : "Data restore failed";
+  } finally {
+    if (!reloading) {
+      host.state.adminDataRestoreBusy = false;
+      host.render();
+    }
   }
 }

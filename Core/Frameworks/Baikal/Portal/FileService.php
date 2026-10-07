@@ -62,7 +62,8 @@ class FileService {
      *   maxUploadBytes: int,
      *   quotaBytes: int,
      *   usedBytes: int,
-     *   availableBytes: int
+     *   availableBytes: int,
+     *   trashDays: int
      * }
      */
     public function status(string $username): array {
@@ -80,6 +81,7 @@ class FileService {
                 'quotaBytes'     => 0,
                 'usedBytes'      => 0,
                 'availableBytes' => 0,
+                'trashDays'      => 0,
             ];
         }
 
@@ -97,6 +99,7 @@ class FileService {
                 'quotaBytes'     => $cfg->getQuotaBytes(),
                 'usedBytes'      => $used,
                 'availableBytes' => $available,
+                'trashDays'      => $cfg->getTrashDays(),
             ];
         } catch (ApiException $e) {
             return [
@@ -108,6 +111,7 @@ class FileService {
                 'quotaBytes'     => 0,
                 'usedBytes'      => 0,
                 'availableBytes' => 0,
+                'trashDays'      => 0,
             ];
         } catch (\Throwable $e) {
             error_log('AngaraDAV portal files status: ' . $e->getMessage());
@@ -121,6 +125,7 @@ class FileService {
                 'quotaBytes'     => 0,
                 'usedBytes'      => 0,
                 'availableBytes' => 0,
+                'trashDays'      => 0,
             ];
         }
     }
@@ -489,6 +494,60 @@ class FileService {
     }
 
     /**
+     * @return array{days: int, items: list<array<string, mixed>>}
+     */
+    public function listTrash(string $username): array {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+
+        return [
+            'days'  => $this->requireFileConfig()->getTrashDays(),
+            'items' => $storage->getTrash()->listForHome($storage->getTrashHomeId()),
+        ];
+    }
+
+    /**
+     * @return array{path: string, name: string, renamed: bool}
+     */
+    public function restoreTrash(string $username, int $id): array {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+        try {
+            $result = $storage->getTrash()->restore($storage, $storage->getTrashHomeId(), $id);
+        } catch (\Throwable $e) {
+            throw $this->mapStorageException($e);
+        }
+        $this->notifyFilesChanged($username, [self::parentPath($result['path'])]);
+
+        return $result;
+    }
+
+    public function deleteTrash(string $username, int $id): void {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+        try {
+            $storage->getTrash()->destroy($storage, $storage->getTrashHomeId(), $id);
+        } catch (\Throwable $e) {
+            throw $this->mapStorageException($e);
+        }
+    }
+
+    /**
+     * @return array{removed: int}
+     */
+    public function emptyTrash(string $username): array {
+        $username = $this->assertUsername($username);
+        $storage = $this->storageFor($username);
+        try {
+            $removed = $storage->getTrash()->emptyHome($storage, $storage->getTrashHomeId());
+        } catch (\Throwable $e) {
+            throw $this->mapStorageException($e);
+        }
+
+        return ['removed' => $removed];
+    }
+
+    /**
      * Rename a file or folder within the same parent directory.
      *
      * @return array{path: string, name: string}
@@ -774,7 +833,10 @@ class FileService {
         }
 
         try {
-            return new HomeStorage($cfg, $storageId);
+            $storage = new HomeStorage($cfg, $storageId);
+            $repo->attachTrash($storage, $home);
+
+            return $storage;
         } catch (\Throwable $e) {
             error_log('AngaraDAV portal files home open: ' . $e->getMessage());
             throw new ApiException('Unable to open WebDAV file storage', 500);

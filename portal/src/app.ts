@@ -8,6 +8,7 @@ import { createAppState, type AppContext } from "./app/context";
 import type { AdminPageId } from "./app/types";
 import { bootstrap as bootstrapPortal, onLogin as onLoginPortal } from "./app/bootstrap";
 import { startBackgroundSync, stopBackgroundSync } from "./app/backgroundSync";
+import { startEventReminders, stopEventReminders } from "./app/calendars/eventReminderPoller";
 import {
   clearFlash as clearFlashState,
   setFlash as setFlashState,
@@ -123,6 +124,7 @@ export function mountApp(root: HTMLElement): void {
 
   function clearPortalSessionState(): void {
     stopBackgroundSync();
+    stopEventReminders();
     clearPortalSessionStateImpl(state, {
       stopImportElapsedTimer,
       stopFilesUploadElapsedTimer,
@@ -141,6 +143,11 @@ export function mountApp(root: HTMLElement): void {
       loadMonthEvents: () => calendars.loadMonthEvents(calendarsHost),
       loadContacts: (abId) => contacts.loadContacts(contactsHost, abId),
       loadFiles: () => files.loadFiles(filesHost),
+    });
+    startEventReminders({
+      state,
+      activateTab: (tab, opts) => activateTabNav(o, tab, opts),
+      openEvent: (instanceId, uri) => calendars.openEventEditor(o, instanceId, uri),
     });
   }
 

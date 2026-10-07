@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.5.7 — 2026-10-06
+
+### Portal
+- **Tasks** can repeat with the same rule as events: daily, weekly, monthly, or yearly, every N, weekdays, and an end of never, on a date, or after a count. A repeating task needs a due date. The list keeps one row for the series, and the due date shown is this occurrence. Marking it done (in the dialog or from the selection toolbar) saves that occurrence as its own completed task and moves the series to the next due date. A count on the rule is how many occurrences are left, including the current one. When there is no next occurrence, the series itself is marked done. Subtasks stay on the series. Changing the due date keeps the time between start and due. Clearing the due date while the task still repeats is refused. Cancelling marks the whole series cancelled.
+- **Agenda** lists open tasks on their due date and notes that have a date, for the calendars checked on the Calendar tab, in the same 35-day window as events. A click opens that task or note. Month and week stay events only. A repeating task stays one row, on the due date stored for the series.
+- **Events** have a reminder: none, at the start, or 5 minutes, 15 minutes, 30 minutes, 1 hour, 1 day, or 1 week before the start. It is stored as a display alarm. Email, audio, and other alarms already on the event stay when you save. While you are signed in and that calendar is checked, the portal shows a notification when the reminder is due, including while another portal section is open. The time in that notification follows Administration → System settings (24-hour, 12-hour, or automatic), including when that setting is changed after the event was saved. Click the notification to edit the event. Close dismisses it for this browser tab. A reminder that is not one of those presets stays on the event for calendar apps.
+- **Administration → Configuration** is three sections. **Settings backup and restore** downloads or restores the JSON system-settings backup. **Data backup and restore** downloads one archive of the database and the WebDAV file store, and can put that archive back. SQLite is a consistent copy of the database file. PostgreSQL is a `pg_dump`. The file store is a tarball of the configured storage directory, without the upload temporary folder. Restoring replaces the live database and file store. `configuration.yaml` stays on the config volume, including the admin password and the encryption key. **Danger zone** is Reset to Default.
+- **Files** delete moves a file or folder into Trash. **Trash retention (days)** (`files_trash_days`, default 30) is separate from deleted-user file retention and is set under Administration → System settings. 0 deletes immediately. The Files tab opens Trash to restore an item, delete it now, or empty Trash. Restore puts the item back in its original folder; if that name is taken, the copy is named with “ (restored)”. A deleted folder is one Trash item and comes back with its contents. Missing parent folders are created on restore. Trashed items still count toward the quota. WebDAV DELETE uses the same Trash. Clients do not see a trash folder. Properties and locks on the deleted path are dropped and are not restored. Calendars, contacts, tasks, and notes still delete immediately. Deleting a user still quarantines that user's whole file home for `files_quarantine_days` and takes that user's Trash with it. The hourly file maintenance run also removes Trash past the current retention. The `file_trash` table is created automatically on first use.
+
+### Docs
+- The project license identifier is **GPL-2.0-or-later**, matching the source file headers (GPL version 2 or any later version) and README. `composer.json` had said `GPL-3.0-only`. [LICENSE](LICENSE) stays the GPL version 3 text, which that grant allows. Source copyright headers were not rewritten.
+
+### CI
+- The portal is typechecked, tested, and built in CI (`npm ci && npm test && npm run build` in `portal/`, Node 24).
+- `composer test` runs CS Fixer, PHPStan, and every `tests/php` script. PHPStan stays level 0 on `Core` and `html`, and is level 2 on `Baikal\Portal`.
+
 ## 2.5.6 — 2026-10-01
 
 ### Portal

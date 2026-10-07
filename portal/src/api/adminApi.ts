@@ -1,4 +1,4 @@
-import { request, setCsrfToken } from "./client";
+import { postBlob, request, setCsrfToken } from "./client";
 import type {
   AdminCapabilities,
   AdminDashboardStats,
@@ -154,6 +154,21 @@ export const adminApi = {
   /** Export the editable system settings as a portable JSON backup document. */
   adminSettingsBackup: () =>
     request<{ data: AdminSettingsBackup }>("/admin/settings/backup"),
+  /** SQLite or pg_dump plus the WebDAV file store. Does not include configuration.yaml. */
+  adminDataExport: () => postBlob("/admin/data-export", "{}"),
+  /**
+   * Replace the live database and WebDAV file store from an angaradav-data archive.
+   * configuration.yaml is not part of the archive and is not changed.
+   */
+  adminDataRestore: (file: File) => {
+    const body = new FormData();
+    body.append("archive", file, file.name);
+    body.append("confirm", "1");
+    return request<{ data: { backend: string; bytes: number } }>("/admin/data-restore", {
+      method: "POST",
+      body,
+    });
+  },
   /**
    * Preview (dryRun: true) or apply (dryRun: false, confirm: true) a settings
    * backup document previously produced by adminSettingsBackup().

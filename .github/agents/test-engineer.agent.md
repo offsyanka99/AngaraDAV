@@ -27,13 +27,13 @@ You are a focused test engineer for AngaraDAV, a PHP/SabreDAV CalDAV-CardDAV-Web
 
 ## Quality gates (not test suites, don't conflate)
 
-- `composer phpstan` — static analysis (`phpstan analyse Core html`, level 0 per [phpstan.neon](../../phpstan.neon)).
+- `composer phpstan` — level 0 on `Core` and `html` ([phpstan.neon](../../phpstan.neon)), then level 2 on `Baikal\Portal` ([phpstan-portal.neon](../../phpstan-portal.neon)).
 - `php vendor/bin/php-cs-fixer fix --dry-run --diff --allow-unsupported-php-version=yes` — style check only; drop `--dry-run` to auto-fix.
-- **`composer test` runs CS Fixer + PHPStan, NOT the PHP test scripts.** Never suggest it as a substitute for `make php-test`.
+- **`composer test` runs CS Fixer, PHPStan, then every `tests/php` script** (`composer php-test` / `scripts/run-php-tests.php`). `make php-test` is the same PHP scripts without CS Fixer or PHPStan.
 
 ## CI parity
 
-[.github/workflows/ci.yml](../workflows/ci.yml) runs every `tests/php/*.php` script individually as a named step (not `make php-test`), plus php-cs-fixer, phpstan, and the Postgres-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php`. It does not run pytest or `npm test`. There is no glob: when you add a PHP test script, add a step for it in that workflow.
+[.github/workflows/ci.yml](../workflows/ci.yml) runs every `tests/php/*.php` script individually as a named step (not `make php-test`), plus php-cs-fixer and `composer phpstan`. The `tests` job runs the Postgres-backed `FileSchemaDriverTest.php` and `PushSchemaPgsqlTest.php`. The `portal` job runs `npm ci && npm test && npm run build` in `portal/` on Node 24. It does not run pytest. There is no glob: when you add a PHP test script, add a step for it in that workflow. A new `*.test.ts` file must be added to `portal/package.json` `scripts.test`.
 
 ## Constraints
 

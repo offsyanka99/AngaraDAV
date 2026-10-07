@@ -18,6 +18,7 @@ export {
   blankEventForSlot,
   syncEditingEventFromForm,
   readRepeatFromForm,
+  reminderFromForm,
 } from "./eventModal";
 export {
   stopImportElapsedTimer,
@@ -38,7 +39,7 @@ export {
 export { onShare, onSaveEvent, onEditCal, onCreateCal } from "./actions";
 export { bindHolidaysToggle, syncHolidaysToggle } from "./holidays";
 export { renderCalendarsHome } from "./home";
-export { handleCalendarsAction } from "./actionsRouter";
+export { handleCalendarsAction, openEventEditor } from "./actionsRouter";
 export {
   persistCalendarSelection,
   readStoredCalendarSelection,

@@ -27,6 +27,12 @@ class HomeStorage {
     /** @var string */
     private $temporaryPath;
 
+    /** @var FileTrash|null */
+    private $trash;
+
+    /** @var int */
+    private $trashHomeId = 0;
+
     public function __construct(FileStorageConfig $config, string $storageId) {
         $this->config = $config;
         $this->storageId = $storageId;
@@ -39,6 +45,73 @@ class HomeStorage {
             throw new \RuntimeException('Unsafe WebDAV file home');
         }
         $this->homePath = rtrim((string) realpath($this->homePath), '/\\');
+    }
+
+    public function attachTrash(FileTrash $trash, int $homeId): void {
+        if ($homeId <= 0) {
+            throw new \InvalidArgumentException('Invalid trash home');
+        }
+        $this->trash = $trash;
+        $this->trashHomeId = $homeId;
+    }
+
+    public function getTrash(): FileTrash {
+        if ($this->trash === null) {
+            throw new \RuntimeException('WebDAV trash is not available');
+        }
+
+        return $this->trash;
+    }
+
+    public function getTrashHomeId(): int {
+        return $this->trashHomeId;
+    }
+
+    public function getStorageId(): string {
+        return $this->storageId;
+    }
+
+    /**
+     * Run $callback while holding this home's mutation lock.
+     * The lock is not re-entrant; $callback must not call mutate() again.
+     *
+     * @return mixed
+     */
+    public function mutate(callable $callback) {
+        return $this->withMutationLock($callback);
+    }
+
+    /**
+     * Create missing parent directories of a home-relative path.
+     * Caller holds the mutation lock.
+     */
+    public function makeParentDirectories(string $relativePath): void {
+        $relativePath = $this->validateRelativePath($relativePath);
+        if ($relativePath === '' || !str_contains($relativePath, '/')) {
+            return;
+        }
+        $parent = dirname($relativePath);
+        if ($parent === '.' || $parent === '/') {
+            return;
+        }
+        $current = '';
+        foreach (explode('/', $parent) as $segment) {
+            $current = $current === '' ? $segment : $current . '/' . $segment;
+            $path = $this->getPath($current);
+            if (is_link($path)) {
+                throw new Conflict('A file occupies a parent folder of the restored item');
+            }
+            if (is_dir($path)) {
+                continue;
+            }
+            if (file_exists($path)) {
+                throw new Conflict('A file occupies a parent folder of the restored item');
+            }
+            if (!mkdir($path, 0700) && !is_dir($path)) {
+                throw new \RuntimeException('Unable to create WebDAV directory');
+            }
+            @chmod($path, 0700);
+        }
     }
 
     public function getPath(string $relativePath = ''): string {
@@ -133,6 +206,18 @@ class HomeStorage {
             $path = $this->getPath($relativePath);
             if (!file_exists($path) && !is_link($path)) {
                 throw new NotFound('The WebDAV resource no longer exists');
+            }
+            if (is_link($path)) {
+                if (!@unlink($path)) {
+                    throw new \RuntimeException('Unable to delete WebDAV file');
+                }
+
+                return;
+            }
+            if ($this->trash !== null && $this->trashHomeId > 0 && $this->config->getTrashDays() > 0) {
+                $this->trash->capture($this, $this->trashHomeId, $relativePath);
+
+                return;
             }
             $this->removeWithoutFollowingLinks($path);
         });
@@ -430,10 +515,18 @@ class HomeStorage {
     }
 
     private function calculateUsage(): int {
+        return $this->usageOf($this->homePath)
+            + $this->usageOf($this->config->trashHomePath($this->storageId));
+    }
+
+    private function usageOf(string $root): int {
+        if (is_link($root) || !is_dir($root)) {
+            return 0;
+        }
         $bytes = 0;
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(
-                $this->homePath,
+                $root,
                 \FilesystemIterator::CURRENT_AS_FILEINFO | \FilesystemIterator::SKIP_DOTS
             ),
             \RecursiveIteratorIterator::LEAVES_ONLY

@@ -84,6 +84,7 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
          php${PHP_VERSION}-sqlite3 \
          php${PHP_VERSION}-xml \
          sqlite3 \
+         postgresql-client \
          msmtp \
          msmtp-mta \
          curl \

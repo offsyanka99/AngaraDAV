@@ -9,7 +9,7 @@ import { renderNoteEditor } from "./editor";
 import { notePlainText } from "./html";
 import type { NotesHost } from "./host";
 
-function renderNoteModal(host: NotesHost): string {
+export function renderNoteModal(host: NotesHost): string {
   if (!host.state.noteModalOpen || !host.state.editingNote) return "";
   const n = host.state.editingNote;
   const creating = host.state.creatingNote;

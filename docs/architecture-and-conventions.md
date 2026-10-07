@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.6` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.7` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
@@ -70,11 +70,12 @@ They do **not** share request handling. Portal writes that mutate CalDAV/CardDAV
 | Item | Value | Source |
 |---|---|---|
 | Runtime | `php: ^8.4` | [`composer.json`](../composer.json) |
+| License | SPDX `GPL-2.0-or-later`. Source headers say GPL version 2 or any later version. [`LICENSE`](../LICENSE) is the GPL version 3 text | [`composer.json`](../composer.json) `license` |
 | Autoload | **PSR-0** (not PSR-4): `Baikal` and `BaikalAdmin` → `Core/Frameworks/` | [`composer.json`](../composer.json) `autoload.psr-0` |
 | Core deps | `sabre/dav ~4.7.0`, `symfony/yaml ^8.1`, `minishlink/web-push ^11.0`, `symfony/http-client ^8.1`, `nyholm/psr7 ^1.8` | [`composer.json`](../composer.json) |
 | Required ext | `curl`, `dom`, `mbstring`, `openssl`, `pdo`, `zlib` (`gmp` suggested for faster VAPID) | [`composer.json`](../composer.json) |
 | Dev deps | `php-cs-fixer ^3.95`, `phpstan ^2.2` + `phpstan-deprecation-rules ^2.0` | [`composer.json`](../composer.json) |
-| Static analysis | PHPStan **level 0**, analysing only `Core` and `html` | [`phpstan.neon`](../phpstan.neon) |
+| Static analysis | PHPStan **level 0** on `Core` and `html`. **Level 2** on `Baikal\Portal` | [`phpstan.neon`](../phpstan.neon), [`phpstan-portal.neon`](../phpstan-portal.neon) |
 | Formatting | `@PSR2` + `@Symfony`; same-line opening braces for functions/classes; repo-wide except `vendor` | [`.php-cs-fixer.dist.php`](../.php-cs-fixer.dist.php) |
 | Vendor patching | `post-install-cmd` / `post-update-cmd` run `scripts/apply-vendor-patches.sh` | [`composer.json`](../composer.json) `scripts` |
 
@@ -83,8 +84,9 @@ Composer scripts:
 | Script | Runs |
 |---|---|
 | `composer cs-fixer` | `php-cs-fixer fix` |
-| `composer phpstan` | `phpstan analyse Core html` |
-| `composer test` | **cs-fixer then phpstan only** — does **not** run `tests/php` |
+| `composer phpstan` | Level 0 on `Core` and `html`, then level 2 on `Baikal\Portal` |
+| `composer php-test` | Every `tests/php/*.php` via [`scripts/run-php-tests.php`](../scripts/run-php-tests.php) |
+| `composer test` | cs-fixer, then phpstan, then `php-test` |
 | `composer apply-vendor-patches` | `sh scripts/apply-vendor-patches.sh` |
 
 Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`](../Dockerfile)); CI matrices 8.4 / 8.5 / 8.6.
@@ -98,7 +100,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | Dev deps | `typescript ^6.0.3`, `vite ^8.2.2` | [`portal/package.json`](../portal/package.json) |
 | TS config | ES2022, `moduleResolution: bundler`, `strict`, `noEmit`, `noUnusedLocals` / `noUnusedParameters`; `src/**/*.test.ts` excluded from typecheck | [`portal/tsconfig.json`](../portal/tsconfig.json) |
 | Vite | `base: "/portal/"`, `outDir: "../html/portal"`, `emptyOutDir`, `sourcemap: false`; dev proxy `/api` → `ANGARADAV_API` or `http://127.0.0.1:31088` | [`portal/vite.config.ts`](../portal/vite.config.ts) |
-| Tests | Node built-in `node:test` via `--experimental-strip-types`; **20 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
+| Tests | Node built-in `node:test` via `--experimental-strip-types`; **21 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
 
 ### Make targets — [`Makefile`](../Makefile)
 
@@ -110,7 +112,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | `dist` | Zip source into `build/angaradav-$(VERSION).zip` (`composer install --no-dev`, `platform.php` pinned to 8.4) |
 | `build-assets` | Regenerates [`Core/Resources/Db/SQLite/db.sql`](../Core/Resources/Db/SQLite/db.sql) from `vendor/sabre/dav/examples/sql/sqlite.*.sql` |
 | `portal` | Guards against root-owned `portal/node_modules`, then `npm test && npm run build` |
-| `php-test` | `set -e` loop over every `tests/php/*.php` |
+| `php-test` | [`scripts/run-php-tests.php`](../scripts/run-php-tests.php) over every `tests/php/*.php` |
 | `local-build` | `sh scripts/local-docker.sh build` |
 | `local-up` | `sh scripts/local-docker.sh up` — recreate `angaradav-local` on `:31088` |
 | `local-down` | Stop the local container |
@@ -120,12 +122,13 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 ### CI
 
-**[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — two jobs, PHP matrix `8.4` / `8.5` / `8.6`:
+**[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — PHP matrix `8.4` / `8.5` / `8.6`, plus a portal job:
 
-- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (43), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan`. There is no glob: a new script must be added to the list.
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (43), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan` (level 0 on `Core`/`html`, level 2 on `Baikal\Portal`). There is no glob: a new script must be added to the list.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
+- `portal` runs `npm ci && npm test && npm run build` in [`portal/`](../portal) on Node 24.
 
-It does **not** run `make php-test`, portal `npm test`, `npm run build`, or pytest.
+It does **not** run `make php-test` or pytest.
 
 **[`.github/workflows/docker.yml`](../.github/workflows/docker.yml)** — multi-arch (`linux/amd64,linux/arm64`) GHCR publish to `ghcr.io/offsyanka99/angaradav`. `docker/metadata-action` tags:
 
@@ -148,7 +151,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.6`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.7`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -163,7 +166,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | [`docker/`](../docker) | nginx config + ordered entrypoint scripts |
 | [`scripts/`](../scripts) | Vendor patching, push worker, files maintenance, local Docker, PHP built-in-server router |
 | [`patches/`](../patches) | sabre/dav patch applied post-install |
-| [`tests/php/`](../tests/php) | Standalone PHP test scripts (36 files) |
+| [`tests/php/`](../tests/php) | Standalone PHP test scripts (46 files) |
 | [`tests/portal_admin_e2e.py`](../tests/portal_admin_e2e.py) | Live pytest e2e (not CI) |
 | `Specific/` | Runtime state — only named lock/secret/log files are gitignored (see §7) |
 | [`config/configuration.yaml.dist`](../config/configuration.yaml.dist) | Committed YAML template; live `config/configuration.yaml` is gitignored |
@@ -251,11 +254,12 @@ Every DAV/API entry defines `PROJECT_PATH_ROOT`, then:
 
 | Class | Path | Role |
 |---|---|---|
-| `FileStorageConfig` | [`FileStorageConfig.php`](../Core/Frameworks/Baikal/Core/Files/FileStorageConfig.php) | Storage root: env `ANGARA_FILES_STORAGE_PATH` → YAML `files_storage_path` → `Specific/files`. Upload/quota: `ANGARA_FILES_MAX_UPLOAD_MB` / `ANGARA_FILES_QUOTA_MB` (byte-key fallbacks `ANGARA_FILES_*_BYTES`). Layout `homes/ tmp/ quarantine/ locks/`. Dirs `0700`. |
-| `SchemaManager` | [`SchemaManager.php`](../Core/Frameworks/Baikal/Core/Files/SchemaManager.php) | `file_homes` table (SQLite + PostgreSQL) |
-| `HomeRepository` | [`HomeRepository.php`](../Core/Frameworks/Baikal/Core/Files/HomeRepository.php) | Random storage ids; quarantine on user delete; purge expired quarantine; temp cleanup |
-| `HomeCollection` / `Directory` / `File` | [`HomeCollection.php`](../Core/Frameworks/Baikal/Core/Files/HomeCollection.php), [`Directory.php`](../Core/Frameworks/Baikal/Core/Files/Directory.php), [`File.php`](../Core/Frameworks/Baikal/Core/Files/File.php) | SabreDAV nodes; owner-only ACL; listing disabled at collection root; symlinks skipped; home root cannot be deleted/renamed |
-| `HomeStorage` | [`HomeStorage.php`](../Core/Frameworks/Baikal/Core/Files/HomeStorage.php) | Mutations; `MAX_PATH_BYTES 4096`, `MAX_SEGMENT_BYTES 255`, `MAX_DEPTH 64`, quota |
+| `FileStorageConfig` | [`FileStorageConfig.php`](../Core/Frameworks/Baikal/Core/Files/FileStorageConfig.php) | Storage root: env `ANGARA_FILES_STORAGE_PATH` → YAML `files_storage_path` → `Specific/files`. Upload/quota: `ANGARA_FILES_MAX_UPLOAD_MB` / `ANGARA_FILES_QUOTA_MB` (byte-key fallbacks `ANGARA_FILES_*_BYTES`). `files_trash_days` default 30, range 0–36500 (0 deletes immediately). Layout `homes/ tmp/ quarantine/ trash/ locks/`. Dirs `0700`. |
+| `SchemaManager` | [`SchemaManager.php`](../Core/Frameworks/Baikal/Core/Files/SchemaManager.php) | `file_homes` and `file_trash` tables (SQLite + PostgreSQL) |
+| `HomeRepository` | [`HomeRepository.php`](../Core/Frameworks/Baikal/Core/Files/HomeRepository.php) | Random storage ids; quarantine on user delete (absorbs that home's Trash); purge expired quarantine and Trash; temp cleanup |
+| `HomeCollection` / `Directory` / `File` | [`HomeCollection.php`](../Core/Frameworks/Baikal/Core/Files/HomeCollection.php), [`Directory.php`](../Core/Frameworks/Baikal/Core/Files/Directory.php), [`File.php`](../Core/Frameworks/Baikal/Core/Files/File.php) | SabreDAV nodes; owner-only ACL; listing disabled at collection root; symlinks skipped; home root cannot be deleted/renamed. DELETE uses Trash when `files_trash_days` > 0 |
+| `HomeStorage` | [`HomeStorage.php`](../Core/Frameworks/Baikal/Core/Files/HomeStorage.php) | Mutations; `MAX_PATH_BYTES 4096`, `MAX_SEGMENT_BYTES 255`, `MAX_DEPTH 64`, quota includes Trash |
+| `FileTrash` | [`FileTrash.php`](../Core/Frameworks/Baikal/Core/Files/FileTrash.php) | Soft-delete outside the home at `trash/{storageId}/{token}/`. One row per file or folder. Restore, delete now, empty, purge. Symlinks are unlinked and not stored |
 | `IfHeaderPreconditionPlugin` | [`IfHeaderPreconditionPlugin.php`](../Core/Frameworks/Baikal/Core/Files/IfHeaderPreconditionPlugin.php) | SabreDAV 4.7 RFC 4918 `If:` workaround, scoped to `files/` |
 | `PayloadTooLarge` | [`PayloadTooLarge.php`](../Core/Frameworks/Baikal/Core/Files/PayloadTooLarge.php) | DAV 413 |
 
@@ -388,23 +392,27 @@ One `foreach` over `['tasks' => KIND_TASK, 'notes' => KIND_NOTE]`. Response key 
 | POST | `/tasks/bulk`, `/notes/bulk` |
 | GET/PATCH/PUT/DELETE | `/tasks/{instanceId}/{uri}`, `/notes/{instanceId}/{uri}` |
 
+A task body may include `repeat` (`freq`, `interval`, `until`, `count`, `byDay`), the same shape events use. A repeating task requires `due`. Omitting `repeat` on update leaves the stored `RRULE`. Status `COMPLETED` on a repeating task finishes this occurrence and sets `occurrenceCompleted` on the returned task. Bulk status uses the same path. `CANCELLED` stays on the series.
+
 ### Files routes — `App::dispatchFileRoutes()` in [`App.php`](../Core/Frameworks/Baikal/Portal/App.php)
 
 Same storage as `/dav.php/files/{username}/`. Upload releases the PHP session lock (`session_write_close()`).
 
 | Method | Path |
 |---|---|
-| GET | `/files` (status) |
+| GET | `/files` (status, includes `trashDays`) |
 | GET | `/files/entries?path=` |
+| GET | `/files/trash` |
+| POST | `/files/trash/restore`, `/files/trash/delete`, `/files/trash/empty` |
 | GET | `/files/download?path=&inline=` (binary, in `handle()`) |
 | POST | `/files/mkdir` |
 | POST | `/files/upload` (multipart or raw body) |
-| DELETE | `/files/entry` |
+| DELETE | `/files/entry` (moves to Trash when `files_trash_days` > 0) |
 | POST | `/files/rename`, `/files/move`, `/files/copy`, `/files/bulk` |
 
 ### Admin API — [`Core/Frameworks/Baikal/Portal/Admin`](../Core/Frameworks/Baikal/Portal/Admin)
 
-Eight focused types (seven services + audit). Routed only from `dispatchAdminRoutes()`.
+Nine focused types (eight services + audit). Routed only from `dispatchAdminRoutes()`.
 
 | Class | Path | Responsibility |
 |---|---|---|
@@ -416,6 +424,7 @@ Eight focused types (seven services + audit). Routed only from `dispatchAdminRou
 | `AdminUserResourceService` | [`AdminUserResourceService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserResourceService.php) | Per-user calendars / address books, scoped by the **target** principal |
 | `AdminSettingsService` | [`AdminSettingsService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) | Only portal writer of `configuration.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS`; atomic write + verify; `push_enabled` requires `https://` external URL; factory reset honours install lock |
 | `AdminBackupService` | [`AdminBackupService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminBackupService.php) | Settings export / preview / restore; checksummed, size/key capped; restore re-uses `updateSystemSettings()` |
+| `AdminDataExportService` | [`AdminDataExportService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminDataExportService.php) | One archive: SQLite `VACUUM INTO` or `pg_dump`, plus `files.tar` of the file-storage root. `configuration.yaml` is omitted. Top-level `tmp/` is omitted. Restore puts that archive back over the live database and file store and does not write `configuration.yaml`. One backup or restore at a time (`flock`, 409). |
 
 Admin routes:
 
@@ -431,6 +440,8 @@ Admin routes:
 | GET/PATCH/PUT | `/admin/settings/system` |
 | POST | `/admin/settings/reset-to-default` (password re-auth + confirm) |
 | GET | `/admin/settings/backup` |
+| POST | `/admin/data-export` (streams `angaradav-data-<UTC>.tar.gz`; 409 while a data backup or restore is already running) |
+| POST | `/admin/data-restore` (multipart `archive` + `confirm`; replaces the database and file store; `configuration.yaml` stays) |
 | POST | `/admin/settings/restore` (`dryRun` preview) |
 | GET/PATCH/PUT/POST | `/admin/settings/database` (write requires `confirm: "CONFIRM"`) |
 | POST | `/admin/settings/database/test` |
@@ -477,13 +488,14 @@ Admin routes:
 | `CalendarStore` | [`CalendarStore.php`](../Core/Frameworks/Baikal/Portal/CalendarStore.php) | Shared CalDAV PDO backend, ACL, URI helpers, push notify, import tx |
 | `ContactStore` | [`ContactStore.php`](../Core/Frameworks/Baikal/Portal/ContactStore.php) | Same for CardDAV |
 | `CalendarService` | [`CalendarService.php`](../Core/Frameworks/Baikal/Portal/CalendarService.php) | Calendar CRUD |
-| `EventService` | [`EventService.php`](../Core/Frameworks/Baikal/Portal/EventService.php) | VEVENT CRUD; RRULE expansion capped at 500 |
+| `EventService` | [`EventService.php`](../Core/Frameworks/Baikal/Portal/EventService.php) | VEVENT CRUD; RRULE parse/build via `RecurrenceRule`; expansion capped at 500. One relative DISPLAY reminder (preset minutes before `DTSTART`); `listEvents` includes those minutes from the master VEVENT. Other `VALARM`s stay |
+| `RecurrenceRule` | [`RecurrenceRule.php`](../Core/Frameworks/Baikal/Portal/RecurrenceRule.php) | Shared RRULE parse, build, and next occurrence for VEVENT and VTODO |
 | `ShareService` | [`ShareService.php`](../Core/Frameworks/Baikal/Portal/ShareService.php) | Calendar sharing + user directory |
-| `CalendarItemService` | [`CalendarItemService.php`](../Core/Frameworks/Baikal/Portal/CalendarItemService.php) | Tasks + notes; subtasks `RELATED-TO;RELTYPE=PARENT` with cycle detection |
+| `CalendarItemService` | [`CalendarItemService.php`](../Core/Frameworks/Baikal/Portal/CalendarItemService.php) | Tasks + notes; subtasks `RELATED-TO;RELTYPE=PARENT` with cycle detection. VTODO `RRULE` is one object per series: completing an occurrence stores a completed copy (no `RRULE`, no `RELATED-TO`) and advances `DTSTART`/`DUE`. The last occurrence drops `RRULE` and stays `COMPLETED` on the series |
 | `ContactService` | [`ContactService.php`](../Core/Frameworks/Baikal/Portal/ContactService.php) | Contact CRUD |
 | `VCardMapper` | [`VCardMapper.php`](../Core/Frameworks/Baikal/Portal/VCardMapper.php) | Unknown vCard props preserved; photo sanitize/resize; custom fields as `X-BAIKAL-CUSTOM` JSON |
 | `CalendarImportService` / `ContactImportService` | [`CalendarImportService.php`](../Core/Frameworks/Baikal/Portal/CalendarImportService.php), [`ContactImportService.php`](../Core/Frameworks/Baikal/Portal/ContactImportService.php) | ICS/vCard; `IMPORT_TX_CHUNK = 200` so SQLite does not fsync per row |
-| `FileService` | [`FileService.php`](../Core/Frameworks/Baikal/Portal/FileService.php) | Portal API over the same homes as DAV |
+| `FileService` | [`FileService.php`](../Core/Frameworks/Baikal/Portal/FileService.php) | Portal API over the same homes as DAV, including Trash list, restore, delete now, and empty |
 | `FileDownloadRateLimiter` | [`FileDownloadRateLimiter.php`](../Core/Frameworks/Baikal/Portal/FileDownloadRateLimiter.php) | Download/view rate limit, same ceiling as login: **20 / 900 s** per IP+user |
 | `PortalMeta` | [`PortalMeta.php`](../Core/Frameworks/Baikal/Portal/PortalMeta.php) | Per-instance `readOnly` / `holidaysCountry` in `Specific/portal_meta.json`; also enforced by `ReadOnlyPlugin` for DAV |
 | `Holidays` | [`Holidays.php`](../Core/Frameworks/Baikal/Portal/Holidays.php) | Holiday country list + import |
@@ -585,7 +597,7 @@ Unused host parameters are prefixed `_` (`noUnusedParameters`).
 
 ### Domain inventories
 
-Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **admin 17**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (`subscriptionsListing.ts` is the subscriptions table helper; mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
+Source file counts (excluding `*.test.ts`): **calendars 19**, **files 18**, **admin 17**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (`subscriptionsListing.ts` is the subscriptions table helper; mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
 
 **Admin** [`portal/src/app/admin/`](../portal/src/app/admin) — Overview / Settings / Users / Subscriptions / Database / Configuration. Subscriptions is omitted unless WebDAV-Push is on.
 
@@ -609,9 +621,9 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **ad
 | `pushStats.ts` | Overview push counts |
 | `filesPushToggle.ts` | Files-push checkbox enablement |
 
-**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month grid, events, ICS import.
+**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month, week, and agenda. Agenda also lists open tasks on their due date and notes that have a date. The event form edits one relative display reminder. While a user tab is visible, due preset reminders on checked calendars show a notification; a click opens the event, and close dismisses that reminder for the browser tab. The clock in that notification is the System settings time format, read when the notification is shown. ICS import.
 
-`host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `month.ts`, `week.ts`, `weekScroll.ts`, `agenda.ts`, `eventsView.ts`, `eventModal.ts`, `toolbar.ts`, `holidays.ts`, `import.ts`, `importProgress.ts`, `selectionPersist.ts`.
+`host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `month.ts`, `week.ts`, `weekScroll.ts`, `agenda.ts`, `agendaItems.ts`, `eventsView.ts`, `eventModal.ts`, `reminder.ts`, `eventReminders.ts`, `eventReminderPoller.ts`, `toolbar.ts`, `holidays.ts`, `import.ts`, `importProgress.ts`, `selectionPersist.ts`.
 
 **Contacts** [`portal/src/app/contacts/`](../portal/src/app/contacts) — `host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `form.ts`, `photo.ts`, `import.ts`.
 
@@ -630,13 +642,13 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **ad
 | [`events.ts`](../portal/src/app/events.ts) | Mount-time delegated listeners (click/submit/change/input/keydown/drag/error), `WeakMap` once per root |
 | [`afterRender.ts`](../portal/src/app/afterRender.ts) | Re-apply what `innerHTML` destroys |
 | [`overlays.ts`](../portal/src/app/overlays.ts) | `#portal-page` + `#portal-overlays`; overlays re-render only when a stability key changes (PDF iframe) |
-| [`notify.ts`](../portal/src/app/notify.ts) | Toasts on `<body>` (outside re-render root, so timers survive). Errors sticky; info/success auto-dismiss; duplicates **without** an action collapse to `×N`; action toasts **do not** coalesce |
+| [`notify.ts`](../portal/src/app/notify.ts) | Toasts on `<body>` (outside re-render root, so timers survive). Errors sticky; info/success auto-dismiss; duplicates **without** an action or a body click collapse to `×N`; action toasts and clickable toasts **do not** coalesce. A body click runs optional `onClick` and does not run for the close button. Pinned toasts stay when the stack trims |
 | [`flash.ts`](../portal/src/app/flash.ts) | In-page flash banner |
 | [`session.ts`](../portal/src/app/session.ts) | Role/service gating (fails open until capabilities load), idle timer, session wipe |
 | [`routing.ts`](../portal/src/app/routing.ts) | Hash `#admin`, `#admin/{page}`, `#admin/users/{user}` |
 | [`navigation.ts`](../portal/src/app/navigation.ts) | `loadHome` / `activateTab` / `normalizeActiveTab` |
 | [`bootstrap.ts`](../portal/src/app/bootstrap.ts) | `/api/install/status` → `/api/ui` → `/api/me` |
-| [`backgroundSync.ts`](../portal/src/app/backgroundSync.ts) | Polls `/api/sync-status` while a tab is visible; toasts when the active domain changed out-of-band (never auto-refreshes) |
+| [`backgroundSync.ts`](../portal/src/app/backgroundSync.ts) | Polls `/api/sync-status` while a tab is visible; toasts when the active domain changed out-of-band (never auto-refreshes). Event-reminder checks start and stop with this poller and use the same interval |
 | [`backgroundSyncDiff.ts`](../portal/src/app/backgroundSyncDiff.ts) | Pure compare/clamp helpers for background sync (unit-tested) |
 | [`confirmRefresh.ts`](../portal/src/app/confirmRefresh.ts) | Confirm before Refresh discards an open editor |
 | [`home.ts`](../portal/src/app/home.ts) | Signed-in shell; `layout-*` + `cal-modal-open` body classes |
@@ -649,6 +661,7 @@ Source file counts (excluding `*.test.ts`): **calendars 17**, **files 18**, **ad
 | [`datetime.ts`](../portal/src/app/datetime.ts) / [`datetimeFields.ts`](../portal/src/app/datetimeFields.ts) / [`datetimeSync.ts`](../portal/src/app/datetimeSync.ts) | Date/time helpers |
 | [`paths.ts`](../portal/src/app/paths.ts) | WebDAV path join/basename |
 | [`keys.ts`](../portal/src/app/keys.ts) | Shared `itemKey` for tasks/notes |
+| [`repeatControl.ts`](../portal/src/app/repeatControl.ts) | Shared Repeat fieldset for events and tasks (`FREQ`, interval, weekly `BYDAY`, until or count). `repeatLabel` is the task due badge |
 | [`badges.ts`](../portal/src/app/badges.ts) | Access / import badges |
 | [`theme.ts`](../portal/src/app/theme.ts) | `html[data-theme]` |
 | [`userSettings.ts`](../portal/src/app/userSettings.ts) | Local user prefs (theme, day range, week numbers) and the User settings password section. Password values and the view-password toggle stay in memory until save or close; they are not written to `localStorage`. Password rules are an `infoIconHtml()` **(i)** on the Password legend, not body copy |
@@ -720,7 +733,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 `Specific/` as a directory is **not** gitignored wholesale — only the named lock/secret/log files above. Portal logging never uses `error_log()` (php-fpm would tag `[error]`).
 
-**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
+**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `files_trash_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
 
 **YAML `database` keys:** `encryption_key`, `backend` (`sqlite` \| `pgsql`), `sqlite_file`, `pgsql_host`, `pgsql_dbname`, `pgsql_username`, `pgsql_password`.
 
@@ -795,7 +808,7 @@ Lexical order (three `40-` scripts share a prefix). **10 scripts** on disk:
 | [`scripts/local-docker.sh`](../scripts/local-docker.sh) | Falls back to `docker build`/`run` when Compose plugin is absent; polls health ~60 s |
 | [`scripts/apply-vendor-patches.sh`](../scripts/apply-vendor-patches.sh) | Idempotent; “already applied” if `resolveCalendarTimeZone` exists in sabre CalDAV Plugin |
 | [`scripts/push-worker.php`](../scripts/push-worker.php) | Push delivery; `flock`; exit 2 = permanent failure. Defines `ANGARA_CONTEXT`. |
-| [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) | Quarantine purge + temp cleanup; self-locks; no-ops if Files unprovisioned. Invoked by entrypoint 46. |
+| [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) | Quarantine purge, Trash purge, and temp cleanup; self-locks; ensures `file_trash` when `file_homes` exists; no-ops if Files unprovisioned. Invoked by entrypoint 46. |
 | [`scripts/dev-server-router.php`](../scripts/dev-server-router.php) | Router for `php -S` |
 
 `nginx.conf` lives **in the image**. `docker compose restart` does not pick up a new image or nginx config — recreate with `--force-recreate`.
@@ -928,8 +941,8 @@ Wire plugins in [`Server.php`](../Core/Frameworks/Baikal/Core/Server.php). Keep 
 | Layer | How to run | Notes |
 |---|---|---|
 | PHP | `make php-test`, or `php tests/php/<File>.php` | Standalone scripts, **not** PHPUnit |
-| Static | `composer phpstan`, `composer cs-fixer` | `composer test` = these two only |
-| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 20 files listed in `package.json` |
+| Static | `composer phpstan`, `composer cs-fixer` | Level 0 on `Core`/`html`; level 2 on `Baikal\Portal`. `composer test` runs cs-fixer, phpstan, then `tests/php` |
+| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 21 files listed in `package.json` |
 | E2E | `pytest tests/portal_admin_e2e.py -v` | Live instance only; `make local-up` first |
 
 ### Standalone PHP test convention
@@ -947,7 +960,7 @@ Observed in every `tests/php/*.php` file (canonical: [`AdminSettingsServiceTest.
 
 Do **not** introduce PHPUnit/Pest or a shared test base class.
 
-### PHP test files (45)
+### PHP test files (46)
 
 | File | Covers |
 |---|---|
@@ -957,6 +970,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `AdminBackupServiceTest.php` | Settings backup/restore |
 | `AdminCapabilitiesServiceTest.php` | Capabilities payload |
 | `AdminDashboardServiceTest.php` | Dashboard stats |
+| `AdminDataExportServiceTest.php` | Data backup archive and restore (SQLite snapshot, file store, `pg_dump` / `psql` argv) |
 | `AdminPushSubscriptionServiceTest.php` | Subscription list redaction, confirm, purge, push-off 404 |
 | `AdminSecurityReviewTest.php` | Admin security invariants |
 | `AdminSettingsServiceTest.php` | YAML allow-list / atomic write |
@@ -1009,9 +1023,9 @@ E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib
 
 Recorded as facts, not recommendations:
 
-- CI `code-analysis` runs **43** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 45** `tests/php/` files.
-- No CI job runs portal `npm test` or `npm run build`; the portal is built only in the Docker `portal` stage.
-- `composer test` does not execute `tests/php`.
+- CI `code-analysis` runs **44** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 46** `tests/php/` files.
+- CI job `portal` runs `npm ci && npm test && npm run build` on Node 24. The Docker image still builds the portal in its `portal` stage.
+- `composer test` runs cs-fixer, phpstan, then every `tests/php` script. PostgreSQL scripts exit 0 with `SKIP` when no DSN is set.
 - Portal test files must be added to `package.json` manually — there is no glob. (Today all 20 on-disk tests are registered.)
 - [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) **is** invoked by [`docker/entrypoint.d/46-webdav-files-maintenance.sh`](../docker/entrypoint.d/46-webdav-files-maintenance.sh) on a timer. It is unused on non-Docker installs (no cron unit ships in the zip).
 - [`Dockerfile`](../Dockerfile) emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME`. PHP version display reads `ANGARA_BUILD_GIT` only.
@@ -1027,7 +1041,7 @@ Recorded as facts, not recommendations:
 - nginx `server {}` `client_max_body_size 50M` is not an upload-limit sed target.
 - `docker.yml` branch allowlist means ordinary feature branches produce no GHCR image unless added.
 - Image PHP default is **8.5** while Composer requires `^8.4` and `make dist` pins platform 8.4.
-- PHPStan level **0** analyses only `Core` and `html` (not `tests/`, not `scripts/`).
+- PHPStan level **0** analyses `Core` and `html`. Level **2** analyses `Baikal\Portal` only (`phpstan-portal.neon`). Neither config analyses `tests/` or `scripts/`.
 - General coding instructions under [`.github/instructions`](../.github/instructions) still mention Nx/Storybook/spec.tsx patterns that this repo does not use; portal tests are `*.test.ts` + `node:test`.
 - [`SECURITY.md`](SECURITY.md) tells operators to set `ANGARA_LOCK_INSTALL=1`. PHP reads that name only.
 - WebDAV Basic auth is per-IP rate-limited in `PDOBasicAuth`; portal login (`Auth`) and admin password changes (`AdminUserService`) are rate-limited too. Self-service password changes (`Auth::changePassword`) allow 5 successes / 900 s per username (`Specific/portal_self_password_rate.json`). A wrong current password shares the login limiter and returns **400**. File download/view uses the same 20/900 s ceiling.

@@ -7,7 +7,7 @@ import { convertAllDaySpanToTimed } from "../datetime";
 import { entityFlash } from "../format";
 import type { CalendarsHost } from "./host";
 import { loadMonthEvents, loadShares } from "./loaders";
-import { readRepeatFromForm } from "./eventModal";
+import { readRepeatFromForm, reminderPayload } from "./eventModal";
 
 export async function onShare(host: CalendarsHost, form: HTMLFormElement) {
   if (host.state.selectedId === null) return;
@@ -97,6 +97,7 @@ export async function onSaveEvent(host: CalendarsHost, form: HTMLFormElement) {
       end,
       instanceId: targetInstanceId,
       repeat,
+      reminder: reminderPayload(fd),
     };
     const res = isCreate
       ? await api.createEvent(targetInstanceId, body)

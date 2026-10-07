@@ -110,6 +110,9 @@ export async function handleShellAction(
         state.creatingTask = false;
         state.taskModalOpen = false;
         await o.loadTasks();
+        if (state.activeTab === "calendars" && state.calView === "agenda") {
+          await o.loadMonthEvents();
+        }
         setFlash("success", cascade ? "Task and subtasks deleted" : "Task deleted");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Delete failed");
@@ -135,6 +138,9 @@ export async function handleShellAction(
         state.creatingNote = false;
         state.noteModalOpen = false;
         await o.loadNotes();
+        if (state.activeTab === "calendars" && state.calView === "agenda") {
+          await o.loadMonthEvents();
+        }
         setFlash("success", "Note deleted");
       } catch (e) {
         setFlash("error", e instanceof Error ? e.message : "Delete failed");

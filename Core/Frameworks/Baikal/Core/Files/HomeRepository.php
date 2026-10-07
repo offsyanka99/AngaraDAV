@@ -79,6 +79,11 @@ class HomeRepository {
             if (file_exists($temporary) || is_link($temporary)) {
                 self::removeWithoutFollowingLinks($temporary);
             }
+            (new FileTrash($this->pdo, $this->config))->absorbLocked(
+                (int) $home['id'],
+                $storageId,
+                $destination
+            );
 
             $this->deletePathMetadata('propertystorage', $prefix);
             $this->deletePathMetadata('locks', $prefix);
@@ -120,11 +125,14 @@ class HomeRepository {
                         $this->config->quarantinedHomePath($storageId),
                         $this->config->homePath($storageId),
                         $this->config->homeTemporaryPath($storageId),
+                        $this->config->trashHomePath($storageId),
                     ] as $path) {
                         if (file_exists($path) || is_link($path)) {
                             self::removeWithoutFollowingLinks($path);
                         }
                     }
+                    $dropTrash = $this->pdo->prepare('DELETE FROM file_trash WHERE home_id = ?');
+                    $dropTrash->execute([$home['id']]);
                     $delete = $this->pdo->prepare(
                         "DELETE FROM file_homes WHERE id = ? AND status = 'purging'"
                     );
@@ -139,6 +147,14 @@ class HomeRepository {
         }
 
         return $purged;
+    }
+
+    public function attachTrash(HomeStorage $storage, array $home): void {
+        $storage->attachTrash(new FileTrash($this->pdo, $this->config), (int) $home['id']);
+    }
+
+    public function purgeExpiredTrash(int $limit = 200): int {
+        return (new FileTrash($this->pdo, $this->config))->purgeExpired($limit);
     }
 
     public function cleanupTemporaryFiles(int $olderThanSeconds = 86400, int $limit = 1000): int {

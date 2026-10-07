@@ -107,6 +107,7 @@ export async function handleFilesAction(
   }
   if (action === "files-nav") {
     const path = t.dataset.path ?? "";
+    state.filesView = "files";
     state.filesPath = path;
     state.filesRenamePath = null;
     state.filesDeletePaths = null;
@@ -327,22 +328,30 @@ export async function handleFilesAction(
     host.clearFlash();
     host.render();
     try {
+      const kept = (state.filesStatus?.trashDays ?? 30) > 0;
+      const moved = kept ? "Moved to Trash" : "Deleted";
       if (paths.length === 1) {
         await api.filesDelete(paths[0]);
-        log.event("files.delete", { path: paths[0] });
-        host.setFlash("success", "Deleted");
+        log.event("files.delete", { path: paths[0], trash: kept });
+        host.setFlash("success", moved);
       } else {
         const res = await api.filesBulk("delete", paths);
-        log.event("files.bulk-delete", { ok: res.ok, failed: res.failed });
+        log.event("files.bulk-delete", { ok: res.ok, failed: res.failed, trash: kept });
         if (res.failed === 0) {
           host.setFlash(
             "success",
-            res.ok === 1 ? "Deleted 1 item" : `Deleted ${res.ok} items`,
+            kept
+              ? res.ok === 1
+                ? "Moved 1 item to Trash"
+                : `Moved ${res.ok} items to Trash`
+              : res.ok === 1
+                ? "Deleted 1 item"
+                : `Deleted ${res.ok} items`,
           );
         } else if (res.ok > 0) {
           host.setFlash(
             "info",
-            `Deleted ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`,
+            `${kept ? "Moved" : "Deleted"} ${res.ok}; ${res.failed} failed. ${res.errors[0] || ""}`,
           );
         } else {
           host.setFlash("error", res.errors[0] || "Delete failed");
@@ -353,6 +362,139 @@ export async function handleFilesAction(
       await loadFiles(host);
     } catch (e) {
       host.setFlash("error", e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      state.busy = false;
+      host.render();
+    }
+    return true;
+  }
+  if (action === "files-trash-open") {
+    state.filesView = "trash";
+    state.filesSearch = "";
+    state.filesSearchFocus = false;
+    state.filesRenamePath = null;
+    state.filesDeletePaths = null;
+    state.filesTrashDeleteId = null;
+    state.filesEmptyTrashOpen = false;
+    resetFilesTransferTree(host);
+    state.filesMkdirOpen = false;
+    state.filesUploadMenuOpen = false;
+    unbindFilesUploadMenuOutside(host);
+    closeFilesPreview(host);
+    closeFilesItemMenu(host);
+    state.checkedFilePaths = [];
+    state.busy = true;
+    host.clearFlash();
+    host.render();
+    try {
+      await loadFiles(host);
+    } catch (e) {
+      host.setFlash("error", e instanceof Error ? e.message : "Could not open Trash");
+    } finally {
+      state.busy = false;
+      host.render();
+    }
+    return true;
+  }
+  if (action === "files-trash-close") {
+    state.filesView = "files";
+    state.filesSearch = "";
+    state.filesSearchFocus = false;
+    state.filesTrashDeleteId = null;
+    state.filesEmptyTrashOpen = false;
+    closeFilesItemMenu(host);
+    state.busy = true;
+    host.clearFlash();
+    host.render();
+    try {
+      await loadFiles(host);
+    } catch (e) {
+      host.setFlash("error", e instanceof Error ? e.message : "Could not open files");
+    } finally {
+      state.busy = false;
+      host.render();
+    }
+    return true;
+  }
+  if (action === "files-trash-restore") {
+    const id = Number(t.dataset.id);
+    if (!Number.isFinite(id) || id <= 0) return true;
+    state.busy = true;
+    host.clearFlash();
+    host.render();
+    try {
+      const restored = await api.filesTrashRestore(id);
+      log.event("files.trash-restore", { id, path: restored.path, renamed: restored.renamed });
+      host.setFlash("success", restored.renamed ? `Restored as ${restored.name}` : "Restored");
+      await loadFiles(host);
+    } catch (e) {
+      host.setFlash("error", e instanceof Error ? e.message : "Restore failed");
+    } finally {
+      state.busy = false;
+      host.render();
+    }
+    return true;
+  }
+  if (action === "files-trash-delete-open") {
+    const id = Number(t.dataset.id);
+    if (!Number.isFinite(id) || id <= 0) return true;
+    state.filesTrashDeleteId = id;
+    state.filesEmptyTrashOpen = false;
+    host.render();
+    return true;
+  }
+  if (action === "files-trash-delete-close") {
+    state.filesTrashDeleteId = null;
+    host.render();
+    return true;
+  }
+  if (action === "files-trash-delete-confirm") {
+    const id = state.filesTrashDeleteId;
+    if (id === null) return true;
+    state.busy = true;
+    host.clearFlash();
+    host.render();
+    try {
+      await api.filesTrashDelete(id);
+      log.event("files.trash-delete", { id });
+      state.filesTrashDeleteId = null;
+      host.setFlash("success", "Deleted");
+      await loadFiles(host);
+    } catch (e) {
+      host.setFlash("error", e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      state.busy = false;
+      host.render();
+    }
+    return true;
+  }
+  if (action === "files-trash-empty-open") {
+    if (state.filesTrash.length === 0) return true;
+    state.filesEmptyTrashOpen = true;
+    state.filesTrashDeleteId = null;
+    host.render();
+    return true;
+  }
+  if (action === "files-trash-empty-close") {
+    state.filesEmptyTrashOpen = false;
+    host.render();
+    return true;
+  }
+  if (action === "files-trash-empty-confirm") {
+    state.busy = true;
+    host.clearFlash();
+    host.render();
+    try {
+      const result = await api.filesTrashEmpty();
+      log.event("files.trash-empty", { removed: result.removed });
+      state.filesEmptyTrashOpen = false;
+      host.setFlash(
+        "success",
+        result.removed === 1 ? "Deleted 1 item" : `Deleted ${result.removed} items`,
+      );
+      await loadFiles(host);
+    } catch (e) {
+      host.setFlash("error", e instanceof Error ? e.message : "Empty trash failed");
     } finally {
       state.busy = false;
       host.render();

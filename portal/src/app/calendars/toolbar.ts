@@ -26,16 +26,16 @@ export function calendarChrome(host: CalendarsHost): {
       return `<span class="cal-swatch" style="background:${esc(col)};margin-top:0" title="${esc(c.displayname)}"></span>`;
     })
     .join("");
+  const view = host.state.calView;
   const emptyHint =
     selectedCals.length === 0
       ? host.state.calendars.length === 0
         ? `<p class="muted small month-empty-hint">No calendars yet — create one on the left, or wait for someone to share with you.</p>`
         : ""
       : host.state.monthEventsLoading
-        ? `<p class="muted small month-empty-hint">Loading events…</p>`
+        ? `<p class="muted small month-empty-hint">${view === "agenda" ? "Loading…" : "Loading events…"}</p>`
         : "";
 
-  const view = host.state.calView;
   const focus = focusDate(host);
   let title: string;
   let prevLabel: string;
@@ -75,8 +75,8 @@ export function calendarChrome(host: CalendarsHost): {
       </div>
       <h2 class="month-cal-title">${esc(title)}</h2>
       <div class="cal-view-toggle" role="group" aria-label="Calendar view">${viewBtns}</div>
-      <input type="search" class="cal-event-search" data-action="event-search" placeholder="Search events…"
-        value="${esc(host.state.eventSearch)}" aria-label="Search events" ${host.state.busy ? "disabled" : ""} />
+      <input type="search" class="cal-event-search" data-action="event-search" placeholder="${view === "agenda" ? "Search events, tasks, notes…" : "Search events…"}"
+        value="${esc(host.state.eventSearch)}" aria-label="${view === "agenda" ? "Search events, tasks, and notes" : "Search events"}" ${host.state.busy ? "disabled" : ""} />
       <span class="month-cal-name muted small" title="${esc(calName)}">
         ${swatches}
         ${esc(calName)}

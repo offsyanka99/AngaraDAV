@@ -8,7 +8,7 @@ use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\Reader;
 
 /**
- * VEVENT CRUD and month-grid listing for the portal Calendar tab.
+ * VEVENT CRUD, month-grid listing, and one relative display reminder for the portal Calendar tab.
  */
 class EventService {
     public function __construct(
@@ -20,7 +20,11 @@ class EventService {
      * List VEVENT occurrences in [from, to] (inclusive, YYYY-MM-DD) for month view.
      * Expands RRULE within the range. Caps at 500 events.
      *
-     * @return list<array{uid: string, uri: string, summary: string, start: string, end: string|null, allDay: bool}>
+     * Preset display-reminder minutes travel with each occurrence. Sabre's expand
+     * can drop VALARM, so the minutes come from the master VEVENT (no RECURRENCE-ID).
+     * A custom display alarm is null here; email and audio alarms are not listed.
+     *
+     * @return list<array{uid: string, uri: string, summary: string, start: string, end: string|null, allDay: bool, reminderMinutes: int|null}>
      */
     public function listEvents(string $username, int $instanceId, string $from, string $to): array {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
@@ -77,6 +81,7 @@ class EventService {
             }
             $uri = (string) ($row['uri'] ?? '');
             $fallbackUid = (string) ($row['uid'] ?? '');
+            $reminderMinutes = $this->seriesReminderMinutes($vcal);
             try {
                 $expanded = $vcal->expand(
                     new \DateTime($from . ' 00:00:00', new \DateTimeZone('UTC')),
@@ -125,12 +130,13 @@ class EventService {
                     $summary = isset($comp->SUMMARY) ? trim((string) $comp->SUMMARY) : '';
                     $uid = isset($comp->UID) ? trim((string) $comp->UID) : $fallbackUid;
                     $events[] = [
-                        'uid'     => $uid,
-                        'uri'     => $uri,
-                        'summary' => $summary !== '' ? $summary : '(No title)',
-                        'start'   => $startStr,
-                        'end'     => $endStr,
-                        'allDay'  => $allDay,
+                        'uid'              => $uid,
+                        'uri'              => $uri,
+                        'summary'          => $summary !== '' ? $summary : '(No title)',
+                        'start'            => $startStr,
+                        'end'              => $endStr,
+                        'allDay'           => $allDay,
+                        'reminderMinutes'  => $reminderMinutes,
                     ];
                 } catch (\Throwable $e) {
                     continue;
@@ -353,14 +359,16 @@ class EventService {
             'start'       => null,
             'end'         => null,
             'allDay'      => false,
-            'hasRrule'    => false,
-            'repeat'      => [
+            'hasRrule'        => false,
+            'repeat'          => [
                 'freq'     => '',
                 'interval' => 1,
                 'until'    => null,
                 'count'    => null,
                 'byDay'    => [],
             ],
+            'reminderMinutes' => null,
+            'reminderCustom'  => false,
         ];
         if (trim($data) === '') {
             return $empty;
@@ -424,7 +432,8 @@ class EventService {
                 $end = null;
             }
         }
-        $repeat = $this->parseRrule(isset($event->RRULE) ? $event->RRULE : null);
+        $repeat = RecurrenceRule::parse(isset($event->RRULE) ? $event->RRULE : null);
+        $reminder = $this->readReminder($event);
         $out = [
             'uid'         => isset($event->UID) ? trim((string) $event->UID) : '',
             'summary'     => isset($event->SUMMARY) ? trim((string) $event->SUMMARY) : '',
@@ -433,130 +442,14 @@ class EventService {
             'start'       => $start,
             'end'         => $end,
             'allDay'      => $allDay,
-            'hasRrule'    => $repeat['freq'] !== '',
-            'repeat'      => $repeat,
+            'hasRrule'        => $repeat['freq'] !== '',
+            'repeat'          => $repeat,
+            'reminderMinutes' => $reminder['minutes'],
+            'reminderCustom'  => $reminder['custom'],
         ];
         $vcal->destroy();
 
         return $out;
-    }
-
-    /**
-     * @param mixed $rruleProperty
-     *
-     * @return array{freq: string, interval: int, until: string|null, count: int|null, byDay: list<string>}
-     */
-    private function parseRrule($rruleProperty): array {
-        $empty = [
-            'freq'     => '',
-            'interval' => 1,
-            'until'    => null,
-            'count'    => null,
-            'byDay'    => [],
-        ];
-        if ($rruleProperty === null) {
-            return $empty;
-        }
-        try {
-            $parts = is_object($rruleProperty) && method_exists($rruleProperty, 'getParts')
-                ? $rruleProperty->getParts()
-                : [];
-            if (!is_array($parts) || $parts === []) {
-                // Fallback parse "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE"
-                $raw = trim((string) $rruleProperty);
-                if ($raw === '') {
-                    return $empty;
-                }
-                $parts = [];
-                foreach (explode(';', $raw) as $seg) {
-                    if (str_contains($seg, '=')) {
-                        [$k, $v] = explode('=', $seg, 2);
-                        $parts[strtoupper(trim($k))] = trim($v);
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            return $empty;
-        }
-        $freq = strtoupper((string) ($parts['FREQ'] ?? ''));
-        $allowed = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
-        if (!in_array($freq, $allowed, true)) {
-            return $empty;
-        }
-        $interval = max(1, min(99, (int) ($parts['INTERVAL'] ?? 1)));
-        $until = null;
-        if (!empty($parts['UNTIL'])) {
-            $u = (string) $parts['UNTIL'];
-            // YYYYMMDD or YYYYMMDDTHHMMSSZ
-            if (preg_match('/^(\d{4})(\d{2})(\d{2})/', $u, $m)) {
-                $until = $m[1] . '-' . $m[2] . '-' . $m[3];
-            }
-        }
-        $count = null;
-        if (isset($parts['COUNT']) && (int) $parts['COUNT'] > 0) {
-            $count = min(999, (int) $parts['COUNT']);
-        }
-        $byDay = [];
-        if (!empty($parts['BYDAY'])) {
-            $rawDays = is_array($parts['BYDAY']) ? $parts['BYDAY'] : explode(',', (string) $parts['BYDAY']);
-            $ok = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-            foreach ($rawDays as $d) {
-                $d = strtoupper(preg_replace('/[^A-Z]/', '', (string) $d) ?? '');
-                if (in_array($d, $ok, true)) {
-                    $byDay[] = $d;
-                }
-            }
-        }
-
-        return [
-            'freq'     => $freq,
-            'interval' => $interval,
-            'until'    => $until,
-            'count'    => $count,
-            'byDay'    => array_values(array_unique($byDay)),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $repeat
-     */
-    private function buildRruleString(array $repeat): ?string {
-        $freq = strtoupper(trim((string) ($repeat['freq'] ?? '')));
-        if ($freq === '' || $freq === 'NONE') {
-            return null;
-        }
-        $allowed = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
-        if (!in_array($freq, $allowed, true)) {
-            throw new ApiException('Invalid repeat frequency', 400);
-        }
-        $interval = max(1, min(99, (int) ($repeat['interval'] ?? 1)));
-        $parts = ['FREQ=' . $freq];
-        if ($interval !== 1) {
-            $parts[] = 'INTERVAL=' . $interval;
-        }
-        $byDay = $repeat['byDay'] ?? $repeat['byday'] ?? [];
-        if (is_array($byDay) && $byDay !== [] && $freq === 'WEEKLY') {
-            $ok = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-            $days = [];
-            foreach ($byDay as $d) {
-                $d = strtoupper(trim((string) $d));
-                if (in_array($d, $ok, true)) {
-                    $days[] = $d;
-                }
-            }
-            if ($days !== []) {
-                $parts[] = 'BYDAY=' . implode(',', array_unique($days));
-            }
-        }
-        $until = isset($repeat['until']) ? trim((string) $repeat['until']) : '';
-        $count = isset($repeat['count']) ? (int) $repeat['count'] : 0;
-        if ($until !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $until)) {
-            $parts[] = 'UNTIL=' . str_replace('-', '', $until);
-        } elseif ($count > 0) {
-            $parts[] = 'COUNT=' . min(999, $count);
-        }
-
-        return implode(';', $parts);
     }
 
     /**
@@ -594,13 +487,17 @@ class EventService {
             if ($rep === null || $rep === '' || $rep === false) {
                 // cleared
             } elseif (is_array($rep)) {
-                $rule = $this->buildRruleString($rep);
+                $rule = RecurrenceRule::build($rep);
                 if ($rule !== null) {
                     $event->add('RRULE', $rule);
                 }
             } elseif (is_string($rep) && trim($rep) !== '') {
                 $event->add('RRULE', trim($rep));
             }
+        }
+
+        if (array_key_exists('reminder', $fields)) {
+            $this->applyReminder($event, $fields['reminder']);
         }
 
         $touchStart = array_key_exists('start', $fields) || array_key_exists('allDay', $fields);
@@ -702,5 +599,195 @@ class EventService {
                 }
             }
         }
+    }
+
+    /** Preset display reminders, in minutes before DTSTART. 0 is at the start. */
+    private const REMINDER_MINUTES = [0, 5, 15, 30, 60, 1440, 10080];
+
+    /**
+     * Preset minutes on the series master. Overrides are not read; expand may drop VALARM.
+     */
+    private function seriesReminderMinutes(VCalendar $vcal): ?int {
+        foreach ($vcal->getComponents() as $comp) {
+            if (strtoupper((string) $comp->name) !== 'VEVENT') {
+                continue;
+            }
+            if (isset($comp->{'RECURRENCE-ID'})) {
+                continue;
+            }
+
+            return $this->readReminder($comp)['minutes'];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param mixed $event VEVENT component
+     *
+     * @return array{minutes: int|null, custom: bool}
+     */
+    private function readReminder($event): array {
+        foreach ($this->componentValarms($event) as $alarm) {
+            if (!$this->isManagedDisplayAlarm($alarm)) {
+                continue;
+            }
+            $minutes = $this->minutesBeforeFromTrigger($alarm->TRIGGER ?? null);
+            if ($minutes !== null && in_array($minutes, self::REMINDER_MINUTES, true)) {
+                return ['minutes' => $minutes, 'custom' => false];
+            }
+
+            return ['minutes' => null, 'custom' => true];
+        }
+
+        return ['minutes' => null, 'custom' => false];
+    }
+
+    /**
+     * @param mixed $event    VEVENT component
+     * @param mixed $reminder null clears the portal display reminder; "keep" leaves alarms alone
+     */
+    private function applyReminder($event, $reminder): void {
+        if ($reminder === 'keep') {
+            return;
+        }
+        $minutes = null;
+        if ($reminder === null || $reminder === '' || $reminder === false) {
+            $minutes = null;
+        } elseif (is_int($reminder) || (is_string($reminder) && preg_match('/^\d+$/', $reminder) === 1)) {
+            $minutes = (int) $reminder;
+            if (!in_array($minutes, self::REMINDER_MINUTES, true)) {
+                throw new ApiException('Invalid reminder', 400);
+            }
+        } else {
+            throw new ApiException('Invalid reminder', 400);
+        }
+
+        $managed = null;
+        foreach ($this->componentValarms($event) as $alarm) {
+            if ($this->isManagedDisplayAlarm($alarm)) {
+                $managed = $alarm;
+                break;
+            }
+        }
+        if ($minutes === null) {
+            if ($managed !== null) {
+                $event->remove($managed);
+            }
+
+            return;
+        }
+        $trigger = $this->reminderTrigger($minutes);
+        if ($managed !== null) {
+            $managed->TRIGGER = $trigger;
+            if (!isset($managed->ACTION) || trim((string) $managed->ACTION) === '') {
+                $managed->ACTION = 'DISPLAY';
+            }
+            if (!isset($managed->DESCRIPTION) || trim((string) $managed->DESCRIPTION) === '') {
+                $managed->DESCRIPTION = 'Reminder';
+            }
+
+            return;
+        }
+        $event->add('VALARM', [
+            'ACTION'      => 'DISPLAY',
+            'DESCRIPTION' => 'Reminder',
+            'TRIGGER'     => $trigger,
+        ]);
+    }
+
+    private function reminderTrigger(int $minutes): string {
+        switch ($minutes) {
+            case 0:
+                return 'PT0S';
+            case 5:
+                return '-PT5M';
+            case 15:
+                return '-PT15M';
+            case 30:
+                return '-PT30M';
+            case 60:
+                return '-PT1H';
+            case 1440:
+                return '-P1D';
+            case 10080:
+                return '-P7D';
+            default:
+                throw new ApiException('Invalid reminder', 400);
+        }
+    }
+
+    /**
+     * @param mixed $trigger
+     */
+    private function minutesBeforeFromTrigger($trigger): ?int {
+        $raw = trim((string) $trigger);
+        if ($raw === '' || preg_match('/^\d{8}T/', $raw) === 1) {
+            return null;
+        }
+        try {
+            $iv = \Sabre\VObject\DateTimeParser::parseDuration($raw);
+        } catch (\Throwable $e) {
+            return null;
+        }
+        if (!$iv instanceof \DateInterval) {
+            return null;
+        }
+        if ($iv->y !== 0 || $iv->m !== 0 || $iv->s !== 0) {
+            return null;
+        }
+        $minutes = ($iv->d * 1440) + ($iv->h * 60) + $iv->i;
+        if ($iv->invert === 1) {
+            return $minutes > 0 ? $minutes : null;
+        }
+
+        return $minutes === 0 ? 0 : null;
+    }
+
+    /**
+     * @param mixed $alarm VALARM component
+     */
+    private function isManagedDisplayAlarm($alarm): bool {
+        $action = strtoupper(trim((string) ($alarm->ACTION ?? '')));
+        if ($action !== 'DISPLAY') {
+            return false;
+        }
+        if (!isset($alarm->TRIGGER)) {
+            return false;
+        }
+        $valueType = strtoupper(trim((string) ($alarm->TRIGGER['VALUE'] ?? '')));
+        if ($valueType !== '' && $valueType !== 'DURATION') {
+            return false;
+        }
+        $related = strtoupper(trim((string) ($alarm->TRIGGER['RELATED'] ?? '')));
+        if ($related !== '' && $related !== 'START') {
+            return false;
+        }
+        if (isset($alarm->REPEAT) || isset($alarm->DURATION)) {
+            return false;
+        }
+        $raw = trim((string) $alarm->TRIGGER);
+        if ($raw === '' || preg_match('/^\d{8}T/', $raw) === 1) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param mixed $event VEVENT component
+     *
+     * @return list<object>
+     */
+    private function componentValarms($event): array {
+        if (!is_object($event) || !method_exists($event, 'select')) {
+            return [];
+        }
+        $list = $event->select('VALARM');
+        if ($list instanceof \Traversable) {
+            $list = iterator_to_array($list);
+        }
+
+        return is_array($list) ? array_values($list) : [];
     }
 }

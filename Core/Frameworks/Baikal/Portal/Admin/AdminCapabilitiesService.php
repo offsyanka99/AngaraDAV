@@ -92,7 +92,7 @@ class AdminCapabilitiesService {
                 'available'   => true,
                 'portalUrl'   => '/portal/#admin/configuration',
                 'portalLabel' => 'Configuration',
-                'summary'     => 'Download or restore a settings backup; reset the instance to defaults.',
+                'summary'     => 'Download or restore a database and file-store backup, or a settings backup. Reset returns to the installer.',
             ],
         ];
 

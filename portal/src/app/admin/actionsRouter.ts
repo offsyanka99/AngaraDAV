@@ -19,6 +19,9 @@ import {
 import { onAdminDatabaseTest } from "./database";
 import {
   onAdminBackupDownload,
+  onAdminDataExportDownload,
+  onAdminDataRestore,
+  onAdminDataRestoreDiscard,
   onAdminRestoreApply,
   onAdminRestoreDiscard,
 } from "./configuration";
@@ -390,6 +393,24 @@ if (action === "admin-reset-confirm") {
 }
 if (action === "admin-backup-download") {
   await onAdminBackupDownload(host);
+  return true;
+}
+if (action === "admin-data-export-download") {
+  await onAdminDataExportDownload(host);
+  return true;
+}
+if (action === "admin-data-restore-discard") {
+  onAdminDataRestoreDiscard(host);
+  return true;
+}
+if (action === "admin-data-restore-toggle") {
+  const cb = t as HTMLInputElement;
+  host.state.adminDataRestoreConfirm = !!cb.checked;
+  host.render();
+  return true;
+}
+if (action === "admin-data-restore") {
+  await onAdminDataRestore(host);
   return true;
 }
 if (action === "admin-restore-discard") {

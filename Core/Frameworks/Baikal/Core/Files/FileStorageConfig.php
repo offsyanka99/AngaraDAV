@@ -21,6 +21,9 @@ class FileStorageConfig {
     /** @var int */
     private $quarantineDays;
 
+    /** @var int */
+    private $trashDays;
+
     public function __construct(array $config) {
         $system = is_array($config['system'] ?? null) ? $config['system'] : [];
         $this->enabled = !empty($system['files_enabled']);
@@ -50,6 +53,14 @@ class FileStorageConfig {
             0,
             3650
         );
+        $this->trashDays = self::configuredInteger(
+            $system,
+            'files_trash_days',
+            '',
+            30,
+            0,
+            36500
+        );
     }
 
     public function isEnabled(): bool {
@@ -72,6 +83,10 @@ class FileStorageConfig {
         return $this->quarantineDays;
     }
 
+    public function getTrashDays(): int {
+        return $this->trashDays;
+    }
+
     public function prepareStorage(): void {
         $this->assertSafeStoragePath($this->storagePath);
         $this->assertNoSymlinkComponents($this->storagePath);
@@ -87,6 +102,7 @@ class FileStorageConfig {
         $this->createPrivateDirectory($this->homesPath());
         $this->createPrivateDirectory($this->temporaryPath());
         $this->createPrivateDirectory($this->quarantinePath());
+        $this->createPrivateDirectory($this->trashPath());
         $this->createPrivateDirectory($this->locksPath());
     }
 
@@ -136,6 +152,10 @@ class FileStorageConfig {
         return $this->storagePath . DIRECTORY_SEPARATOR . 'quarantine';
     }
 
+    public function trashPath(): string {
+        return $this->storagePath . DIRECTORY_SEPARATOR . 'trash';
+    }
+
     public function locksPath(): string {
         return $this->storagePath . DIRECTORY_SEPARATOR . 'locks';
     }
@@ -166,6 +186,21 @@ class FileStorageConfig {
         self::assertStorageId($storageId);
 
         return $this->quarantinePath() . DIRECTORY_SEPARATOR . $storageId;
+    }
+
+    public function trashHomePath(string $storageId): string {
+        self::assertStorageId($storageId);
+
+        return $this->trashPath() . DIRECTORY_SEPARATOR . $storageId;
+    }
+
+    public function trashItemPath(string $storageId, string $token): string {
+        self::assertStorageId($storageId);
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            throw new \InvalidArgumentException('Invalid trash token');
+        }
+
+        return $this->trashHomePath($storageId) . DIRECTORY_SEPARATOR . $token;
     }
 
     private function createPrivateDirectory(string $path): void {

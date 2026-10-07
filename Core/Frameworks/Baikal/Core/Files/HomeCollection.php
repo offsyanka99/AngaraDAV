@@ -38,6 +38,7 @@ class HomeCollection extends AbstractPrincipalCollection implements IACL {
         $owner = (string) $principalInfo['uri'];
         $home = $this->repository->getOrCreateForPrincipal($owner);
         $storage = new HomeStorage($this->config, (string) $home['storage_id']);
+        $this->repository->attachTrash($storage, $home);
 
         return new Directory($storage, '', self::ownerAcl(), $owner, true);
     }
