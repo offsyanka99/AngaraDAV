@@ -13,6 +13,7 @@ class Auth {
     public const CSRF_KEY = 'angara_portal_csrf';
     public const LAST_SEEN_KEY = 'angara_portal_last';
     public const LOGIN_AT_KEY = 'angara_portal_login_at';
+    public const SESSION_GENERATION_KEY = 'angara_portal_generation';
 
     /** @var int Default idle timeout (seconds) — matches admin default (15 min) */
     public const DEFAULT_SESSION_MAX_AGE = 900;
@@ -44,10 +45,30 @@ class Auth {
     /** @var bool True when the current request expired an idle session */
     private $timedOut = false;
 
-    public function __construct(\PDO $pdo, string $authRealm, int $sessionMaxAge = self::DEFAULT_SESSION_MAX_AGE) {
+    /** @var int Generation read from configuration.yaml for this request */
+    private $sessionGeneration;
+
+    /** @var bool True when this request rejected a session from an older generation */
+    private $generationRejected = false;
+
+    /** @var callable(string): void|null */
+    private $onGenerationRejected;
+
+    /**
+     * @param callable(string): void|null $onGenerationRejected
+     */
+    public function __construct(
+        \PDO $pdo,
+        string $authRealm,
+        int $sessionMaxAge = self::DEFAULT_SESSION_MAX_AGE,
+        int $sessionGeneration = 0,
+        ?callable $onGenerationRejected = null
+    ) {
         $this->pdo = $pdo;
         $this->authRealm = $authRealm;
         $this->sessionMaxAge = $sessionMaxAge > 0 ? $sessionMaxAge : self::DEFAULT_SESSION_MAX_AGE;
+        $this->sessionGeneration = $sessionGeneration >= 0 ? $sessionGeneration : 0;
+        $this->onGenerationRejected = $onGenerationRejected;
     }
 
     /** Idle timeout in seconds (from session_max_age_minutes). */
@@ -58,6 +79,11 @@ class Auth {
     /** Whether this request logged the user out due to idle timeout. */
     public function wasTimedOut(): bool {
         return $this->timedOut;
+    }
+
+    /** Whether this request ended the session because a data restore bumped the generation. */
+    public function wasGenerationRejected(): bool {
+        return $this->generationRejected;
     }
 
     public static function startSession(): void {
@@ -87,6 +113,11 @@ class Auth {
         if (!is_string($u) || $u === '') {
             return null;
         }
+        if (!$this->generationMatches()) {
+            $this->rejectStaleGeneration($u);
+
+            return null;
+        }
         if (!$this->touchSession()) {
             return null;
         }
@@ -99,6 +130,9 @@ class Auth {
         if ($u === null) {
             if ($this->timedOut) {
                 throw new ApiException('Session timed out. Please sign in again.', 401);
+            }
+            if ($this->generationRejected) {
+                throw new ApiException(PortalSessionGeneration::RESTORE_MESSAGE, 401);
             }
             throw new ApiException('Not authenticated', 401);
         }
@@ -113,7 +147,14 @@ class Auth {
             if ($this->timedOut) {
                 throw new ApiException('Session timed out. Please sign in again.', 401);
             }
+            if ($this->generationRejected) {
+                throw new ApiException(PortalSessionGeneration::RESTORE_MESSAGE, 401);
+            }
             throw new ApiException('Not authenticated', 401);
+        }
+        if (!$this->generationMatches()) {
+            $this->rejectStaleGeneration($u);
+            throw new ApiException(PortalSessionGeneration::RESTORE_MESSAGE, 401);
         }
         if ($this->sessionIdleExpired()) {
             $this->timedOut = true;
@@ -190,6 +231,7 @@ class Auth {
         $_SESSION[self::SESSION_KEY] = $row['username'];
         $_SESSION[self::LOGIN_AT_KEY] = time();
         $_SESSION[self::LAST_SEEN_KEY] = time();
+        $_SESSION[self::SESSION_GENERATION_KEY] = $this->sessionGeneration;
         $_SESSION[self::CSRF_KEY] = bin2hex(random_bytes(32));
 
         $profile = $this->profile($row['username']);
@@ -297,6 +339,27 @@ class Auth {
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
         }
+    }
+
+    private function generationMatches(): bool {
+        return $this->storedSessionGeneration() === $this->sessionGeneration;
+    }
+
+    /** A missing session key counts as generation 0. */
+    private function storedSessionGeneration(): int {
+        if (!array_key_exists(self::SESSION_GENERATION_KEY, $_SESSION)) {
+            return 0;
+        }
+
+        return PortalSessionGeneration::coerce($_SESSION[self::SESSION_GENERATION_KEY]);
+    }
+
+    private function rejectStaleGeneration(string $username): void {
+        $this->generationRejected = true;
+        if ($this->onGenerationRejected !== null) {
+            ($this->onGenerationRejected)($username);
+        }
+        $this->logout();
     }
 
     /**

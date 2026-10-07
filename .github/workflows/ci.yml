@@ -88,6 +88,10 @@ jobs:
         run: php tests/php/ApiExceptionTest.php
       - name: Portal session idle unit test
         run: php tests/php/AuthSessionIdleTest.php
+      - name: Portal session generation unit test
+        run: php tests/php/AuthSessionGenerationTest.php
+      - name: Portal session generation bump unit test
+        run: php tests/php/PortalSessionGenerationTest.php
       - name: Installer unit test
         run: php tests/php/InstallServiceTest.php
       - name: Note description format unit test

@@ -2,6 +2,7 @@
 
 namespace Baikal\Portal\Admin;
 
+use Baikal\Model\Config;
 use Baikal\Portal\ApiException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -527,6 +528,17 @@ class AdminSettingsService {
             throw new ApiException('Refusing to accept encryption_key in request body', 400);
         }
 
+        return Config::withConfigLock($this->configPath, function () use ($body): array {
+            return $this->applyDatabaseSettings($body);
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    private function applyDatabaseSettings(array $body): array {
         $this->document = $this->loadDocument();
         if (!isset($this->document['database']) || !is_array($this->document['database'])) {
             $this->document['database'] = [];
@@ -670,6 +682,17 @@ class AdminSettingsService {
 
         $this->assertNoForbiddenBodyKeys($body);
 
+        return Config::withConfigLock($this->configPath, function () use ($body): array {
+            return $this->applySystemSettings($body);
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    private function applySystemSettings(array $body): array {
         // Reload so concurrent classic-admin saves are not clobbered more than necessary
         $this->document = $this->loadDocument();
         if (!isset($this->document['system']) || !is_array($this->document['system'])) {

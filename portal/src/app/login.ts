@@ -4,6 +4,7 @@
  */
 import { esc } from "../ui.ts";
 import type { AppState } from "./context";
+import { DATA_RESTORE_SUCCESS } from "./sessionEnd.ts";
 import type { ShellOpts } from "./shell";
 import { passwordFieldHtml } from "./userSettings.ts";
 
@@ -41,10 +42,14 @@ export function renderLogin(
         </p>`;
   }
   const loginDisabled = state.busy || !!upgrade;
+  const restoreNotice = state.dataRestoreNotice
+    ? `<p class="flash flash-success">${esc(DATA_RESTORE_SUCCESS)}</p>`
+    : "";
   root.innerHTML = shellFn(
     `<div class="auth-wrap">
         <div class="card auth-card">
           <h1>Sign in</h1>
+          ${restoreNotice}
           ${gateBanner}
           <p class="muted">Use your AngaraDAV <strong>DAV user</strong> credentials.</p>
           <form class="stack" data-form="login">

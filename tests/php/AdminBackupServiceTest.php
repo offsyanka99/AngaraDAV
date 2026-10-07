@@ -145,5 +145,24 @@ assert_throws(fn () => $backup->preview($doc6), 'bad checksum rejected');
 // Restore without confirm is rejected
 assert_throws(fn () => $backup->restore($doc, false, 'admin'), 'restore requires confirm');
 
+$rawGen = Yaml::parseFile($path);
+$rawGen['system']['portal_session_generation'] = 4;
+file_put_contents($path, Yaml::dump($rawGen, 4, 2));
+$settingsGen = new AdminSettingsService($path, $dir);
+$backupGen = new AdminBackupService($settingsGen, $dir);
+assert_true(!in_array('portal_session_generation', $settingsGen->editableKeys(), true), 'generation is not editable');
+$docGen = $backupGen->export('admin');
+assert_true(!array_key_exists('portal_session_generation', $docGen['settings']), 'export omits session generation');
+$docGen['settings']['timezone'] = 'Europe/Paris';
+$docGen['settings']['portal_session_generation'] = 99;
+unset($docGen['checksum']);
+$previewGen = $backupGen->preview($docGen);
+assert_true($previewGen['unknown'] === ['portal_session_generation'], 'generation key is unknown on restore');
+$appliedGen = $backupGen->restore($docGen, true, 'admin');
+assert_true(in_array('timezone', $appliedGen['applied'], true), 'restore still applies an editable key');
+assert_true(!in_array('portal_session_generation', $appliedGen['applied'], true), 'restore does not apply generation');
+$afterGen = Yaml::parseFile($path);
+assert_true(($afterGen['system']['portal_session_generation'] ?? null) === 4, 'settings restore leaves the generation unchanged');
+
 echo $failures === 0 ? "\nAll AdminBackupService checks passed.\n" : "\n$failures check(s) FAILED.\n";
 exit($failures === 0 ? 0 : 1);

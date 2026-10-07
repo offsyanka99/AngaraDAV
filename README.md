@@ -15,7 +15,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.7`, `sha-…`) · linux/
 
 | In the portal (`/portal/`) | On the wire |
 |----------------------------|-------------|
-| **Calendar** — month / week / agenda (events, open tasks due, dated notes), search, display reminders (a notification when one is due), share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
+| **Calendar** — month / week / agenda (events, open tasks due, dated notes), search, Today and jump to a date, display reminders (a notification when one is due), share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
 | **Contacts** — address books, search, photos, import/export `.vcf` | CardDAV (`/dav.php/`, `/card.php/`) |
 | **Tasks** — VTODO, subtasks, repeating tasks, bulk edit, column filters | CalDAV |
 | **Notes** — VJOURNAL rich text in a modal (H1–H3, quote, lists, checkboxes, strikethrough, inline code; jtx Markdown in `DESCRIPTION`) | CalDAV |
@@ -23,7 +23,7 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.7`, `sha-…`) · linux/
 | **Administration** — users, system settings, database, settings backup/restore, data backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
 | **WebDAV-Push** (optional) — near-real-time change notices for calendars, contacts, and (opt-in) file folders (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
 
-Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `configuration.yaml`. Tabs follow Admin **DAV services** toggles.
+A successful **Administration → Configuration** data restore replaces the database and the WebDAV file store and adds 1 to `system.portal_session_generation` in `configuration.yaml`. Signed-in portal browsers return to Sign in. Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `configuration.yaml`. Tabs follow Admin **DAV services** toggles.
 
 Optional **WebDAV-Push** wakes CalDAV/CardDAV clients instead of waiting for the next poll (shared calendars included; portal writes enqueue the same jobs as `/dav.php/`). Enable it in **Administration → System settings → Enable WebDAV-Push** and set the canonical HTTPS DAV base (`push_external_url` or `ANGARA_PUSH_EXTERNAL_URL`, typically `https://your-host/dav.php/`). Push is not advertised until that URL is valid HTTPS. File homes are covered when **Enable WebDAV-Push for file storage** is also on: a client subscribes to a folder under `/dav.php/files/{username}/` and is woken for changes anywhere below it, whether they come from a DAV client or the portal.
 

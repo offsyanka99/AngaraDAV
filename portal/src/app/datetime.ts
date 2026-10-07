@@ -357,12 +357,15 @@ export function renderPortalDateTimePopoverHtml(opts: {
   value: string;
   dateOnly: boolean;
   allowClear: boolean;
+  /** When false, the Clear control is omitted. Defaults to showing it. */
+  showClear?: boolean;
   viewY: number;
   viewM: number;
   weekStart: WeekStartPref;
   timeFormat: TimeFormatPref;
 }): string {
   const { field, value, dateOnly, allowClear, viewY, viewM, weekStart, timeFormat } = opts;
+  const showClear = opts.showClear !== false;
   const parts = parseDtParts(value);
   const weekStartN = localeWeekStart(weekStart);
   const dowLabels = localeDowLabels(weekStart);
@@ -438,8 +441,12 @@ export function renderPortalDateTimePopoverHtml(opts: {
           </div>
           <div class="dt-dow-row">${dowLabels.map((l) => `<span class="dt-dow">${esc(l)}</span>`).join("")}</div>
           <div class="dt-days">${cells.join("")}</div>
-          <div class="dt-cal-footer">
-            <button type="button" class="btn btn-ghost btn-small" data-action="dt-clear" data-dt-field="${esc(field)}" ${allowClear ? "" : "disabled"}>Clear</button>
+          <div class="dt-cal-footer${showClear ? "" : " is-today-only"}">
+            ${
+              showClear
+                ? `<button type="button" class="btn btn-ghost btn-small" data-action="dt-clear" data-dt-field="${esc(field)}" ${allowClear ? "" : "disabled"}>Clear</button>`
+                : ""
+            }
             <button type="button" class="btn btn-ghost btn-small" data-action="dt-today" data-dt-field="${field}">Today</button>
           </div>
         </div>
@@ -451,7 +458,7 @@ export function renderPortalDateTimePopoverHtml(opts: {
 /** Place open date/time popovers in the viewport (avoid modal overflow clipping). */
 export function positionDtPopovers(container: ParentNode = document): void {
   container.querySelectorAll<HTMLElement>(".dt-field.is-open").forEach((field) => {
-    const trigger = field.querySelector<HTMLElement>(".dt-trigger");
+    const trigger = field.querySelector<HTMLElement>(".dt-trigger, .cal-jump-btn");
     const pop = field.querySelector<HTMLElement>(".dt-popover");
     if (!trigger || !pop) return;
     const r = trigger.getBoundingClientRect();

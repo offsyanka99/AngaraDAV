@@ -6,6 +6,7 @@ import type { AdminSettingsBackup } from "../../api";
 import { log } from "../../log";
 import { esc, renderConfirmCheckbox, renderModal } from "../../ui";
 import { infoTitle } from "../sectionInfo";
+import { DATA_RESTORE_NOTICE_KEY } from "../sessionEnd";
 import { saveBlobAsFile } from "../exportBlob";
 import { backupFileName } from "./backupFileName";
 import type { AdminHost } from "./host";
@@ -16,26 +17,6 @@ import {
   adminStatusLabel,
 } from "./meta";
 
-const DATA_RESTORE_NOTICE_KEY = "angaradav-portal-data-restored";
-let dataRestoreNotice: boolean | null = null;
-
-function dataRestoreNoticeHtml(): string {
-  if (dataRestoreNotice === null) {
-    dataRestoreNotice = false;
-    try {
-      if (sessionStorage.getItem(DATA_RESTORE_NOTICE_KEY) === "1") {
-        sessionStorage.removeItem(DATA_RESTORE_NOTICE_KEY);
-        dataRestoreNotice = true;
-      }
-    } catch {
-      dataRestoreNotice = false;
-    }
-  }
-  return dataRestoreNotice
-    ? `<p class="flash flash-success">Database and file store restored.</p>`
-    : "";
-}
-
 export function renderAdminConfigurationShell(host: AdminHost): string {
   const meta = adminPageMeta(host, "configuration");
   if (meta && meta.available === false) {
@@ -45,7 +26,6 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
   const dataFile = host.state.adminDataRestoreFile;
   const canRestoreData = !!dataFile && host.state.adminDataRestoreConfirm && !dataBusy;
   return `
-    ${dataRestoreNoticeHtml()}
     <section class="card">
       <div class="section-header">
         ${infoTitle("Settings backup and restore", "admin-configuration")}
@@ -96,9 +76,10 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
         without the upload temporary folder.
       </p>
       <p class="muted small">
-        <span class="mono">configuration.yaml</span> stays in place. It holds the admin password
-        and the encryption key. Restoring a data backup replaces the live database and the file store
-        with that archive.
+        <span class="mono">configuration.yaml</span> stays on the server. It holds the admin password
+        and the encryption key. A successful restore adds 1 to the portal session generation in that
+        file and signs portal browsers out. Restoring a data backup replaces the live database and
+        the file store with that archive.
       </p>
       ${host.state.adminDataExportError ? `<p class="flash flash-error">${esc(host.state.adminDataExportError)}</p>` : ""}
       <div class="form-actions-row" style="margin-top:0.75rem">
@@ -109,7 +90,8 @@ export function renderAdminConfigurationShell(host: AdminHost): string {
       <p style="margin-top:1.25rem"><strong>Restore data</strong></p>
       <p class="muted small">
         Choose a data backup. This replaces users, calendars, contacts, and WebDAV files.
-        The admin password and <span class="mono">configuration.yaml</span> stay.
+        The admin password stays in <span class="mono">configuration.yaml</span>.
+        A successful restore signs every portal browser out, including this one. Sign in again.
       </p>
       ${host.state.adminDataRestoreError ? `<p class="flash flash-error">${esc(host.state.adminDataRestoreError)}</p>` : ""}
       <div class="form-actions-row" style="margin-top:0.75rem">

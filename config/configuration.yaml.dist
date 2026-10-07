@@ -24,6 +24,8 @@ system:
     auth_realm: BaikalDAV
     base_uri: ''
     session_max_age_minutes: 15
+    # portal_session_generation is an integer counter. A missing key means 0.
+    # A successful Administration data restore adds 1. It is not an admin setting.
     # Portal background-sync poll interval (seconds). SPA checks collection
     # revisions while a user tab is visible. Bounds 10–300; does not extend idle.
     portal_sync_poll_seconds: 30

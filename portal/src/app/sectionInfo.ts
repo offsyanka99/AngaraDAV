@@ -13,6 +13,7 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
       "Create and edit calendars, then share them with other AngaraDAV users.",
       "Agenda lists events, open tasks on their due date, and notes that have a date, for the calendars you check. Month and week show events only.",
       "An event can have one display reminder relative to its start. For a calendar you have checked, a notification appears when that time arrives. The time uses the clock from System settings. Click it to edit the event, or close it. Other reminders already on the event stay.",
+      "Jump to date opens a calendar whose first weekday follows Administration → System settings (Week starts on). Pick a day to show that month, week, or agenda.",
       "CalDAV clients (Thunderbird, Apple Calendar, DAVx⁵, Home Assistant, …) keep using /dav.php/ — this portal is for management only.",
     ],
   },
@@ -165,7 +166,7 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
     title: "Configuration",
     paragraphs: [
       "Settings backup and restore downloads a JSON backup of the editable system settings, or restores one after you review a diff. Passwords, secrets, and user/DAV data stay out of that file.",
-      "Data backup and restore downloads one archive: a SQLite snapshot or a PostgreSQL pg_dump, plus a tarball of the WebDAV file store. Restoring that archive replaces the live database and the file store. configuration.yaml stays in place, including the admin password and the encryption key.",
+      "Data backup and restore downloads one archive: a SQLite snapshot or a PostgreSQL pg_dump, plus a tarball of the WebDAV file store. Restoring that archive replaces the live database and the file store. configuration.yaml stays on the server, including the admin password and the encryption key. A successful restore signs every portal browser out; sign in again. Sign in still says the database and file store were restored.",
       "Reset to Default wipes this instance entirely — config, database, and WebDAV files — and reopens the installer.",
     ],
   },

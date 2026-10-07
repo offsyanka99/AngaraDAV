@@ -53,6 +53,7 @@ $before = [
         'portal_time_format'  => '24h',
         'portal_week_start'   => 'monday',
         'portal_admin_users'  => ['alice'],
+        'portal_session_generation' => 4,
     ],
     'database' => [
         'backend'     => 'sqlite',
@@ -75,6 +76,7 @@ assert_true(($sys['portal_log_level'] ?? '') === 'info', 'portal log level is ke
 assert_true(($sys['portal_time_format'] ?? '') === '24h', 'time format is kept');
 assert_true(($sys['portal_week_start'] ?? '') === 'monday', 'week start is kept');
 assert_true(($sys['portal_admin_users'] ?? null) === ['alice'], 'portal admin list is kept');
+assert_true(($sys['portal_session_generation'] ?? null) === 4, 'session generation is kept');
 assert_true(($after['database']['sqlite_file'] ?? '') === '/tmp/keep.sqlite', 'database section is untouched');
 
 @unlink($yamlPath);

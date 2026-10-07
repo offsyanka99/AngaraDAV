@@ -2717,6 +2717,17 @@ section.stack {
   gap: 0.1rem;
 }
 
+.cal-jump.dt-field {
+  display: inline-flex;
+  flex-direction: row;
+  width: auto;
+  gap: 0;
+}
+
+.dt-cal-footer.is-today-only {
+  justify-content: flex-end;
+}
+
 .month-nav-btn {
   font-size: 1.25rem;
   line-height: 1;

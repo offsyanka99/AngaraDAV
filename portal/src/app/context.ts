@@ -156,6 +156,8 @@ export type AdminResourceDelete =
 export type AppState = {
   user: PortalUser | null;
   flash: Flash;
+  /** Set when this tab reloaded after a successful data restore. */
+  dataRestoreNotice: boolean;
   activeTab: TabId;
   adminPage: AdminPageId;
   adminDashboard: AdminDashboardStats | null;
@@ -378,6 +380,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
   return {
     user: null,
     flash: null,
+    dataRestoreNotice: false,
     activeTab: opts.activeTab,
     adminPage: opts.adminPage,
     adminDashboard: null,

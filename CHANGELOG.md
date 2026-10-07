@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Portal
+- **Calendar** has a **Jump to date** button beside Today, on month, week, and agenda. It opens the same small date calendar used by event fields. The first weekday follows **Week starts on** in Administration → System settings (`auto`, Monday, or Sunday). Choosing a day, or Today inside that calendar, moves month, week, and agenda to that day.
+- A successful **Administration → Configuration** data restore ends portal sessions. The counter is `system.portal_session_generation` in `configuration.yaml`, outside the data archive. Browsers that were signed in return to Sign in, including the administrator who ran the restore. That screen still says the database and file store were restored. Settings backup and restore leave the counter unchanged. A failed data restore leaves it unchanged. Replacing the database and file store by hand, with AngaraDAV stopped, also leaves it unchanged.
+
 ## 2.5.7 — 2026-10-06
 
 ### Portal

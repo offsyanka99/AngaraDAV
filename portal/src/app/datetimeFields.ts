@@ -12,6 +12,7 @@ import {
   toLocalInputValue,
   ymd,
 } from "./datetime";
+import { CAL_JUMP_FIELD } from "./calendars/jumpDate";
 import type { AppOrchestrator } from "./orchestrator";
 
 export function timeFormatOpts(o: AppOrchestrator) {
@@ -119,6 +120,7 @@ export function getDtFieldCurrentValue(o: AppOrchestrator, field: string): strin
   if (field === "dtstart") return toLocalInputValue(state.editingNote?.dtstart);
   if (field === "bulk-due") return state.bulkDueValue;
   if (field === "birthday") return String(state.editingContact?.birthday || "");
+  if (field === CAL_JUMP_FIELD) return state.calFocusDay;
   return "";
 }
 

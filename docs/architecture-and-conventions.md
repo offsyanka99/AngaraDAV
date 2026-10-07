@@ -100,7 +100,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 | Dev deps | `typescript ^6.0.3`, `vite ^8.2.2` | [`portal/package.json`](../portal/package.json) |
 | TS config | ES2022, `moduleResolution: bundler`, `strict`, `noEmit`, `noUnusedLocals` / `noUnusedParameters`; `src/**/*.test.ts` excluded from typecheck | [`portal/tsconfig.json`](../portal/tsconfig.json) |
 | Vite | `base: "/portal/"`, `outDir: "../html/portal"`, `emptyOutDir`, `sourcemap: false`; dev proxy `/api` → `ANGARADAV_API` or `http://127.0.0.1:31088` | [`portal/vite.config.ts`](../portal/vite.config.ts) |
-| Tests | Node built-in `node:test` via `--experimental-strip-types`; **21 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
+| Tests | Node built-in `node:test` via `--experimental-strip-types`; **23 files enumerated explicitly** (no glob) | [`portal/package.json`](../portal/package.json) `scripts.test` |
 
 ### Make targets — [`Makefile`](../Makefile)
 
@@ -124,7 +124,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — PHP matrix `8.4` / `8.5` / `8.6`, plus a portal job:
 
-- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (43), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan` (level 0 on `Core`/`html`, level 2 on `Baikal\Portal`). There is no glob: a new script must be added to the list.
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (46), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan` (level 0 on `Core`/`html`, level 2 on `Baikal\Portal`). There is no glob: a new script must be added to the list.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 - `portal` runs `npm ci && npm test && npm run build` in [`portal/`](../portal) on Node 24.
 
@@ -166,7 +166,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 | [`docker/`](../docker) | nginx config + ordered entrypoint scripts |
 | [`scripts/`](../scripts) | Vendor patching, push worker, files maintenance, local Docker, PHP built-in-server router |
 | [`patches/`](../patches) | sabre/dav patch applied post-install |
-| [`tests/php/`](../tests/php) | Standalone PHP test scripts (46 files) |
+| [`tests/php/`](../tests/php) | Standalone PHP test scripts (48 files) |
 | [`tests/portal_admin_e2e.py`](../tests/portal_admin_e2e.py) | Live pytest e2e (not CI) |
 | `Specific/` | Runtime state — only named lock/secret/log files are gitignored (see §7) |
 | [`config/configuration.yaml.dist`](../config/configuration.yaml.dist) | Committed YAML template; live `config/configuration.yaml` is gitignored |
@@ -290,11 +290,11 @@ Worker env log level: `ANGARA_PUSH_LOG_LEVEL` then unprefixed `PUSH_LOG_LEVEL` t
 
 | Class | Path | Role |
 |---|---|---|
-| `Config` | [`Config.php`](../Core/Frameworks/Baikal/Model/Config.php) | Abstract. `writeConfigFile()`: dump YAML depth 4 → temp + `LOCK_EX` → `rename()` → `chmod 0600` → re-parse to verify. `persist()` merges the model onto the existing section so keys the model does not own (`portal_log_level`, `portal_time_format`, `portal_week_start`, `portal_admin_users`, …) survive an upgrade’s `configured_version` write. |
+| `Config` | [`Config.php`](../Core/Frameworks/Baikal/Model/Config.php) | Abstract. `writeConfigFile()`: dump YAML depth 4 → temp + `LOCK_EX` → `rename()` → `chmod 0600` → re-parse to verify. `withConfigLock()` is `configuration.yaml.lock` (mode `0600`) around a read-modify-write. `persist()` merges the model onto the existing section so keys the model does not own (`portal_log_level`, `portal_time_format`, `portal_week_start`, `portal_admin_users`, `portal_session_generation`, …) survive an upgrade’s `configured_version` write. |
 | `Config\Standard` | [`Config/Standard.php`](../Core/Frameworks/Baikal/Model/Config/Standard.php) | `system` section (service flags, files limits, auth realm, session age, push, `admin_passwordhash`). Clamps numeric ranges. Password getters return `""` so hashes are never echoed. |
 | `Config\Database` | [`Config/Database.php`](../Core/Frameworks/Baikal/Model/Config/Database.php) | `database` section |
 
-The **only** portal writer of live YAML is [`AdminSettingsService`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) (plus the installer). Do not hand-edit or commit `config/configuration.yaml`.
+Live YAML is written by the installer, [`AdminSettingsService`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php), and [`PortalSessionGeneration::bump()`](../Core/Frameworks/Baikal/Portal/PortalSessionGeneration.php) after a successful data restore. `persist()`, the system and database settings saves, and that bump take `configuration.yaml.lock` around the read-modify-write. The bump also holds the data-export lock and releases the config lock first. Do not hand-edit or commit `config/configuration.yaml`.
 
 ### Other Core classes
 
@@ -324,7 +324,7 @@ Inside `App::handle()` / `dispatch()`:
 2. `GET /ui` — public, unauthenticated (log level + locale prefs for first paint).
 3. `POST /login` — same-origin checked.
 4. **State-changing gate** for `POST|PUT|PATCH|DELETE`: `assertSameOrigin()` → session check (401) → `assertCsrf()`. GET never CSRF-checks. `/logout` is special-cased here.
-5. `GET /me` (or `GET /`) — HTTP **200** with `user: null` when anonymous (avoids a spurious 401 on first paint).
+5. `GET /me` (or `GET /`) — HTTP **200** with `user: null` when anonymous (avoids a spurious 401 on first paint). When this cookie was signed in before a data restore, that body also has `sessionEnded: "restored"`.
 6. **Admin gate:** path `/admin` or `/admin/*` → `AdminAuth::requireAdmin()` → `dispatchAdminRoutes()`. This is the only admin entry.
 7. `GET /sync-status` → `SyncStatusService::get()`. Uses `Auth::peekUser()` (does **not** extend the idle timeout) and releases the session lock first. Query `includeFiles`, `path`.
 8. `Auth::requireUser()`. `POST /me/password` changes that user's DAV digest (`Auth::changePassword`) and returns `{"ok":true}`. Then route modules in order: **calendars → contacts → files → items**.
@@ -441,7 +441,7 @@ Admin routes:
 | POST | `/admin/settings/reset-to-default` (password re-auth + confirm) |
 | GET | `/admin/settings/backup` |
 | POST | `/admin/data-export` (streams `angaradav-data-<UTC>.tar.gz`; 409 while a data backup or restore is already running) |
-| POST | `/admin/data-restore` (multipart `archive` + `confirm`; replaces the database and file store; `configuration.yaml` stays) |
+| POST | `/admin/data-restore` (multipart `archive` + `confirm`; replaces the database and file store; `configuration.yaml` is outside the archive; a successful return increments `system.portal_session_generation`) |
 | POST | `/admin/settings/restore` (`dryRun` preview) |
 | GET/PATCH/PUT/POST | `/admin/settings/database` (write requires `confirm: "CONFIRM"`) |
 | POST | `/admin/settings/database/test` |
@@ -465,12 +465,13 @@ Admin routes:
 | CSRF key | `angara_portal_csrf` |
 | Last-seen | `angara_portal_last` |
 | Login-at | `angara_portal_login_at` |
+| Generation | `angara_portal_generation` (compared with `system.portal_session_generation`; a missing session key counts as 0) |
 | Idle default | `DEFAULT_SESSION_MAX_AGE` 900 s (`session_max_age_minutes`) |
 | Cookie | `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS; strict mode; `session_regenerate_id(true)` on login |
 | Login rate | 20 failures / 900 s per IP in `Specific/portal_login_rate.json`; Fail2Ban-friendly `error_log` line |
 | Password change | `POST /me/password` → `changePassword()`. Current password required (`verifyPassword`; wrong password is **400**, not 401). New password at least 8 characters, confirmed, and different. Writes `users.digesta1` only — not `system.admin_passwordhash`. Success limit 5 / 900 s per username in `Specific/portal_self_password_rate.json`. `session_regenerate_id(true)` after a successful change. Body fields `digesta1` / `password_hash` / `passwordhash` / `hash` are refused. |
 
-`username()` always `touchSession()`. Digest is `md5(user:realm:password)` with realm from YAML (`BaikalDAV`).
+`username()` checks `angara_portal_generation` against `system.portal_session_generation` (a missing session key counts as 0), then `touchSession()`. Digest is `md5(user:realm:password)` with realm from YAML (`BaikalDAV`).
 
 **[`AdminAuth.php`](../Core/Frameworks/Baikal/Portal/AdminAuth.php)** — first match wins:
 
@@ -597,7 +598,7 @@ Unused host parameters are prefixed `_` (`noUnusedParameters`).
 
 ### Domain inventories
 
-Source file counts (excluding `*.test.ts`): **calendars 19**, **files 18**, **admin 17**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (`subscriptionsListing.ts` is the subscriptions table helper; mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
+Source file counts (excluding `*.test.ts`): **calendars 22**, **files 18**, **admin 17**, **contacts 9**, **tasks 8**, **notes 8**. Admin has no `actions.ts` / `render.ts` / `listing.ts` (`subscriptionsListing.ts` is the subscriptions table helper; mutations live in page modules). Calendars/contacts have no `render.ts` / `listing.ts` (`home.ts` owns the tab). Notes have no `listing.ts`.
 
 **Admin** [`portal/src/app/admin/`](../portal/src/app/admin) — Overview / Settings / Users / Subscriptions / Database / Configuration. Subscriptions is omitted unless WebDAV-Push is on.
 
@@ -621,9 +622,9 @@ Source file counts (excluding `*.test.ts`): **calendars 19**, **files 18**, **ad
 | `pushStats.ts` | Overview push counts |
 | `filesPushToggle.ts` | Files-push checkbox enablement |
 
-**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month, week, and agenda. Agenda also lists open tasks on their due date and notes that have a date. The event form edits one relative display reminder. While a user tab is visible, due preset reminders on checked calendars show a notification; a click opens the event, and close dismisses that reminder for the browser tab. The clock in that notification is the System settings time format, read when the notification is shown. ICS import.
+**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month, week, and agenda. The shared toolbar has Today and **Jump to date**. Jump to date opens the same date calendar as event fields (`jumpDate.ts`, picker field `cal-jump`). The first weekday follows `portal_week_start` (Administration → System settings, Week starts on). Choosing a day, or Today in that calendar, sets `calFocusDay` and `monthCursor` and reloads the visible range. Agenda also lists open tasks on their due date and notes that have a date. The event form edits one relative display reminder. While a user tab is visible, due preset reminders on checked calendars show a notification; a click opens the event, and close dismisses that reminder for the browser tab. The clock in that notification is the System settings time format, read when the notification is shown. ICS import.
 
-`host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `month.ts`, `week.ts`, `weekScroll.ts`, `agenda.ts`, `agendaItems.ts`, `eventsView.ts`, `eventModal.ts`, `reminder.ts`, `eventReminders.ts`, `eventReminderPoller.ts`, `toolbar.ts`, `holidays.ts`, `import.ts`, `importProgress.ts`, `selectionPersist.ts`.
+`host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `month.ts`, `week.ts`, `weekScroll.ts`, `agenda.ts`, `agendaItems.ts`, `eventsView.ts`, `eventModal.ts`, `reminder.ts`, `eventReminders.ts`, `eventReminderPoller.ts`, `toolbar.ts`, `jumpDate.ts`, `holidays.ts`, `import.ts`, `importProgress.ts`, `selectionPersist.ts`.
 
 **Contacts** [`portal/src/app/contacts/`](../portal/src/app/contacts) — `host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `form.ts`, `photo.ts`, `import.ts`.
 
@@ -733,7 +734,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 `Specific/` as a directory is **not** gitignored wholesale — only the named lock/secret/log files above. Portal logging never uses `error_log()` (php-fpm would tag `[error]`).
 
-**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `files_trash_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`.
+**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `files_trash_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`, `portal_session_generation` (integer counter outside `EDITABLE_KEYS`; a missing key reads as 0; a successful data restore adds 1).
 
 **YAML `database` keys:** `encryption_key`, `backend` (`sqlite` \| `pgsql`), `sqlite_file`, `pgsql_host`, `pgsql_dbname`, `pgsql_username`, `pgsql_password`.
 
@@ -942,7 +943,7 @@ Wire plugins in [`Server.php`](../Core/Frameworks/Baikal/Core/Server.php). Keep 
 |---|---|---|
 | PHP | `make php-test`, or `php tests/php/<File>.php` | Standalone scripts, **not** PHPUnit |
 | Static | `composer phpstan`, `composer cs-fixer` | Level 0 on `Core`/`html`; level 2 on `Baikal\Portal`. `composer test` runs cs-fixer, phpstan, then `tests/php` |
-| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 21 files listed in `package.json` |
+| Portal | `npm test` in [`portal/`](../portal), or `make portal` | `node:test`; 23 files listed in `package.json` |
 | E2E | `pytest tests/portal_admin_e2e.py -v` | Live instance only; `make local-up` first |
 
 ### Standalone PHP test convention
@@ -960,7 +961,7 @@ Observed in every `tests/php/*.php` file (canonical: [`AdminSettingsServiceTest.
 
 Do **not** introduce PHPUnit/Pest or a shared test base class.
 
-### PHP test files (46)
+### PHP test files (48)
 
 | File | Covers |
 |---|---|
@@ -979,6 +980,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `AngaraEnvPrecedenceTest.php` | `ANGARA_*` vs YAML |
 | `ApiExceptionTest.php` | Status + payload |
 | `AuthPasswordChangeTest.php` | Self-service `POST /me/password` |
+| `AuthSessionGenerationTest.php` | Session generation mismatch → 401; settings path does not own the key |
 | `AuthSessionIdleTest.php` | `peekUser` does not extend idle; expired idle → 401 |
 | `CalendarItemServiceTest.php` | Tasks/notes |
 | `CalendarTimeZoneResolveTest.php` | Patched timezone helper |
@@ -995,6 +997,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `LocalDockerDxTest.php` | `local-docker.sh` / compose DX |
 | `NginxCspHeadersTest.php` | CSP include |
 | `NoteDescriptionFormatTest.php` | HTML/Markdown bridge |
+| `PortalSessionGenerationTest.php` | `system.portal_session_generation` reader and bump |
 | `PortalUiSettingsTest.php` | `/ui` settings |
 | `PushFilesFanoutTest.php` | File-home push paths, fan-out levels, dispatcher |
 | `PushFilesPluginTest.php` | File-home push through a SabreDAV server |
@@ -1013,7 +1016,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 
 ### Portal tests vs `package.json`
 
-All **20** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
+All **23** `*.test.ts` files currently on disk are listed in `scripts.test`. There is still **no glob** — a new file that is not added to `package.json` will not run.
 
 E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib `urllib` + `CookieJar` and synthesizes `Origin`/`Referer` plus `X-CSRF-Token`. Env: `BAIKAL_BASE_URL`, `PORTAL_TEST_ADMIN_PASSWORD`. Skips when no server or `PORTAL_E2E=0`. Disposable local instances only.
 
@@ -1023,10 +1026,10 @@ E2E: [`tests/portal_api_helpers.py`](../tests/portal_api_helpers.py) uses stdlib
 
 Recorded as facts, not recommendations:
 
-- CI `code-analysis` runs **44** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 46** `tests/php/` files.
+- CI `code-analysis` runs **46** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 48** `tests/php/` files.
 - CI job `portal` runs `npm ci && npm test && npm run build` on Node 24. The Docker image still builds the portal in its `portal` stage.
 - `composer test` runs cs-fixer, phpstan, then every `tests/php` script. PostgreSQL scripts exit 0 with `SKIP` when no DSN is set.
-- Portal test files must be added to `package.json` manually — there is no glob. (Today all 20 on-disk tests are registered.)
+- Portal test files must be added to `package.json` manually — there is no glob. (Today all 23 on-disk tests are registered.)
 - [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) **is** invoked by [`docker/entrypoint.d/46-webdav-files-maintenance.sh`](../docker/entrypoint.d/46-webdav-files-maintenance.sh) on a timer. It is unused on non-Docker installs (no cron unit ships in the zip).
 - [`Dockerfile`](../Dockerfile) emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - [`esc()`](../portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.

@@ -44,13 +44,15 @@ On TrueNAS, dataset snapshots of the mounts above remain the way to capture `con
 
 A second data backup or restore is refused with HTTP 409 while one is already running. The Docker image includes `postgresql-client`, which provides `pg_dump` and `psql`.
 
-**Data backup and restore** on the same tab (`POST /api/admin/data-restore`) puts an `angaradav-data-*.tar.gz` back while AngaraDAV is running. Choose the archive, confirm that it replaces the current database and WebDAV file store, and the page reloads when the restore finishes. `configuration.yaml` is not in the archive and is not changed. The upload limit is the image PHP limit (1G). If a restore stops halfway, the previous file store may still be in `.angara-restore-aside` inside the file storage directory; move it back before trying again.
+**Data backup and restore** on the same tab (`POST /api/admin/data-restore`) puts an `angaradav-data-*.tar.gz` back while AngaraDAV is running. Choose the archive and confirm that it replaces the current database and WebDAV file store. `configuration.yaml` is not in the archive. A successful restore adds 1 to `system.portal_session_generation` in that file. Portal browsers, including the administrator who ran the restore, return to Sign in. That screen still says the database and file store were restored. Sign in again. Settings backup and restore leave the counter unchanged. A failed data restore leaves it unchanged. If the counter cannot be written, Configuration stays on screen and tells you to add 1 to `system.portal_session_generation` in `configuration.yaml`. The upload limit is the image PHP limit (1G). If a restore stops halfway, the previous file store may still be in `.angara-restore-aside` inside the file storage directory; move it back before trying again.
 
 Restore with AngaraDAV stopped:
 
 1. Replace the SQLite file (`Specific/db/db.sqlite`, or the configured `sqlite_file`) with `database.sqlite`, or load `database.sql` with `psql`.
 2. Extract `files.tar` into the file storage root. In Docker that tree is owned by UID/GID 101.
 3. Keep the existing config volume, including `database.encryption_key`, and keep `Specific/push_vapid.json`.
+
+That stopped procedure does not add 1 to `system.portal_session_generation`. When those browsers should sign out, add 1 to that integer in `configuration.yaml` before starting AngaraDAV again. A missing key means 0, so the first increment writes 1.
 
 ## TrueNAS SCALE
 
@@ -229,7 +231,7 @@ docker exec angaradav grep 'admin audit' /var/www/baikal/Specific/portal_debug.l
 | **Basic** | Same digest table | Only over HTTPS |
 | **Apache** | Web server auth | When a reverse proxy authenticates users |
 
-Tasks are **VTODO** and notes are **VJOURNAL** on CalDAV calendars; there is no separate endpoint. A repeating task stores one `RRULE` on that `VTODO`. Completing an occurrence writes that occurrence as its own completed task, then moves the series due date to the next one. The last occurrence is marked done on the series. Agenda on the Calendar tab lists those open tasks on their due date, and notes that have a date, for the calendars checked there, in the same window as events. An event can store one display reminder: at the start, or 5 minutes, 15 minutes, 30 minutes, 1 hour, 1 day, or 1 week before. Other alarms already on the event stay. While a user is signed in, with that calendar checked, the portal shows a notification when the reminder is due. Clicking it opens the event. Closing it hides that reminder until the browser tab is closed.
+Tasks are **VTODO** and notes are **VJOURNAL** on CalDAV calendars; there is no separate endpoint. A repeating task stores one `RRULE` on that `VTODO`. Completing an occurrence writes that occurrence as its own completed task, then moves the series due date to the next one. The last occurrence is marked done on the series. Agenda on the Calendar tab lists those open tasks on their due date, and notes that have a date, for the calendars checked there, in the same window as events. **Jump to date**, beside Today, opens a small calendar whose first weekday follows **Week starts on** in Administration → System settings. Choosing a day moves month, week, and agenda to that day. An event can store one display reminder: at the start, or 5 minutes, 15 minutes, 30 minutes, 1 hour, 1 day, or 1 week before. Other alarms already on the event stay. While a user is signed in, with that calendar checked, the portal shows a notification when the reminder is due. Clicking it opens the event. Closing it hides that reminder until the browser tab is closed.
 
 - A `401` followed by `207` on `PROPFIND`/`REPORT` is normal Digest negotiation, not a failed sync.
 - Expected DAV `4xx` responses appear in the nginx access log but not in PHP/FastCGI error logs. Build Fail2Ban rules for DAV from repeated terminal `401`s in the access log.
@@ -237,7 +239,8 @@ Tasks are **VTODO** and notes are **VJOURNAL** on CalDAV calendars; there is no 
 
 ### Portal sessions
 
-- Idle timeout: **Session timeout** in System settings (`session_max_age_minutes`, default **15**). An expired session clears the SPA and returns to Sign in.
+- Idle timeout: **Session timeout** in System settings (`session_max_age_minutes`, default **15**). An expired session clears the SPA and returns to Sign in with the timeout sentence.
+- A successful Administration data restore adds 1 to `system.portal_session_generation` in `configuration.yaml`. The next request from a browser signed in at the previous value returns to Sign in with "The database was restored. Please sign in again." A missing key counts as 0. Replacing the database by hand, with AngaraDAV stopped, does not move the counter.
 - Failed logins are rate-limited per IP (20 per 15 minutes); file download/view uses the same ceiling.
 - Mutations require same-origin + CSRF.
 

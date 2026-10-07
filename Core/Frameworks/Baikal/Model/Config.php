@@ -138,22 +138,60 @@ abstract class Config {
         }
     }
 
+    /**
+     * Exclusive lock beside the YAML file. persist(), settings saves, and the
+     * session-generation bump all take this around their read-modify-write.
+     * Do not call another locked config writer from inside $callback.
+     *
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    public static function withConfigLock(string $yamlPath, callable $callback) {
+        $lockPath = $yamlPath . '.lock';
+        $dir = dirname($yamlPath);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            throw new \RuntimeException('Config directory is not writable');
+        }
+        $handle = fopen($lockPath, 'c');
+        if ($handle === false) {
+            throw new \RuntimeException('Unable to lock configuration.yaml');
+        }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new \RuntimeException('Unable to lock configuration.yaml');
+            }
+            @chmod($lockPath, 0600);
+
+            return $callback();
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
     function persist() {
-        if (file_exists(PROJECT_PATH_CONFIG . "configuration.yaml")) {
-            $config = Yaml::parseFile(PROJECT_PATH_CONFIG . "configuration.yaml");
-            if (!is_array($config)) {
+        $yamlPath = PROJECT_PATH_CONFIG . "configuration.yaml";
+        self::withConfigLock($yamlPath, function () use ($yamlPath) {
+            if (file_exists($yamlPath)) {
+                $config = Yaml::parseFile($yamlPath);
+                if (!is_array($config)) {
+                    $config = [];
+                }
+            } else {
                 $config = [];
             }
-        } else {
-            $config = [];
-        }
-        $existing = $config[$this->sConfigFileSection] ?? [];
-        if (!is_array($existing)) {
-            $existing = [];
-        }
-        // Keep keys this model does not own (portal log level, time format,
-        // week start, portal admin list, …). Upgrade only rewrites configured_version.
-        $config[$this->sConfigFileSection] = array_merge($existing, $this->aData);
-        self::writeConfigFile($config);
+            $existing = $config[$this->sConfigFileSection] ?? [];
+            if (!is_array($existing)) {
+                $existing = [];
+            }
+            // Keep keys this model does not own (portal log level, time format,
+            // week start, portal admin list, session generation, …).
+            // Upgrade only rewrites configured_version.
+            $config[$this->sConfigFileSection] = array_merge($existing, $this->aData);
+            self::writeConfigFile($config);
+        });
     }
 }

@@ -7,6 +7,7 @@ logs
 # Specific
 config/baikal.yaml
 config/configuration.yaml
+config/configuration.yaml.lock
 config/.htaccess
 Specific/INSTALL_DISABLED
 # WebDAV-Push runtime state — the VAPID private key must never be committed
@@ -43,6 +44,7 @@ docs/admin-portal-refactor-plan.md
 docs/upgrade-plan.md
 docs/webdav-push-files-plan.md
 docs/admin-push-subscriptions-plan.md
+docs/session-restore-plan.md
 
 # IDE
 nbproject

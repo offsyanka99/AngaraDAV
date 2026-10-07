@@ -5,6 +5,7 @@ import { esc } from "../../ui";
 import { formatDayRange, weekRange } from "../datetime";
 import type { CalendarsHost } from "./host";
 import { focusDate, monthTitle } from "./eventsView";
+import { calendarJumpHtml } from "./jumpDate";
 
 export function calendarChrome(host: CalendarsHost): {
   calName: string;
@@ -67,8 +68,20 @@ export function calendarChrome(host: CalendarsHost): {
     )
     .join("");
 
+  const jumpPicker = host.state.eventDtPicker?.field === "cal-jump" ? host.state.eventDtPicker : null;
+  const jumpHtml = calendarJumpHtml({
+    busy: host.state.busy,
+    open: jumpPicker !== null,
+    focusDay: host.state.calFocusDay,
+    viewY: jumpPicker ? jumpPicker.viewY : focus.getFullYear(),
+    viewM: jumpPicker ? jumpPicker.viewM : focus.getMonth(),
+    weekStart: host.state.portalUi.weekStart,
+    timeFormat: host.state.portalUi.timeFormat,
+  });
+
   const toolbar = `<div class="month-cal-toolbar">
       <button type="button" class="btn btn-ghost btn-small" data-action="month-today" ${host.state.busy ? "disabled" : ""}>Today</button>
+      ${jumpHtml}
       <div class="month-nav">
         <button type="button" class="btn btn-ghost btn-small month-nav-btn" data-action="month-prev" aria-label="${esc(prevLabel)}" ${host.state.busy ? "disabled" : ""}>‹</button>
         <button type="button" class="btn btn-ghost btn-small month-nav-btn" data-action="month-next" aria-label="${esc(nextLabel)}" ${host.state.busy ? "disabled" : ""}>›</button>

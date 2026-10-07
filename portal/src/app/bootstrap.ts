@@ -14,6 +14,7 @@ import {
   bumpSessionIdleTimer,
   userIsAdmin,
 } from "./session";
+import { DATA_RESTORE_SIGN_IN, signInMessageFor401, takeDataRestoreNotice } from "./sessionEnd";
 import { applyStoredUserSettings } from "./userSettings";
 import type { AdminPageId, TabId } from "./types";
 
@@ -63,12 +64,9 @@ async function loadAdminForActivePage(deps: BootstrapDeps): Promise<void> {
 export async function bootstrap(deps: BootstrapDeps): Promise<void> {
   const { state } = deps;
   log.event("bootstrap.start");
+  state.dataRestoreNotice = takeDataRestoreNotice();
   setOnUnauthorized((msg) => {
-    deps.handleSessionExpired(
-      /timed\s*out|session expired/i.test(msg)
-        ? msg
-        : "Your session timed out. Please sign in again.",
-    );
+    deps.handleSessionExpired(signInMessageFor401(msg));
   });
   setOnSessionActivity(() => {
     bumpSessionIdleTimer(state, (m) => deps.handleSessionExpired(m));
@@ -105,12 +103,16 @@ export async function bootstrap(deps: BootstrapDeps): Promise<void> {
     // Anonymous bootstrap returns HTTP 200 with user:null (no console 401).
     if (!me.user) {
       deps.clearPortalSessionState();
+      if (me.sessionEnded === "restored") {
+        state.flash = { type: "info", message: DATA_RESTORE_SIGN_IN };
+      }
       applyPortalUi(state, me.ui);
       if (typeof me.version === "string" && me.version.trim() !== "") {
         state.appVersion = me.version.trim();
       }
       log.event("bootstrap.anonymous");
     } else {
+      state.dataRestoreNotice = false;
       state.user = me.user;
       state.userSettings = applyStoredUserSettings(state.user.username);
       applyPortalUi(state, me.ui);
@@ -161,6 +163,7 @@ export async function onLogin(form: HTMLFormElement, deps: LoginDeps): Promise<v
   log.event("login.attempt", { username });
   try {
     const res = await api.login(username, password);
+    state.dataRestoreNotice = false;
     state.user = res.user;
     state.userSettings = applyStoredUserSettings(state.user?.username ?? username);
     applyPortalUi(state, res.ui);

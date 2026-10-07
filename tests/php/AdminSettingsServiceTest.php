@@ -51,6 +51,7 @@ $initial = [
         'admin_passwordhash'  => password_hash('oldadmin', PASSWORD_DEFAULT),
         'auth_realm'          => 'BaikalDAV',
         'extra_unknown_key'   => 'preserve-me',
+        'portal_session_generation' => 7,
     ],
     'database' => ['backend' => 'sqlite'],
 ];
@@ -61,6 +62,8 @@ try {
     $get = $svc->getSystemSettings();
     assert_true($get['hasAdminPassword'] === true, 'hasAdminPassword true');
     assert_true(!array_key_exists('admin_passwordhash', $get), 'hash never in GET');
+    assert_true(!array_key_exists('portal_session_generation', $get), 'generation is not in GET settings');
+    assert_true(!in_array('portal_session_generation', $svc->editableKeys(), true), 'generation is not an editable key');
     assert_true($get['files_enabled'] === false, 'files off');
     assert_true($get['cal_enabled'] === true, 'cal on');
     assert_true($get['writable'] === true, 'writable');
@@ -103,6 +106,7 @@ try {
     // Preserve unknown keys + other sections
     $raw = Yaml::parseFile($path);
     assert_true(($raw['system']['extra_unknown_key'] ?? null) === 'preserve-me', 'unknown system key preserved');
+    assert_true(($raw['system']['portal_session_generation'] ?? null) === 7, 'settings save keeps session generation');
     assert_true(($raw['database']['backend'] ?? null) === 'sqlite', 'database section preserved');
     assert_true(!empty($raw['system']['admin_passwordhash']), 'password hash still present');
 

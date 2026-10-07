@@ -61,7 +61,20 @@ class App {
         ) {
             $sessionMax = (int) $config['system']['session_max_age_minutes'] * 60;
         }
-        $this->auth = new Auth($pdo, $realm, $sessionMax);
+        $system = is_array($config['system'] ?? null) ? $config['system'] : [];
+        $this->auth = new Auth(
+            $pdo,
+            $realm,
+            $sessionMax,
+            PortalSessionGeneration::fromSystem($system),
+            function (string $username): void {
+                $safe = preg_replace('/[^\w.@+-]/', '?', $username);
+                $this->portalServerLog(
+                    'portal session ended reason=data-restore user=' . (is_string($safe) && $safe !== '' ? $safe : '?'),
+                    'info'
+                );
+            }
+        );
         $this->adminAuth = new AdminAuth($this->auth, $config);
         $this->adminAudit = new AdminAudit($this->portalSpecificDir(), $this->portalLogLevel());
         $this->adminDashboard = new AdminDashboardService($pdo, $config);
@@ -132,6 +145,21 @@ class App {
         }
 
         return '';
+    }
+
+    private function configurationYamlPath(): string {
+        if (!defined('PROJECT_PATH_CONFIG') || PROJECT_PATH_CONFIG === '') {
+            throw new \RuntimeException('PROJECT_PATH_CONFIG is not defined');
+        }
+
+        return rtrim((string) PROJECT_PATH_CONFIG, '/') . '/configuration.yaml';
+    }
+
+    private function bumpPortalSessionGeneration(): void {
+        PortalSessionGeneration::bump(
+            $this->configurationYamlPath(),
+            $this->adminDataExport->exportLockPath()
+        );
     }
 
     /**
@@ -524,6 +552,9 @@ class App {
                 if ($this->auth->wasTimedOut()) {
                     throw new ApiException('Session timed out. Please sign in again.', 401);
                 }
+                if ($this->auth->wasGenerationRejected()) {
+                    throw new ApiException(PortalSessionGeneration::RESTORE_MESSAGE, 401);
+                }
                 throw new ApiException('Not authenticated', 401);
             }
             $this->auth->assertCsrf($this->http->csrfFromRequest());
@@ -534,13 +565,18 @@ class App {
             // Return 200 with user:null so browsers do not log a spurious 401.
             $username = $this->auth->username();
             if ($username === null) {
-                return [
+                $anonymous = [
                     'user'      => null,
                     'csrfToken' => null,
                     'version'   => defined('ANGARA_VERSION') ? ANGARA_VERSION : null,
                     'davPath'   => '/dav.php/',
                     'ui'        => $this->portalUiSettings(),
                 ];
+                if ($this->auth->wasGenerationRejected()) {
+                    $anonymous['sessionEnded'] = 'restored';
+                }
+
+                return $anonymous;
             }
             $profile = $this->enrichProfile($this->auth->profile($username));
             $profile['csrfToken'] = $this->auth->csrfToken();
@@ -847,6 +883,7 @@ class App {
         }
 
         // Data restore: replace the database and file store from an angaradav-data archive.
+        // A successful return is followed by a portal session generation bump.
         if ($adminPath === '/admin/data-restore' || $adminPath === '/admin/data-restore/') {
             if ($method !== 'POST') {
                 throw new ApiException('Method not allowed', 405);
@@ -875,24 +912,6 @@ class App {
             }
             try {
                 $restored = $this->adminDataExport->restore($tmp);
-                $this->adminAudit->mutation(
-                    $adminUser,
-                    'restore-data-backup',
-                    'system',
-                    'ok',
-                    [
-                        'backend' => $restored['backend'],
-                        'bytes'   => $restored['bytes'],
-                    ]
-                );
-                $this->portalServerLog(
-                    'admin data restore ok user=' . $adminUser
-                    . ' backend=' . $restored['backend']
-                    . ' bytes=' . $restored['bytes'],
-                    'info'
-                );
-
-                return ['data' => $restored];
             } catch (ApiException $e) {
                 $this->adminAudit->mutation(
                     $adminUser,
@@ -909,6 +928,42 @@ class App {
                 );
                 throw $e;
             }
+            $this->adminAudit->mutation(
+                $adminUser,
+                'restore-data-backup',
+                'system',
+                'ok',
+                [
+                    'backend' => $restored['backend'],
+                    'bytes'   => $restored['bytes'],
+                ]
+            );
+            try {
+                $this->bumpPortalSessionGeneration();
+            } catch (\Throwable $e) {
+                $detail = str_replace(["\r", "\n"], ' ', $e->getMessage());
+                $this->adminAudit->mutation(
+                    $adminUser,
+                    'portal-session-generation',
+                    'system',
+                    'error:500',
+                    ['msg' => $detail]
+                );
+                $this->portalServerLog(
+                    'admin data restore session generation failed user=' . $adminUser
+                    . ' error=' . $detail,
+                    'error'
+                );
+                throw new ApiException(PortalSessionGeneration::BUMP_FAILED_MESSAGE, 500);
+            }
+            $this->portalServerLog(
+                'admin data restore ok user=' . $adminUser
+                . ' backend=' . $restored['backend']
+                . ' bytes=' . $restored['bytes'],
+                'info'
+            );
+
+            return ['data' => $restored];
         }
 
         // Settings restore: apply the "changed" keys from a previously exported backup

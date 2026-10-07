@@ -15,6 +15,7 @@ import {
 import { syncOpenItemFormsBeforeDtRender } from "../datetimeSync";
 import type { AppOrchestrator } from "../orchestrator";
 import { readRepeatFromForm, reminderFromForm } from "./eventModal";
+import { applyCalendarJump, CAL_JUMP_FIELD } from "./jumpDate";
 import { persistCalendarSelection } from "./selectionPersist";
 
 /** Load one event and open the edit dialog. */
@@ -49,6 +50,21 @@ export async function openEventEditor(
     state.deleteConfirmId = null;
   } catch (e) {
     setFlash("error", e instanceof Error ? e.message : "Failed to open event");
+  } finally {
+    state.busy = false;
+    render();
+  }
+}
+
+/** Move month, week, and agenda to one day and reload that range. */
+async function jumpCalendarTo(o: AppOrchestrator, day: string): Promise<void> {
+  const { state, render } = o;
+  if (!applyCalendarJump(state, day)) return;
+  state.eventDtPicker = null;
+  state.busy = true;
+  render();
+  try {
+    await o.loadMonthEvents();
   } finally {
     state.busy = false;
     render();
@@ -484,6 +500,10 @@ export async function handleCalendarsAction(
     const field = state.eventDtPicker.field;
     const day = t.dataset.day ?? "";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return true;
+    if (field === CAL_JUMP_FIELD) {
+      await jumpCalendarTo(o, day);
+      return true;
+    }
     syncOpenItemFormsBeforeDtRender(o);
     const dateOnly = state.eventDtPicker.dateOnly;
     if (dateOnly) {
@@ -538,6 +558,10 @@ export async function handleCalendarsAction(
   if (action === "dt-today") {
     if (!state.eventDtPicker) return true;
     const field = state.eventDtPicker.field;
+    if (field === CAL_JUMP_FIELD) {
+      await jumpCalendarTo(o, ymd(new Date()));
+      return true;
+    }
     syncOpenItemFormsBeforeDtRender(o);
     const today = ymd(new Date());
     if (state.eventDtPicker.dateOnly) {

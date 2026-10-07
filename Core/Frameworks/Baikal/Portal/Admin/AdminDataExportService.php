@@ -212,6 +212,15 @@ class AdminDataExportService {
         return $files->getStoragePath();
     }
 
+    /**
+     * Data-export flock path. build() and restore() take it non-blocking.
+     * The session-generation bump takes it blocking so two restores cannot
+     * both write the same next integer.
+     */
+    public function exportLockPath(): string {
+        return $this->lockFilePath($this->storagePath());
+    }
+
     private function acquireLock(string $storage): void {
         $path = $this->lockFilePath($storage);
         $handle = fopen($path, 'c');

@@ -158,7 +158,8 @@ export const adminApi = {
   adminDataExport: () => postBlob("/admin/data-export", "{}"),
   /**
    * Replace the live database and WebDAV file store from an angaradav-data archive.
-   * configuration.yaml is not part of the archive and is not changed.
+   * configuration.yaml is not part of the archive. A successful return
+   * increments system.portal_session_generation in that file.
    */
   adminDataRestore: (file: File) => {
     const body = new FormData();
@@ -242,6 +243,8 @@ export const adminApi = {
     const data = await request<{
       /** null when not signed in (anonymous bootstrap — HTTP 200, not 401). */
       user: PortalUser | null;
+      /** Set when this cookie was signed in before a data restore. */
+      sessionEnded?: "restored";
       csrfToken?: string | null;
       version: string | null;
       davPath: string;

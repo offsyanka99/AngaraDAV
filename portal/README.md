@@ -60,7 +60,7 @@ hosts — they do not import `app.ts`.
 
 | Tab | Features |
 |-----|----------|
-| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month / week / agenda; agenda also lists open tasks on their due date and notes that have a date; create/edit/delete VEVENT (RRULE) with one display reminder (a notification when it is due; click opens the event); holidays/read-only; large `.ics` import progress modal |
+| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month / week / agenda, Today and Jump to date (week start follows System settings); agenda also lists open tasks on their due date and notes that have a date; create/edit/delete VEVENT (RRULE) with one display reminder (a notification when it is due; click opens the event); holidays/read-only; large `.ics` import progress modal |
 | **Contacts** | Address books (create/rename/delete with confirm), contact table/search, per-contact CRUD, multi email/phone, photos, birthday/special dates, Unicode custom fields, book + single-contact `.vcf` export; large `.vcf` import progress modal |
 | **Tasks** | CalDAV `VTODO` list (sortable, full width), subtasks via `RELATED-TO;RELTYPE=PARENT`, repeat (`RRULE`) on the series, multi-select bulk status/due/%, create/edit modal on writable calendars |
 | **Notes** | CalDAV `VJOURNAL` list (sortable, full width), create/edit modal, rich editor (H1–H3, blockquote, checkbox, strikethrough, inline code, horizontal line, lists/links) with jtx Board Markdown in `DESCRIPTION` |
@@ -93,7 +93,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 - **System settings:** form writes `configuration.yaml` (services, files, push incl. Push for file storage and the per-user subscription limit, session, admin password); timezone select.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
-- **Configuration:** three sections. **Settings backup and restore** downloads or restores a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`); the preview shows a changed/unknown/invalid diff before applying. **Data backup and restore** downloads one archive (`POST /api/admin/data-export`) and can put it back (`POST /api/admin/data-restore`): a SQLite snapshot or a PostgreSQL `pg_dump`, plus a tarball of the WebDAV file store. Restore replaces the live database and file store. `configuration.yaml` stays on the config volume. **Danger zone** is **Reset to Default** (full factory wipe + reopen installer).
+- **Configuration:** three sections. **Settings backup and restore** downloads or restores a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`); the preview shows a changed/unknown/invalid diff before applying. **Data backup and restore** downloads one archive (`POST /api/admin/data-export`) and can put it back (`POST /api/admin/data-restore`): a SQLite snapshot or a PostgreSQL `pg_dump`, plus a tarball of the WebDAV file store. Restore replaces the live database and file store. `configuration.yaml` stays on the config volume. A successful restore increments `system.portal_session_generation` and signs portal browsers out; sign in again. **Danger zone** is **Reset to Default** (full factory wipe + reopen installer).
 - **Capabilities:** `GET /api/admin/capabilities` → `portalAdminUrl` + per-page `portalUrl` (all under `/portal/#admin…`).
 - Non-admins never see the menu item; `/api/admin/*` still returns **403**.
 
@@ -107,7 +107,7 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 | System settings | Yes |
 | Database settings write | Yes (`confirm: "CONFIRM"`) |
 | Settings backup / restore | Yes (never secrets or user/DAV data) |
-| Data backup / restore | Yes (SQLite snapshot or `pg_dump`, plus the file store; restore replaces that data; config volume stays separate) |
+| Data backup / restore | Yes (SQLite snapshot or `pg_dump`, plus the file store; restore replaces that data; config volume stays separate; a successful restore ends portal sessions) |
 | Installer / upgrade | Yes (`/portal/install/`). Upgrade keeps `portal_log_level`, `portal_time_format`, and `portal_week_start` |
 
 Large **`.ics` / `.vcf` imports** open a progress dialog (read → upload → server import, elapsed time) and show the result when finished.
