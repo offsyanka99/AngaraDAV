@@ -2,10 +2,11 @@
  * Shared Calendar toolbar: nav, view switch, event search.
  */
 import { esc } from "../../ui";
-import { formatDayRange, weekRange } from "../datetime";
+import { formatDayRange, weekRange, workWeekRange } from "../datetime";
 import type { CalendarsHost } from "./host";
 import { focusDate, monthTitle } from "./eventsView";
 import { calendarJumpHtml } from "./jumpDate";
+import type { CalendarViewId } from "./selectionPersist";
 
 export function calendarChrome(host: CalendarsHost): {
   calName: string;
@@ -41,7 +42,12 @@ export function calendarChrome(host: CalendarsHost): {
   let title: string;
   let prevLabel: string;
   let nextLabel: string;
-  if (view === "week") {
+  if (view === "workweek") {
+    const w = workWeekRange(focus, host.localeWeekStart());
+    title = formatDayRange(w.days[0], w.days[w.days.length - 1]);
+    prevLabel = "Previous work week";
+    nextLabel = "Next work week";
+  } else if (view === "week") {
     const w = weekRange(focus, host.localeWeekStart());
     title = formatDayRange(w.days[0], w.days[6]);
     prevLabel = "Previous week";
@@ -56,17 +62,7 @@ export function calendarChrome(host: CalendarsHost): {
     nextLabel = "Next month";
   }
 
-  const views: { id: "month" | "week" | "agenda"; label: string }[] = [
-    { id: "month", label: "Month" },
-    { id: "week", label: "Week" },
-    { id: "agenda", label: "Agenda" },
-  ];
-  const viewBtns = views
-    .map(
-      (v) =>
-        `<button type="button" class="btn btn-ghost btn-small cal-view-btn${view === v.id ? " is-active" : ""}" data-action="cal-view" data-view="${v.id}" ${host.state.busy ? "disabled" : ""}>${v.label}</button>`,
-    )
-    .join("");
+  const viewMenu = calendarViewMenuHtml(view, host.state.busy);
 
   const jumpPicker = host.state.eventDtPicker?.field === "cal-jump" ? host.state.eventDtPicker : null;
   const jumpHtml = calendarJumpHtml({
@@ -87,7 +83,7 @@ export function calendarChrome(host: CalendarsHost): {
         <button type="button" class="btn btn-ghost btn-small month-nav-btn" data-action="month-next" aria-label="${esc(nextLabel)}" ${host.state.busy ? "disabled" : ""}>›</button>
       </div>
       <h2 class="month-cal-title">${esc(title)}</h2>
-      <div class="cal-view-toggle" role="group" aria-label="Calendar view">${viewBtns}</div>
+      ${viewMenu}
       <input type="search" class="cal-event-search" data-action="event-search" placeholder="${view === "agenda" ? "Search events, tasks, notes…" : "Search events…"}"
         value="${esc(host.state.eventSearch)}" aria-label="${view === "agenda" ? "Search events, tasks, and notes" : "Search events"}" ${host.state.busy ? "disabled" : ""} />
       <span class="month-cal-name muted small" title="${esc(calName)}">
@@ -97,4 +93,19 @@ export function calendarChrome(host: CalendarsHost): {
     </div>`;
 
   return { calName, swatches, emptyHint, toolbar };
+}
+
+const CALENDAR_VIEW_OPTIONS: { id: CalendarViewId; label: string }[] = [
+  { id: "month", label: "Month" },
+  { id: "week", label: "Week" },
+  { id: "workweek", label: "Work week" },
+  { id: "agenda", label: "Agenda" },
+];
+
+export function calendarViewMenuHtml(view: CalendarViewId, busy: boolean): string {
+  const options = CALENDAR_VIEW_OPTIONS.map(
+    (item) =>
+      `<option value="${item.id}"${view === item.id ? " selected" : ""}>${esc(item.label)}</option>`,
+  ).join("");
+  return `<select class="cal-view-select" data-action="cal-view" aria-label="Calendar view"${busy ? " disabled" : ""}>${options}</select>`;
 }

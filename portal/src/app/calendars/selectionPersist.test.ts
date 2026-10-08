@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseCalendarView } from "./selectionPersist.ts";
+import { isWeekGridView, parseCalendarView } from "./selectionPersist.ts";
 
 describe("parseCalendarView", () => {
-  it("accepts month, week, and agenda", () => {
+  it("accepts month, week, work week, and agenda", () => {
     assert.equal(parseCalendarView("month"), "month");
     assert.equal(parseCalendarView("week"), "week");
+    assert.equal(parseCalendarView("workweek"), "workweek");
     assert.equal(parseCalendarView("agenda"), "agenda");
   });
 
@@ -15,3 +16,13 @@ describe("parseCalendarView", () => {
     assert.equal(parseCalendarView(1), null);
   });
 });
+
+describe("isWeekGridView", () => {
+  it("treats week and work week as the timed grid", () => {
+    assert.equal(isWeekGridView("week"), true);
+    assert.equal(isWeekGridView("workweek"), true);
+    assert.equal(isWeekGridView("month"), false);
+    assert.equal(isWeekGridView("agenda"), false);
+  });
+});
+

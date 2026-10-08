@@ -5,7 +5,11 @@
 import { CAL_SELECTION_STORAGE_KEY } from "../constants.ts";
 import type { AppState } from "../context";
 
-export type CalendarViewId = "month" | "week" | "agenda";
+export type CalendarViewId = "month" | "week" | "workweek" | "agenda";
+
+export function isWeekGridView(view: CalendarViewId | string): boolean {
+  return view === "week" || view === "workweek";
+}
 
 export type StoredCalendarSelection = {
   ids: number[];
@@ -14,7 +18,7 @@ export type StoredCalendarSelection = {
 };
 
 export function parseCalendarView(raw: unknown): CalendarViewId | null {
-  return raw === "month" || raw === "week" || raw === "agenda" ? raw : null;
+  return raw === "month" || raw === "week" || raw === "workweek" || raw === "agenda" ? raw : null;
 }
 
 function storageKey(username: string): string {

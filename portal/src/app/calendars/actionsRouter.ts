@@ -16,7 +16,7 @@ import { syncOpenItemFormsBeforeDtRender } from "../datetimeSync";
 import type { AppOrchestrator } from "../orchestrator";
 import { readRepeatFromForm, reminderFromForm } from "./eventModal";
 import { applyCalendarJump, CAL_JUMP_FIELD } from "./jumpDate";
-import { persistCalendarSelection } from "./selectionPersist";
+import { isWeekGridView, parseCalendarView, persistCalendarSelection } from "./selectionPersist";
 
 /** Load one event and open the edit dialog. */
 export async function openEventEditor(
@@ -235,10 +235,11 @@ export async function handleCalendarsAction(
   }
 
   if (action === "cal-view") {
-    const view = t.dataset.view;
-    if (view !== "month" && view !== "week" && view !== "agenda") return true;
+    if (t instanceof HTMLSelectElement && ev.type !== "change") return true;
+    const view = parseCalendarView(t instanceof HTMLSelectElement ? t.value : t.dataset.view);
+    if (view === null) return true;
     state.calView = view;
-    if (view === "week") state.weekScrollToDayStart = true;
+    if (isWeekGridView(view)) state.weekScrollToDayStart = true;
     persistCalendarSelection(state);
     state.monthExpandDay = null;
     state.busy = true;
@@ -271,7 +272,7 @@ export async function handleCalendarsAction(
   if (action === "month-prev" || action === "month-next") {
     const delta = action === "month-prev" ? -1 : 1;
     const view = state.calView;
-    if (view === "week") {
+    if (isWeekGridView(view)) {
       const cur = parseYmd(state.calFocusDay) ?? new Date();
       cur.setDate(cur.getDate() + delta * 7);
       state.calFocusDay = ymd(cur);

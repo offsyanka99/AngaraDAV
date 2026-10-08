@@ -61,6 +61,15 @@ export function weekRange(day: Date, weekStart: number): { from: string; to: str
   return { from: ymd(days[0]), to: ymd(days[6]), days };
 }
 
+/** Monday–Friday inside the same week `weekRange` would show. Saturday and Sunday are omitted. */
+export function workWeekRange(day: Date, weekStart: number): { from: string; to: string; days: Date[] } {
+  const days = weekRange(day, weekStart).days.filter((d) => {
+    const dow = d.getDay();
+    return dow >= 1 && dow <= 5;
+  });
+  return { from: ymd(days[0]), to: ymd(days[days.length - 1]), days };
+}
+
 export function formatDayRange(from: Date, to: Date): string {
   const sameYear = from.getFullYear() === to.getFullYear();
   const sameMonth = sameYear && from.getMonth() === to.getMonth();

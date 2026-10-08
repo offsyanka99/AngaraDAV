@@ -5,6 +5,7 @@
 import { esc, renderFlash, renderModal, type FlashType } from "../ui.ts";
 import { infoIconHtml } from "./sectionInfo.ts";
 import type { AppState } from "./context";
+import { isWeekGridView } from "./calendars/selectionPersist.ts";
 import { applyTheme, parseTheme, persistTheme, readStoredTheme, type ThemeId } from "./theme.ts";
 
 /** Matches Auth::PASSWORD_MIN_LENGTH (installer minimum). */
@@ -386,7 +387,7 @@ export async function submitUserSettings(
   state.userSettingsError = null;
   state.userPasswordDraft = { ...EMPTY_PASSWORD_DRAFT };
   state.userPasswordVisible = { ...HIDDEN_PASSWORD_VISIBILITY };
-  if (state.calView === "week") state.weekScrollToDayStart = true;
+  if (isWeekGridView(state.calView)) state.weekScrollToDayStart = true;
   applyTheme(next.theme);
   hooks.clearFlash();
   if (passwordChange) {

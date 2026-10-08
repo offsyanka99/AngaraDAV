@@ -249,7 +249,7 @@ export type AppState = {
   deleteConfirmId: number | null;
   deleteAbConfirmId: number | null;
   monthCursor: { y: number; m: number };
-  calView: "month" | "week" | "agenda";
+  calView: "month" | "week" | "workweek" | "agenda";
   /** After switching to week view, scroll the grid to (day start − 1 hour). */
   weekScrollToDayStart: boolean;
   /** Last week-grid scrollTop so returning to Calendar does not jump to midnight. */

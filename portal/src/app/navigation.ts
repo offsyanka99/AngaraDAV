@@ -9,6 +9,7 @@ import * as files from "./files";
 import * as notes from "./notes";
 import * as tasks from "./tasks";
 import {
+  isWeekGridView,
   persistCalendarSelection,
   readStoredCalendarSelection,
 } from "./calendars/selectionPersist";
@@ -169,7 +170,7 @@ export async function loadHome(o: AppOrchestrator): Promise<void> {
     const stored = readStoredCalendarSelection(state.user?.username);
     if (stored) {
       if (stored.view) state.calView = stored.view;
-      if (state.calView === "week") state.weekScrollToDayStart = true;
+      if (isWeekGridView(state.calView)) state.weekScrollToDayStart = true;
       const valid = stored.ids.filter((id) => state.calendars.some((c) => c.id === id));
       state.selectedIds = valid;
       if (

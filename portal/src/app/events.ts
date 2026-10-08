@@ -275,7 +275,7 @@ function onRootChange(o: AppOrchestrator, ev: Event): void {
     void onAction(o, ev);
     return;
   }
-  if (action === "task-filter") {
+  if (action === "task-filter" || action === "cal-view") {
     ev.stopPropagation();
     log.debug("portalEvents.change", { action });
     void onAction(o, ev);

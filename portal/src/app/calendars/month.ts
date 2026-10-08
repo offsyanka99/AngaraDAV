@@ -14,7 +14,7 @@ import { renderWeekView } from "./week";
 export { formatEventChipLabel, monthTitle } from "./eventsView";
 
 export function renderCalendarView(host: CalendarsHost): string {
-  if (host.state.calView === "week") return renderWeekView(host);
+  if (host.state.calView === "week" || host.state.calView === "workweek") return renderWeekView(host);
   if (host.state.calView === "agenda") return renderAgendaView(host);
   return renderMonthGridInner(host);
 }

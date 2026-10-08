@@ -2,7 +2,7 @@
  * Shared calendar view helpers (month / week / agenda).
  */
 import type { CalendarEvent } from "../../api";
-import { addDays, parseYmd, weekRange, ymd } from "../datetime";
+import { addDays, parseYmd, weekRange, workWeekRange, ymd } from "../datetime";
 import type { CalendarsHost } from "./host";
 
 export function formatEventChipLabel(host: CalendarsHost, ev: CalendarEvent): string {
@@ -38,6 +38,10 @@ export function eventsRangeForView(
 ): { from: string; to: string } {
   const weekStart = host.localeWeekStart();
   const focus = focusDate(host);
+  if (host.state.calView === "workweek") {
+    const w = workWeekRange(focus, weekStart);
+    return { from: w.from, to: w.to };
+  }
   if (host.state.calView === "week") {
     const w = weekRange(focus, weekStart);
     return { from: w.from, to: w.to };

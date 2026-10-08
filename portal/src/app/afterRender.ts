@@ -7,6 +7,7 @@
 import type { AppOrchestrator } from "./orchestrator";
 import * as files from "./files";
 import * as notes from "./notes";
+import { isWeekGridView } from "./calendars/selectionPersist";
 import { alignWeekViewScroll } from "./calendars/week";
 import { bindDtPickerOutside, unbindDtPickerOutside } from "./shell";
 
@@ -50,7 +51,7 @@ export function bindAfterRender(o: AppOrchestrator): void {
 }
 
 function alignWeekScrollIfNeeded(o: AppOrchestrator): void {
-  if (!o.state.weekScrollToDayStart || o.state.calView !== "week") return;
+  if (!o.state.weekScrollToDayStart || !isWeekGridView(o.state.calView)) return;
   if (!alignWeekViewScroll(o.root, o.state.userSettings.dayStartHour)) return;
   const wrap = o.root.querySelector<HTMLElement>(".week-wrap");
   if (wrap) o.state.weekWrapScrollTop = wrap.scrollTop;
@@ -58,7 +59,7 @@ function alignWeekScrollIfNeeded(o: AppOrchestrator): void {
 }
 
 function restoreWeekWrapScrollNow(o: AppOrchestrator): void {
-  if (o.state.weekScrollToDayStart || o.state.calView !== "week") return;
+  if (o.state.weekScrollToDayStart || !isWeekGridView(o.state.calView)) return;
   const wrap = o.root.querySelector<HTMLElement>(".week-wrap");
   if (!wrap || o.state.weekWrapScrollTop === null) return;
   wrap.scrollTop = o.state.weekWrapScrollTop;

@@ -2753,19 +2753,11 @@ section.stack {
   white-space: nowrap;
 }
 
-.cal-view-toggle {
-  display: inline-flex;
-  gap: 0.15rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.1rem;
-  background: var(--surface-2);
-}
-
-.cal-view-btn.is-active {
+select.cal-view-select {
+  width: auto;
+  min-width: 8.75rem;
+  padding: 0.32rem 0.55rem;
   background: var(--surface);
-  color: var(--text);
-  font-weight: 650;
 }
 
 .cal-event-search {
@@ -2789,8 +2781,8 @@ section.stack {
 
 .week-grid-row {
   display: grid;
-  grid-template-columns: 4.1rem repeat(7, minmax(0, 1fr));
-  min-width: 46.1rem;
+  grid-template-columns: 4.1rem repeat(var(--week-cols, 7), minmax(0, 1fr));
+  min-width: calc(4.1rem + var(--week-cols, 7) * 6rem);
 }
 
 .week-frozen {

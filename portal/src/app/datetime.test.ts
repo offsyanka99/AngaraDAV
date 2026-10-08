@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatUnixDateTime, isoWeekNumber, isoWeekNumberForRow } from "./datetime.ts";
+import { formatUnixDateTime, isoWeekNumber, isoWeekNumberForRow, workWeekRange, ymd } from "./datetime.ts";
 
 describe("isoWeekNumber", () => {
   it("uses ISO-8601 (week 1 contains 4 Jan)", () => {
@@ -32,6 +32,42 @@ describe("formatUnixDateTime", () => {
 
   it("returns a dash for an empty timestamp", () => {
     assert.equal(formatUnixDateTime(0, "24h"), "—");
+  });
+});
+
+describe("workWeekRange", () => {
+  it("keeps Monday through Friday of a Monday-start week", () => {
+    const range = workWeekRange(new Date(2026, 9, 8), 1);
+    assert.deepEqual(range.days.map(ymd), [
+      "2026-10-05",
+      "2026-10-06",
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+    ]);
+    assert.equal(range.from, "2026-10-05");
+    assert.equal(range.to, "2026-10-09");
+  });
+
+  it("hides the Sunday and Saturday of a Sunday-start week", () => {
+    const range = workWeekRange(new Date(2026, 9, 8), 0);
+    assert.deepEqual(range.days.map(ymd), [
+      "2026-10-05",
+      "2026-10-06",
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+    ]);
+    assert.ok(range.days.every((d) => d.getDay() >= 1 && d.getDay() <= 5));
+  });
+
+  it("uses the week that contains a weekend focus day", () => {
+    const saturday = workWeekRange(new Date(2026, 9, 10), 1);
+    assert.equal(saturday.from, "2026-10-05");
+    assert.equal(saturday.to, "2026-10-09");
+    const sunday = workWeekRange(new Date(2026, 9, 11), 0);
+    assert.equal(sunday.from, "2026-10-12");
+    assert.equal(sunday.to, "2026-10-16");
   });
 });
 

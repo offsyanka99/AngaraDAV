@@ -3,7 +3,7 @@
  */
 import type { CalendarEvent } from "../../api";
 import { esc } from "../../ui";
-import { eventDayKeys, weekRange, ymd } from "../datetime";
+import { eventDayKeys, weekRange, workWeekRange, ymd } from "../datetime";
 import { eventTimedStart, focusDate, minutesFromMidnight, visibleCalendarEvents } from "./eventsView";
 import type { CalendarsHost } from "./host";
 import { calendarColor } from "./loaders";
@@ -49,7 +49,11 @@ function eventBlock(host: CalendarsHost, ev: CalendarEvent & { instanceId: numbe
 export function renderWeekView(host: CalendarsHost): string {
   const chrome = calendarChrome(host);
   const focus = focusDate(host);
-  const { days } = weekRange(focus, host.localeWeekStart());
+  const range =
+    host.state.calView === "workweek"
+      ? workWeekRange(focus, host.localeWeekStart())
+      : weekRange(focus, host.localeWeekStart());
+  const { days } = range;
   const todayKey = ymd(new Date());
   const events = visibleCalendarEvents(host);
   const byDay = new Map<string, CalendarEvent[]>();
@@ -116,7 +120,7 @@ export function renderWeekView(host: CalendarsHost): string {
   return `<section class="card month-cal-card week-cal-card">
     ${chrome.toolbar}
     ${chrome.emptyHint}
-    <div class="week-wrap" style="--week-hour:${HOUR_PX}px;--day-start-h:${dayStart};--day-end-h:${dayEnd}"${
+    <div class="week-wrap" style="--week-hour:${HOUR_PX}px;--week-cols:${days.length};--day-start-h:${dayStart};--day-end-h:${dayEnd}"${
       host.state.weekScrollToDayStart
         ? ` data-align-hour="${Math.min(23, Math.max(0, dayStart - 1))}"`
         : ""
