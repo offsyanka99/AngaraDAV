@@ -694,6 +694,11 @@ body.layout-files .files-table-wrap {
   }
 }
 
+/* Stacks on the preview. Same z-index would sit under the row menu (60). */
+#files-preview-conflict-modal {
+  z-index: 70;
+}
+
 .cal-modal-card.files-preview-card {
   width: min(1100px, 100%);
   max-height: calc(100vh - 3rem);

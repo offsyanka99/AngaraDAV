@@ -9,7 +9,7 @@ import type { AppState } from "./context";
 import type { AppOrchestrator } from "./orchestrator";
 import * as calendars from "./calendars";
 import * as files from "./files";
-import { renderFilesPreviewModal } from "./files/preview";
+import { renderFilesPreviewConflictModal, renderFilesPreviewModal } from "./files/preview";
 
 const PAGE_ID = "portal-page";
 const OVERLAYS_ID = "portal-overlays";
@@ -43,6 +43,7 @@ export function overlayStabilityKey(state: AppState): string {
         preview.truncated ? "1" : "0",
         String((preview.text ?? "").length),
         preview.error ?? "",
+        preview.etag ?? "",
       ].join("|")
     : "";
   const upload = state.filesUploadProgress;
@@ -55,7 +56,10 @@ export function overlayStabilityKey(state: AppState): string {
     : "";
   const confirm = state.confirmDelete ? state.confirmDelete.scope : "";
   const refresh = state.confirmRefresh ? "1" : "";
-  return `p:${previewKey};u:${uploadKey};i:${importKey};c:${confirm};r:${refresh}`;
+  const previewConflict = state.filesPreviewConflict
+    ? `${state.filesPreviewConflict.kind}:${state.filesPreviewConflict.path}:${state.filesPreviewConflict.etag ?? ""}`
+    : "";
+  return `p:${previewKey};u:${uploadKey};i:${importKey};c:${confirm};r:${refresh};f:${previewConflict}`;
 }
 
 export function overlayHtml(o: AppOrchestrator): string {
@@ -64,7 +68,8 @@ export function overlayHtml(o: AppOrchestrator): string {
       ${renderConfirmRefreshModal(o.state)}
       ${calendars.renderImportProgressModal(o.calendarsHost)}
       ${files.renderFilesUploadProgressModal(o.filesHost)}
-      ${renderFilesPreviewModal(o.filesHost)}`;
+      ${renderFilesPreviewModal(o.filesHost)}
+      ${renderFilesPreviewConflictModal(o.filesHost)}`;
 }
 
 /**

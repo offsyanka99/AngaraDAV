@@ -49,6 +49,8 @@ export function applyTheme(theme: ThemeId): void {
   html.style.colorScheme = theme;
   const meta = document.querySelector('meta[name="color-scheme"]');
   if (meta) meta.setAttribute("content", theme);
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute("content", theme === "light" ? "#f4f6f9" : "#0f1419");
 }
 
 export function applyStoredTheme(username?: string | null): ThemeId {

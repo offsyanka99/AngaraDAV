@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.7` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.8` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
@@ -151,7 +151,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.7`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.8`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -501,7 +501,7 @@ Admin routes:
 | `PortalMeta` | [`PortalMeta.php`](../Core/Frameworks/Baikal/Portal/PortalMeta.php) | Per-instance `readOnly` / `holidaysCountry` in `Specific/portal_meta.json`; also enforced by `ReadOnlyPlugin` for DAV |
 | `Holidays` | [`Holidays.php`](../Core/Frameworks/Baikal/Portal/Holidays.php) | Holiday country list + import |
 | `NoteDescriptionFormat` | [`NoteDescriptionFormat.php`](../Core/Frameworks/Baikal/Portal/NoteDescriptionFormat.php) | VJOURNAL HTML ↔ Markdown (jtx Board) |
-| `SyncStatusService` | [`SyncStatusService.php`](../Core/Frameworks/Baikal/Portal/SyncStatusService.php) | Cheap revision snapshot (calendar/address book `synctoken`s, optional files fingerprint) for the portal background-sync poller; poll interval `portal_sync_poll_seconds` (default 30, clamped 10–300) |
+| `SyncStatusService` | [`SyncStatusService.php`](../Core/Frameworks/Baikal/Portal/SyncStatusService.php) | Cheap revision snapshot for the portal background-sync poller: calendar and address book `synctoken`s, `MAX(calendarobjects.lastmodified)` per `VEVENT`/`VTODO`/`VJOURNAL`, and an optional files fingerprint. Poll interval `portal_sync_poll_seconds` (default 30, clamped 10–300) |
 
 ### Installer — [`Core/Frameworks/Baikal/Portal/Install`](../Core/Frameworks/Baikal/Portal/Install)
 
@@ -622,7 +622,7 @@ Source file counts (excluding `*.test.ts`): **calendars 22**, **files 18**, **ad
 | `pushStats.ts` | Overview push counts |
 | `filesPushToggle.ts` | Files-push checkbox enablement |
 
-**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — month, week, and agenda. The shared toolbar has Today and **Jump to date**. Jump to date opens the same date calendar as event fields (`jumpDate.ts`, picker field `cal-jump`). The first weekday follows `portal_week_start` (Administration → System settings, Week starts on). Choosing a day, or Today in that calendar, sets `calFocusDay` and `monthCursor` and reloads the visible range. Agenda also lists open tasks on their due date and notes that have a date. The event form edits one relative display reminder. While a user tab is visible, due preset reminders on checked calendars show a notification; a click opens the event, and close dismisses that reminder for the browser tab. The clock in that notification is the System settings time format, read when the notification is shown. ICS import.
+**Calendars** [`portal/src/app/calendars/`](../portal/src/app/calendars) — one view menu: month, week, work week (Monday–Friday), and agenda. The shared toolbar has Today and **Jump to date**. Jump to date opens the same date calendar as event fields (`jumpDate.ts`, picker field `cal-jump`). The first weekday follows `portal_week_start` (Administration → System settings, Week starts on). Choosing a day, or Today in that calendar, sets `calFocusDay` and `monthCursor` and reloads the visible range. Agenda also lists open tasks on their due date and notes that have a date. The event form edits one relative display reminder. While a user tab is visible, due preset reminders on checked calendars show a notification; a click opens the event, and close dismisses that reminder for the browser tab. The clock in that notification is the System settings time format, read when the notification is shown. ICS import.
 
 `host.ts`, `index.ts`, `home.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `month.ts`, `week.ts`, `weekScroll.ts`, `agenda.ts`, `agendaItems.ts`, `eventsView.ts`, `eventModal.ts`, `reminder.ts`, `eventReminders.ts`, `eventReminderPoller.ts`, `toolbar.ts`, `jumpDate.ts`, `holidays.ts`, `import.ts`, `importProgress.ts`, `selectionPersist.ts`.
 
@@ -632,7 +632,7 @@ Source file counts (excluding `*.test.ts`): **calendars 22**, **files 18**, **ad
 
 **Notes** [`portal/src/app/notes/`](../portal/src/app/notes) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `editor.ts`, `html.ts` (`sanitizeNoteHtml`).
 
-**Files** [`portal/src/app/files/`](../portal/src/app/files) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `listing.ts`, `transfer.ts`, `upload.ts`, `preview.ts`, `previewKind.ts`, `itemMenu.ts`, `itemMenuModel.ts`, `officePreview.ts`, `officeXml.ts`, `zip.ts`, `bind.ts`, `stateReset.ts`.
+**Files** [`portal/src/app/files/`](../portal/src/app/files) — `host.ts`, `index.ts`, `loaders.ts`, `actions.ts`, `actionsRouter.ts`, `render.ts`, `listing.ts`, `transfer.ts`, `upload.ts`, `preview.ts`, `previewConflict.ts`, `previewKind.ts`, `itemMenu.ts`, `itemMenuModel.ts`, `officePreview.ts`, `officeXml.ts`, `zip.ts`, `bind.ts`, `stateReset.ts`. A folder refresh compares an open preview's etag with the listing. A changed or missing file asks before the preview is replaced.
 
 ### Top-level `portal/src/app/*.ts`
 
@@ -649,7 +649,9 @@ Source file counts (excluding `*.test.ts`): **calendars 22**, **files 18**, **ad
 | [`routing.ts`](../portal/src/app/routing.ts) | Hash `#admin`, `#admin/{page}`, `#admin/users/{user}` |
 | [`navigation.ts`](../portal/src/app/navigation.ts) | `loadHome` / `activateTab` / `normalizeActiveTab` |
 | [`bootstrap.ts`](../portal/src/app/bootstrap.ts) | `/api/install/status` → `/api/ui` → `/api/me` |
-| [`backgroundSync.ts`](../portal/src/app/backgroundSync.ts) | Polls `/api/sync-status` while a tab is visible; toasts when the active domain changed out-of-band (never auto-refreshes). Event-reminder checks start and stop with this poller and use the same interval |
+| [`backgroundSync.ts`](../portal/src/app/backgroundSync.ts) | Polls `/api/sync-status` while a tab is visible; toasts when the active domain changed out-of-band (never auto-refreshes). Notes and Tasks compare that component's `lastModified`, so a VEVENT write does not toast them. A capped files folder says the check covers the first 500 items. When User settings **Background changes** is on, the same moment also raises a browser notification if this window is visible but not focused. Event-reminder checks start and stop with this poller and use the same interval |
+| [`staleNotification.ts`](../portal/src/app/staleNotification.ts) | Decides that browser notification: setting on, permission granted, tab visible, window unfocused |
+| [`pwa.ts`](../portal/src/app/pwa.ts) | Registers `/portal/sw.js` (network only, scope `/portal/`). Manifest is `portal/public/manifest.webmanifest` (`display: standalone`) |
 | [`backgroundSyncDiff.ts`](../portal/src/app/backgroundSyncDiff.ts) | Pure compare/clamp helpers for background sync (unit-tested) |
 | [`confirmRefresh.ts`](../portal/src/app/confirmRefresh.ts) | Confirm before Refresh discards an open editor |
 | [`home.ts`](../portal/src/app/home.ts) | Signed-in shell; `layout-*` + `cal-modal-open` body classes |
@@ -1029,7 +1031,7 @@ Recorded as facts, not recommendations:
 - CI `code-analysis` runs **46** named PHP scripts and the `tests` job runs **2** more (`FileSchemaDriverTest.php`, `PushSchemaPgsqlTest.php`) → **all 48** `tests/php/` files.
 - CI job `portal` runs `npm ci && npm test && npm run build` on Node 24. The Docker image still builds the portal in its `portal` stage.
 - `composer test` runs cs-fixer, phpstan, then every `tests/php` script. PostgreSQL scripts exit 0 with `SKIP` when no DSN is set.
-- Portal test files must be added to `package.json` manually — there is no glob. (Today all 23 on-disk tests are registered.)
+- Portal test files must be added to `package.json` manually — there is no glob. (Today all 26 on-disk tests are registered.)
 - [`scripts/files-maintenance.php`](../scripts/files-maintenance.php) **is** invoked by [`docker/entrypoint.d/46-webdav-files-maintenance.sh`](../docker/entrypoint.d/46-webdav-files-maintenance.sh) on a timer. It is unused on non-Docker installs (no cron unit ships in the zip).
 - [`Dockerfile`](../Dockerfile) emits `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME`. PHP version display reads `ANGARA_BUILD_GIT` only.
 - [`esc()`](../portal/src/ui.ts) escapes `&`, `<`, `>`, `"` but not `'`.

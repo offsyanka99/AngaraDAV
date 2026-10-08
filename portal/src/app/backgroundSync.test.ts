@@ -12,6 +12,7 @@ import {
   MAX_POLL_SECONDS,
   MIN_POLL_SECONDS,
   shouldShowStaleToast,
+  staleToastMessage,
 } from "./backgroundSyncDiff.ts";
 
 const baseFiles = {
@@ -86,31 +87,100 @@ describe("isDomainStale", () => {
     assert.equal(isDomainStale("calendars", snap, next, [12, 99]), true);
   });
 
-  it("should diff all VTODO calendars for tasks, ignoring calendar selection", () => {
-    const snap = status();
+  it("should ignore a VEVENT synctoken bump for tasks and notes", () => {
+    const snap = status({
+      calendars: [
+        {
+          instanceId: 12,
+          calendarId: 4,
+          synctoken: 88,
+          components: "VEVENT,VTODO,VJOURNAL",
+          lastModified: { VEVENT: 10, VTODO: 4, VJOURNAL: 7 },
+        },
+      ],
+    });
     const next = status({
       calendars: [
-        { instanceId: 12, calendarId: 4, synctoken: 89, components: "VEVENT,VTODO" },
-        { instanceId: 20, calendarId: 5, synctoken: 3, components: "VJOURNAL" },
-        { instanceId: 21, calendarId: 6, synctoken: 10, components: "VEVENT" },
+        {
+          instanceId: 12,
+          calendarId: 4,
+          synctoken: 89,
+          components: "VEVENT,VTODO,VJOURNAL",
+          lastModified: { VEVENT: 11, VTODO: 4, VJOURNAL: 7 },
+        },
+      ],
+    });
+    assert.equal(isDomainStale("tasks", snap, next, []), false);
+    assert.equal(isDomainStale("notes", snap, next, []), false);
+    assert.equal(isDomainStale("calendars", snap, next, [12]), true);
+  });
+
+  it("should toast tasks only when VTODO lastmodified changes", () => {
+    const snap = status({
+      calendars: [
+        {
+          instanceId: 12,
+          calendarId: 4,
+          synctoken: 88,
+          components: "VEVENT,VTODO",
+          lastModified: { VEVENT: 10, VTODO: 4, VJOURNAL: 0 },
+        },
+        {
+          instanceId: 20,
+          calendarId: 5,
+          synctoken: 3,
+          components: "VJOURNAL",
+          lastModified: { VEVENT: 0, VTODO: 0, VJOURNAL: 7 },
+        },
+      ],
+    });
+    const next = status({
+      calendars: [
+        {
+          instanceId: 12,
+          calendarId: 4,
+          synctoken: 88,
+          components: "VEVENT,VTODO",
+          lastModified: { VEVENT: 10, VTODO: 5, VJOURNAL: 0 },
+        },
+        {
+          instanceId: 20,
+          calendarId: 5,
+          synctoken: 3,
+          components: "VJOURNAL",
+          lastModified: { VEVENT: 0, VTODO: 0, VJOURNAL: 7 },
+        },
       ],
     });
     assert.equal(isDomainStale("tasks", snap, next, []), true);
     assert.equal(isDomainStale("notes", snap, next, []), false);
-    assert.equal(isDomainStale("calendars", snap, next, [21]), false);
   });
 
-  it("should diff all VJOURNAL calendars for notes", () => {
-    const snap = status();
-    const next = status({
+  it("should toast notes only when VJOURNAL lastmodified changes", () => {
+    const snap = status({
       calendars: [
-        { instanceId: 12, calendarId: 4, synctoken: 88, components: "VEVENT,VTODO" },
-        { instanceId: 20, calendarId: 5, synctoken: 4, components: "VJOURNAL" },
-        { instanceId: 21, calendarId: 6, synctoken: 10, components: "VEVENT" },
+        {
+          instanceId: 20,
+          calendarId: 5,
+          synctoken: 3,
+          components: "VJOURNAL",
+          lastModified: { VEVENT: 0, VTODO: 0, VJOURNAL: 7 },
+        },
       ],
     });
-    assert.equal(isDomainStale("notes", snap, next, [12]), true);
-    assert.equal(isDomainStale("tasks", snap, next, [12]), false);
+    const next = status({
+      calendars: [
+        {
+          instanceId: 20,
+          calendarId: 5,
+          synctoken: 3,
+          components: "VJOURNAL",
+          lastModified: { VEVENT: 0, VTODO: 0, VJOURNAL: 8 },
+        },
+      ],
+    });
+    assert.equal(isDomainStale("notes", snap, next, []), true);
+    assert.equal(isDomainStale("tasks", snap, next, []), false);
   });
 
   it("should match VTODO components case-insensitively", () => {
@@ -237,7 +307,7 @@ describe("hasOpenEditor", () => {
     assert.equal(hasOpenEditor({ ...closed, filesDeletePaths: ["a"] }), true);
     assert.equal(hasOpenEditor({ ...closed, filesTrashDeleteId: 4 }), true);
     assert.equal(hasOpenEditor({ ...closed, filesEmptyTrashOpen: true }), true);
-    assert.equal(hasOpenEditor({ ...closed, filesPreview: { path: "a" } }), true);
+    assert.equal(hasOpenEditor({ ...closed, filesPreview: { path: "a" } }), false);
     assert.equal(hasOpenEditor({ ...closed, calModalOpen: true }), true);
     assert.equal(hasOpenEditor({ ...closed, createCalModalOpen: true }), true);
     assert.equal(hasOpenEditor({ ...closed, abModalOpen: true }), true);
@@ -249,5 +319,25 @@ describe("domainNoun", () => {
     assert.equal(domainNoun("calendars"), "events");
     assert.equal(domainNoun("notes"), "notes");
     assert.equal(domainNoun("files"), "files");
+  });
+});
+
+describe("staleToastMessage", () => {
+  it("should keep the plain refresh sentence when the file list is not capped", () => {
+    assert.equal(
+      staleToastMessage("files", false),
+      "Files changed in the background. Refresh to pick up the latest.",
+    );
+    assert.equal(
+      staleToastMessage("notes", true),
+      "Notes changed in the background. Refresh to pick up the latest.",
+    );
+  });
+
+  it("should say the file check covers the first 500 items when the folder is capped", () => {
+    assert.equal(
+      staleToastMessage("files", true),
+      "Files changed in the background. This folder has more than 500 items, so only the first 500 are checked. Refresh to pick up the latest.",
+    );
   });
 });

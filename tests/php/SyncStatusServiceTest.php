@@ -61,6 +61,9 @@ CREATE TABLE calendarinstances (
 CREATE TABLE addressbooks (
   id integer primary key, principaluri text, displayname text, uri text, description text, synctoken integer
 );
+CREATE TABLE calendarobjects (
+  id integer primary key, calendarid integer, componenttype text, lastmodified integer
+);
 SQL);
 
 $pdo->exec("INSERT INTO users (username, digesta1) VALUES ('alice', 'hash'), ('bob', 'hash')");
@@ -86,6 +89,13 @@ $pdo->exec(
     "INSERT INTO addressbooks (id, principaluri, displayname, uri, description, synctoken)
      VALUES (4, 'principals/bob', 'Bob book', 'default', '', 2)"
 );
+$pdo->exec(
+    "INSERT INTO calendarobjects (calendarid, componenttype, lastmodified) VALUES
+     (1, 'VEVENT', 100),
+     (1, 'VEVENT', 150),
+     (1, 'VTODO', 40),
+     (2, 'VJOURNAL', 9)"
+);
 
 $config = [
     'system' => [
@@ -110,7 +120,12 @@ try {
     assert_true(isset($byInstance[12], $byInstance[20]), 'alice instance ids');
     assert_true($byInstance[12]['calendarId'] === 1 && $byInstance[12]['synctoken'] === 88, 'alice work synctoken');
     assert_true($byInstance[12]['components'] === 'VEVENT,VTODO', 'alice work components');
+    assert_true($byInstance[12]['lastModified']['VEVENT'] === 150, 'work VEVENT max lastmodified');
+    assert_true($byInstance[12]['lastModified']['VTODO'] === 40, 'work VTODO lastmodified');
+    assert_true($byInstance[12]['lastModified']['VJOURNAL'] === 0, 'work has no VJOURNAL objects');
     assert_true($byInstance[20]['synctoken'] === 3 && $byInstance[20]['components'] === 'VJOURNAL', 'alice journal');
+    assert_true($byInstance[20]['lastModified']['VJOURNAL'] === 9, 'journal VJOURNAL lastmodified');
+    assert_true($byInstance[20]['lastModified']['VEVENT'] === 0, 'journal has no VEVENT objects');
     assert_true(count($status['addressBooks']) === 1 && $status['addressBooks'][0]['id'] === 3, 'alice own address book only');
     assert_true($status['addressBooks'][0]['synctoken'] === 14, 'alice address book synctoken');
     assert_true($status['files']['enabled'] === true, 'files enabled');
@@ -124,6 +139,8 @@ try {
     assert_true($bob['calendars'][0]['instanceId'] === 13, 'bob instanceId is sharee row');
     assert_true($bob['calendars'][0]['calendarId'] === 1, 'bob shares calendarId');
     assert_true($bob['calendars'][0]['synctoken'] === 88, 'sharee sees same synctoken');
+    assert_true($bob['calendars'][0]['lastModified']['VEVENT'] === 150, 'sharee sees same VEVENT lastmodified');
+    assert_true($bob['calendars'][0]['lastModified']['VTODO'] === 40, 'sharee sees same VTODO lastmodified');
     assert_true(count($bob['addressBooks']) === 1 && $bob['addressBooks'][0]['id'] === 4, 'bob own book only');
 
     $files->writeFile('alice', '', 'readme.txt', "hello\n", false);

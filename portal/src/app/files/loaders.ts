@@ -5,6 +5,7 @@ import { api, ApiError, type FileEntry } from "../../api";
 import { log } from "../../log";
 import type { FilesHost } from "./host";
 import { closeFilesItemMenu } from "./itemMenu";
+import { applyPreviewRefreshConflict } from "./preview";
 import { captureSyncSnapshot } from "../backgroundSync";
 
 export async function loadFiles(host: FilesHost): Promise<void> {
@@ -36,11 +37,13 @@ export async function loadFiles(host: FilesHost): Promise<void> {
       return;
     }
     log.debug("loadFiles", { path: host.state.filesPath });
+    let listUnavailable = false;
     const [status, list] = await Promise.all([
       api.filesStatus(),
       api.filesList(host.state.filesPath).catch((e) => {
         // If disabled/not ready, status still loads; list may 503
         if (e instanceof ApiError && (e.status === 503 || e.status === 404)) {
+          listUnavailable = e.status === 503;
           return { path: host.state.filesPath, entries: [] as FileEntry[] };
         }
         throw e;
@@ -60,6 +63,7 @@ export async function loadFiles(host: FilesHost): Promise<void> {
       host.state.checkedFilePaths = [];
       closeFilesItemMenu(host);
     }
+    if (!listUnavailable) applyPreviewRefreshConflict(host);
     log.event("loadFiles", {
       path: host.state.filesPath,
       count: host.state.filesEntries.length,

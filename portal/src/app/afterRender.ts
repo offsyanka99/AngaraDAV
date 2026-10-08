@@ -100,7 +100,8 @@ function restoreSearchFocus(o: AppOrchestrator): void {
 }
 
 function focusOpenModal(root: HTMLElement): void {
-  const modal = root.querySelector<HTMLElement>(".cal-modal[data-focus-trap]");
+  const modals = root.querySelectorAll<HTMLElement>(".cal-modal[data-focus-trap]");
+  const modal = modals.length > 0 ? modals[modals.length - 1] : null;
   if (!modal) return;
   const active = document.activeElement as HTMLElement | null;
   if (active && modal.contains(active)) return;

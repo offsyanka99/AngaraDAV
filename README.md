@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.5.7 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
+**Version:** 2.5.8 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.7`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.8`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 
@@ -15,13 +15,15 @@ Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.7`, `sha-…`) · linux/
 
 | In the portal (`/portal/`) | On the wire |
 |----------------------------|-------------|
-| **Calendar** — month / week / agenda (events, open tasks due, dated notes), search, Today and jump to a date, display reminders (a notification when one is due), share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
+| **Calendar** — month / week / work week / agenda (events, open tasks due, dated notes), search, Today and jump to a date, display reminders (a notification when one is due), share, import/export `.ics`, holidays | CalDAV (`/dav.php/`, `/cal.php/`) |
 | **Contacts** — address books, search, photos, import/export `.vcf` | CardDAV (`/dav.php/`, `/card.php/`) |
 | **Tasks** — VTODO, subtasks, repeating tasks, bulk edit, column filters | CalDAV |
 | **Notes** — VJOURNAL rich text in a modal (H1–H3, quote, lists, checkboxes, strikethrough, inline code; jtx Markdown in `DESCRIPTION`) | CalDAV |
-| **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename, Trash (restore, delete now, empty) | WebDAV `/dav.php/files/{username}/` |
+| **Files** — browse, upload, preview (images, PDF, Office, text, audio, video), copy/move/rename, Trash (restore, delete now, empty). Refresh asks before replacing an open preview | WebDAV `/dav.php/files/{username}/` |
 | **Administration** — users, system settings, database, settings backup/restore, data backup/restore (Admin-role DAV users) | `/portal/install/` for setup |
 | **WebDAV-Push** (optional) — near-real-time change notices for calendars, contacts, and (opt-in) file folders (DAVx⁵ and other Web Push clients) | Advertised on `/dav.php/` when enabled |
+
+The portal can be installed as its own window. That install does not cache pages, and it does not keep running after the browser closes. **User settings → Background changes** can also show a browser notification when this window is open but not focused. A change to an event does not ask Notes or Tasks to refresh. When a Files folder has more than 500 items, the refresh banner says only the first 500 are checked.
 
 A successful **Administration → Configuration** data restore replaces the database and the WebDAV file store and adds 1 to `system.portal_session_generation` in `configuration.yaml`. Signed-in portal browsers return to Sign in. Clients (DAVx⁵, Thunderbird, Apple, Home Assistant, WebDAV-sync, …) use **DAV username and password**. Sign in has a **View password** control on that field. Each signed-in user can change that password in the user menu → **User settings** (rules under the **(i)** next to Password; each field can be shown the same way). It updates portal sign-in and CalDAV/CardDAV/WebDAV together, and does not change the server admin password in `configuration.yaml`. Tabs follow Admin **DAV services** toggles.
 

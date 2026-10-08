@@ -6,6 +6,7 @@ import { esc, renderFlash, renderModal, type FlashType } from "../ui.ts";
 import { infoIconHtml } from "./sectionInfo.ts";
 import type { AppState } from "./context";
 import { isWeekGridView } from "./calendars/selectionPersist.ts";
+import { notificationsSupported } from "./staleNotification.ts";
 import { applyTheme, parseTheme, persistTheme, readStoredTheme, type ThemeId } from "./theme.ts";
 
 /** Matches Auth::PASSWORD_MIN_LENGTH (installer minimum). */
@@ -16,6 +17,8 @@ export type UserSettings = {
   dayStartHour: number;
   dayEndHour: number;
   showWeekNumbers: boolean;
+  /** Browser Notification beside the stale-view banner. Off until the user saves it. */
+  staleNotifications: boolean;
 };
 
 export const USER_SETTINGS_STORAGE_KEY = "angaradav-portal-user-settings";
@@ -25,6 +28,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   dayStartHour: 8,
   dayEndHour: 18,
   showWeekNumbers: false,
+  staleNotifications: false,
 };
 
 /** Password fields kept only while the settings modal is open. Never written to localStorage. */
@@ -75,6 +79,7 @@ export function normalizeUserSettings(partial: Partial<UserSettings> | null | un
     dayStartHour,
     dayEndHour,
     showWeekNumbers: !!partial?.showWeekNumbers,
+    staleNotifications: partial?.staleNotifications === true,
   };
 }
 
@@ -221,6 +226,21 @@ export function userSettingsModalHtml(state: AppState): string {
         </label>
       </fieldset>
       <fieldset class="user-settings-fieldset">
+        <legend>Background changes ${infoIconHtml({
+          title: "Background changes",
+          paragraphs: [
+            "The banner in the page stays. This also shows a browser notification when this window is open but another window is in front.",
+            "The check pauses while this tab is hidden, and it stops when you close the portal. It is not WebDAV-Push.",
+            "The browser asks permission the first time you save this turned on.",
+          ],
+        })}</legend>
+        <label class="check-row">
+          <input type="checkbox" name="staleNotifications" ${s.staleNotifications ? "checked" : ""} ${dis} ${notificationsSupported() ? "" : "disabled"} />
+          Also notify when this window is not focused
+        </label>
+        ${notificationSettingsHint()}
+      </fieldset>
+      <fieldset class="user-settings-fieldset">
         <legend>Password ${infoIconHtml({
           title: "Password",
           paragraphs: [
@@ -288,7 +308,37 @@ export function readUserSettingsFromForm(form: HTMLFormElement): UserSettings | 
     dayStartHour,
     dayEndHour,
     showWeekNumbers: fd.get("showWeekNumbers") === "on",
+    staleNotifications: fd.get("staleNotifications") === "on",
   };
+}
+
+/** null when the choice can be saved. A string is the message to keep the modal open. */
+export async function ensureStaleNotificationPermission(enabled: boolean): Promise<string | null> {
+  if (!enabled) return null;
+  if (!notificationsSupported()) {
+    return "Browser notifications need HTTPS (or localhost) and a browser that supports them.";
+  }
+  if (Notification.permission === "granted") return null;
+  if (Notification.permission === "denied") {
+    return "Browser notifications are blocked for this site. Allow them in the browser settings, then try again.";
+  }
+  try {
+    const result = await Notification.requestPermission();
+    if (result === "granted") return null;
+  } catch {
+    return "The browser did not allow notification permission.";
+  }
+  return "Browser notifications were not allowed.";
+}
+
+function notificationSettingsHint(): string {
+  if (!notificationsSupported()) {
+    return `<p class="muted small" style="margin:0">This page cannot show browser notifications. Use HTTPS or localhost.</p>`;
+  }
+  if (Notification.permission === "denied") {
+    return `<p class="muted small" style="margin:0">Notifications are blocked for this site. Allow them in the browser settings.</p>`;
+  }
+  return "";
 }
 
 export function readPasswordDraft(form: HTMLFormElement): PasswordDraft {
@@ -363,6 +413,13 @@ export async function submitUserSettings(
   const passwordChange = readPasswordChange(state.userPasswordDraft);
   if (passwordChange && "error" in passwordChange) {
     state.userSettingsError = passwordChange.error;
+    hooks.render();
+    return;
+  }
+  const permissionError = await ensureStaleNotificationPermission(next.staleNotifications);
+  if (permissionError) {
+    state.userPasswordDraft = readPasswordDraft(form);
+    state.userSettingsError = permissionError;
     hooks.render();
     return;
   }

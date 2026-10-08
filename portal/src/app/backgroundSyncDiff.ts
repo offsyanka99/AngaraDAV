@@ -43,7 +43,6 @@ export function hasOpenEditor(state: {
   filesDeletePaths?: unknown;
   filesTrashDeleteId?: unknown;
   filesEmptyTrashOpen?: unknown;
-  filesPreview?: unknown;
   calModalOpen?: unknown;
   createCalModalOpen?: unknown;
   abModalOpen?: unknown;
@@ -59,7 +58,6 @@ export function hasOpenEditor(state: {
     state.filesDeletePaths ||
     state.filesTrashDeleteId ||
     state.filesEmptyTrashOpen ||
-    state.filesPreview ||
     state.calModalOpen ||
     state.createCalModalOpen ||
     state.abModalOpen
@@ -79,6 +77,22 @@ function tokenMap<T extends { synctoken: number }>(
 ): Map<number, number> {
   const map = new Map<number, number>();
   for (const row of rows) map.set(keyOf(row), row.synctoken);
+  return map;
+}
+
+type CalendarRevision = SyncStatus["calendars"][number];
+
+/** Per-component timestamp when the server sent it; otherwise the calendar synctoken. */
+function componentRevision(row: CalendarRevision, component: string): number {
+  const bag = row.lastModified;
+  if (!bag) return row.synctoken;
+  const value = bag[component.toUpperCase() as keyof typeof bag];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function componentRevisionMap(rows: CalendarRevision[], component: string): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const row of rows) map.set(row.instanceId, componentRevision(row, component));
   return map;
 }
 
@@ -117,16 +131,16 @@ export function isDomainStale(
     const prev = snapshot.calendars.filter((c) => hasComponent(c.components, "VTODO"));
     const cur = next.calendars.filter((c) => hasComponent(c.components, "VTODO"));
     return tokensDiffer(
-      tokenMap(prev, (c) => c.instanceId),
-      tokenMap(cur, (c) => c.instanceId),
+      componentRevisionMap(prev, "VTODO"),
+      componentRevisionMap(cur, "VTODO"),
     );
   }
   if (tab === "notes") {
     const prev = snapshot.calendars.filter((c) => hasComponent(c.components, "VJOURNAL"));
     const cur = next.calendars.filter((c) => hasComponent(c.components, "VJOURNAL"));
     return tokensDiffer(
-      tokenMap(prev, (c) => c.instanceId),
-      tokenMap(cur, (c) => c.instanceId),
+      componentRevisionMap(prev, "VJOURNAL"),
+      componentRevisionMap(cur, "VJOURNAL"),
     );
   }
   if (tab === "contacts") {
@@ -159,6 +173,16 @@ export function shouldShowStaleToast(opts: {
   if (!opts.stale || opts.busy) return false;
   if (opts.staleToastId === null) return true;
   return opts.toastVisible === false;
+}
+
+export function staleToastMessage(tab: TabId, filesCapped = false): string {
+  const noun = domainNoun(tab);
+  const title = `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+  const cap =
+    tab === "files" && filesCapped
+      ? " This folder has more than 500 items, so only the first 500 are checked."
+      : "";
+  return `${title} changed in the background.${cap} Refresh to pick up the latest.`;
 }
 
 export function domainNoun(tab: TabId): string {

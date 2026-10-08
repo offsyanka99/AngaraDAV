@@ -87,6 +87,18 @@ export type FilesPreview = {
   html: string | null;
   truncated: boolean;
   error: string | null;
+  /** Etag captured when this preview was opened. */
+  etag: string | null;
+  /** Server version the user chose to keep viewing after a refresh. */
+  ignored: { kind: "changed"; etag: string } | { kind: "missing" } | null;
+};
+
+/** Open preview no longer matches the folder listing after a refresh. */
+export type FilesPreviewConflict = {
+  path: string;
+  name: string;
+  kind: "changed" | "missing";
+  etag: string | null;
 };
 
 /** Floating ⋮ / right-click menu for a Files row (and the current selection). */
@@ -351,6 +363,8 @@ export type AppState = {
   filesPreview: FilesPreview | null;
   /** Bumped to ignore stale preview fetches. */
   filesPreviewSeq: number;
+  /** Preview etag no longer matches the refreshed folder listing. */
+  filesPreviewConflict: FilesPreviewConflict | null;
   filesUploadConflict: FilesUploadConflict | null;
   /** Themed delete confirm (event/task/note/contact/bulk/revoke). */
   confirmDelete: ConfirmDeleteState | null;
@@ -560,6 +574,7 @@ export function createAppState(opts: CreateAppStateOpts): AppState {
     filesItemMenuWinClose: null,
     filesPreview: null,
     filesPreviewSeq: 0,
+    filesPreviewConflict: null,
     filesUploadConflict: null,
     confirmDelete: null,
     confirmRefresh: false,

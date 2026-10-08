@@ -10,6 +10,7 @@ import type { FilesHost } from "./host";
 import { closeFilesItemMenu } from "./itemMenu";
 import { officeBlobToHtml } from "./officePreview";
 import { classifyFilesPreview } from "./previewKind";
+import { previewRefreshConflict } from "./previewConflict";
 import { disposeFilesPreviewState } from "./stateReset";
 import { resetFilesTransferTree } from "./transfer";
 
@@ -49,10 +50,13 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
     html: null,
     truncated: false,
     error: null,
+    etag: entry.etag ?? null,
+    ignored: null,
   };
 
   const needsFetch = kind === "text" || kind === "pdf" || kind === "office";
   if (!needsFetch) {
+    host.state.filesPreviewConflict = null;
     host.state.filesPreview = { ...base, status: "ready" };
     log.event("files.preview", { path: entry.path, kind });
     host.render();
@@ -64,12 +68,12 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
 
   try {
     if (kind === "pdf" && entry.size > MAX_PDF_BYTES) {
-      if (host.state.filesPreviewSeq !== seq) return;
-      host.state.filesPreview = {
-        ...base,
+      if (!commitPreview(host, seq, base, {
         status: "error",
         error: `This PDF is too large to preview (${formatBytes(entry.size)}). Download it instead.`,
-      };
+      })) {
+        return;
+      }
       host.render();
       return;
     }
@@ -77,40 +81,54 @@ export async function openFilesPreview(host: FilesHost, path: string): Promise<v
     if (host.state.filesPreviewSeq !== seq) return;
     if (kind === "office") {
       const html = await officeBlobToHtml(entry.name, blob);
-      if (host.state.filesPreviewSeq !== seq) return;
-      host.state.filesPreview = { ...base, status: "ready", html };
+      if (!commitPreview(host, seq, base, { status: "ready", html })) return;
     } else if (kind === "pdf") {
+      if (host.state.filesPreviewSeq !== seq) return;
       const pdfBlob =
         blob.type && blob.type.toLowerCase().includes("pdf")
           ? blob
           : new Blob([blob], { type: "application/pdf" });
-      host.state.filesPreview = {
-        ...base,
-        status: "ready",
-        objectUrl: URL.createObjectURL(pdfBlob),
-      };
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      if (!commitPreview(host, seq, base, { status: "ready", objectUrl })) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
     } else {
       const tooBig = blob.size > MAX_TEXT_BYTES;
       const slice = tooBig ? blob.slice(0, MAX_TEXT_BYTES) : blob;
       const text = await slice.text();
-      if (host.state.filesPreviewSeq !== seq) return;
-      host.state.filesPreview = {
-        ...base,
-        status: "ready",
-        text,
-        truncated: tooBig,
-      };
+      if (!commitPreview(host, seq, base, { status: "ready", text, truncated: tooBig })) return;
     }
     log.event("files.preview", { path: entry.path, kind });
   } catch (e) {
-    if (host.state.filesPreviewSeq !== seq) return;
-    host.state.filesPreview = {
-      ...base,
+    if (!commitPreview(host, seq, base, {
       status: "error",
       error: e instanceof Error ? e.message : "Could not open file",
-    };
+    })) {
+      return;
+    }
   }
   host.render();
+}
+
+/**
+ * A refresh can adopt an etag or record Keep while this fetch is in flight.
+ * Keep that choice when the bytes arrive.
+ */
+function commitPreview(
+  host: FilesHost,
+  seq: number,
+  base: FilesPreview,
+  patch: Partial<FilesPreview>,
+): boolean {
+  if (host.state.filesPreviewSeq !== seq) return false;
+  const current = host.state.filesPreview;
+  const carried =
+    current && current.path === base.path
+      ? { etag: current.etag, ignored: current.ignored }
+      : { etag: base.etag, ignored: base.ignored };
+  host.state.filesPreview = { ...base, ...patch, etag: carried.etag, ignored: carried.ignored };
+  return true;
 }
 
 export function renderFilesPreviewModal(host: FilesHost): string {
@@ -123,19 +141,19 @@ export function renderFilesPreviewModal(host: FilesHost): string {
   } else if (p.status === "error") {
     body = `<p class="flash flash-error" style="margin:0">${esc(p.error || "Could not open file")}</p>`;
   } else if (p.kind === "image") {
-    const src = api.filesDownloadUrl(p.path, { inline: true });
+    const src = previewMediaUrl(p.path, p.etag);
     body = `<div class="files-preview-media">
       <img class="files-preview-img" src="${esc(src)}" alt="${esc(p.name)}" decoding="async" />
     </div>`;
   } else if (p.kind === "pdf" && p.objectUrl) {
     body = `<iframe class="files-preview-frame" title="${esc(p.name)}" src="${esc(p.objectUrl)}" type="application/pdf"></iframe>`;
   } else if (p.kind === "audio") {
-    const src = api.filesDownloadUrl(p.path, { inline: true });
+    const src = previewMediaUrl(p.path, p.etag);
     body = `<div class="files-preview-media">
       <audio class="files-preview-audio" controls preload="metadata" src="${esc(src)}"></audio>
     </div>`;
   } else if (p.kind === "video") {
-    const src = api.filesDownloadUrl(p.path, { inline: true });
+    const src = previewMediaUrl(p.path, p.etag);
     body = `<div class="files-preview-media">
       <video class="files-preview-video" controls preload="metadata" src="${esc(src)}"></video>
     </div>`;
@@ -164,5 +182,77 @@ export function renderFilesPreviewModal(host: FilesHost): string {
       { label: "Download", action: "files-preview-download", variant: "ghost" },
       { label: "Close", action: "files-preview-close", variant: "primary" },
     ],
+  });
+}
+
+function previewMediaUrl(path: string, etag: string | null): string {
+  const url = api.filesDownloadUrl(path, { inline: true });
+  if (!etag) return url;
+  return `${url}&v=${encodeURIComponent(etag)}`;
+}
+
+export function applyPreviewRefreshConflict(host: FilesHost): void {
+  const preview = host.state.filesPreview;
+  if (!preview || host.state.filesView === "trash" || !host.state.filesStatus?.ready) {
+    return;
+  }
+  const decision = previewRefreshConflict(preview, host.state.filesPath, host.state.filesEntries);
+  if (!decision) {
+    if (host.state.filesPreviewConflict?.path === preview.path) {
+      host.state.filesPreviewConflict = null;
+    }
+    return;
+  }
+  if (decision.kind === "adopt") {
+    host.state.filesPreview = { ...preview, etag: decision.etag };
+    if (host.state.filesPreviewConflict?.path === preview.path) {
+      host.state.filesPreviewConflict = null;
+    }
+    return;
+  }
+  host.state.filesPreviewConflict = {
+    path: decision.path,
+    name: decision.name,
+    kind: decision.kind,
+    etag: decision.etag,
+  };
+}
+
+export function keepPreviewConflict(host: FilesHost): void {
+  const preview = host.state.filesPreview;
+  const conflict = host.state.filesPreviewConflict;
+  host.state.filesPreviewConflict = null;
+  if (!preview || !conflict || conflict.path !== preview.path) return;
+  if (conflict.kind === "missing") {
+    host.state.filesPreview = { ...preview, ignored: { kind: "missing" } };
+    return;
+  }
+  if (conflict.etag) {
+    host.state.filesPreview = { ...preview, ignored: { kind: "changed", etag: conflict.etag } };
+  }
+}
+
+export function renderFilesPreviewConflictModal(host: FilesHost): string {
+  const conflict = host.state.filesPreviewConflict;
+  if (!conflict) return "";
+  const changed = conflict.kind === "changed";
+  return renderModal({
+    id: "files-preview-conflict-modal",
+    title: changed ? "File changed" : "File removed",
+    titleId: "files-preview-conflict-title",
+    closeAction: "files-preview-conflict-keep",
+    size: "sm",
+    body: changed
+      ? `<p style="margin:0">${esc(conflict.name)} was updated on the server. Reload the preview, or keep what you are looking at.</p>`
+      : `<p style="margin:0">${esc(conflict.name)} is no longer in this folder. Close the preview, or keep looking at this copy.</p>`,
+    footer: changed
+      ? [
+          { label: "Keep", action: "files-preview-conflict-keep", variant: "ghost" },
+          { label: "Reload", action: "files-preview-conflict-reload", variant: "primary" },
+        ]
+      : [
+          { label: "Keep", action: "files-preview-conflict-keep", variant: "ghost" },
+          { label: "Close preview", action: "files-preview-conflict-close", variant: "primary" },
+        ],
   });
 }

@@ -220,6 +220,8 @@ describe("user settings password section", () => {
       assert.equal((html.match(/data-action="toggle-password"/g) ?? []).length, 3);
       assert.match(html, /name="currentPassword"/);
       assert.match(html, /name="passwordConfirm"/);
+      assert.match(html, /name="staleNotifications"/);
+      assert.match(html, /Also notify when this window is not focused/);
     } finally {
       globalThis.document = previous;
     }
@@ -233,5 +235,6 @@ describe("normalizeUserSettings", () => {
     assert.equal(s.dayStartHour, 8);
     assert.equal(s.dayEndHour, 18);
     assert.equal(s.showWeekNumbers, false);
+    assert.equal(s.staleNotifications, false);
   });
 });

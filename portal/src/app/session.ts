@@ -238,6 +238,7 @@ export function clearPortalSessionState(state: AppState, hooks: ClearSessionHook
   }
   state.filesPreview = null;
   state.filesPreviewSeq += 1;
+  state.filesPreviewConflict = null;
   state.filesUploadMenuOpen = false;
   hooks.unbindFilesUploadMenuOutside();
   state.filesUploadDropActive = false;

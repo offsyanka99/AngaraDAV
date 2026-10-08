@@ -47,7 +47,7 @@ class SyncStatusService {
     /**
      * @return array{
      *   pollSeconds: int,
-     *   calendars: list<array{instanceId: int, calendarId: int, synctoken: int, components: string}>,
+     *   calendars: list<array{instanceId: int, calendarId: int, synctoken: int, components: string, lastModified: array{VEVENT: int, VTODO: int, VJOURNAL: int}}>,
      *   addressBooks: list<array{id: int, synctoken: int}>,
      *   files: array{enabled: bool, ready: bool, path: string, fingerprint: string|null, missing: bool, capped?: bool}
      * }
@@ -62,7 +62,7 @@ class SyncStatusService {
     }
 
     /**
-     * @return list<array{instanceId: int, calendarId: int, synctoken: int, components: string}>
+     * @return list<array{instanceId: int, calendarId: int, synctoken: int, components: string, lastModified: array{VEVENT: int, VTODO: int, VJOURNAL: int}}>
      */
     private function listCalendarRevisions(string $username): array {
         $principal = 'principals/' . $username;
@@ -81,17 +81,84 @@ class SyncStatusService {
             SharingPlugin::ACCESS_READ,
             SharingPlugin::ACCESS_READWRITE,
         ]);
-        $out = [];
+        $rows = [];
+        $calendarIds = [];
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $calendarId = (int) $row['calendar_id'];
+            $calendarIds[$calendarId] = $calendarId;
+            $rows[] = $row;
+        }
+        $revised = $this->componentLastModified(array_values($calendarIds));
+        $out = [];
+        foreach ($rows as $row) {
+            $calendarId = (int) $row['calendar_id'];
             $out[] = [
-                'instanceId' => (int) $row['instance_id'],
-                'calendarId' => (int) $row['calendar_id'],
-                'synctoken'  => (int) ($row['synctoken'] ?? 0),
-                'components' => (string) ($row['components'] ?? ''),
+                'instanceId'   => (int) $row['instance_id'],
+                'calendarId'   => $calendarId,
+                'synctoken'    => (int) ($row['synctoken'] ?? 0),
+                'components'   => (string) ($row['components'] ?? ''),
+                'lastModified' => $revised[$calendarId] ?? self::emptyComponentRevision(),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Newest object timestamp per component. A VEVENT write does not move VTODO or VJOURNAL.
+     *
+     * @param list<int> $calendarIds
+     *
+     * @return array<int, array{VEVENT: int, VTODO: int, VJOURNAL: int}>
+     */
+    private function componentLastModified(array $calendarIds): array {
+        $out = [];
+        foreach ($calendarIds as $calendarId) {
+            $out[$calendarId] = self::emptyComponentRevision();
+        }
+        if ($calendarIds === []) {
+            return $out;
+        }
+        $placeholders = implode(',', array_fill(0, count($calendarIds), '?'));
+        $stmt = $this->pdo->prepare(
+            'SELECT calendarid, UPPER(componenttype) AS componenttype, MAX(lastmodified) AS revised
+             FROM calendarobjects
+             WHERE calendarid IN (' . $placeholders . ')
+               AND UPPER(componenttype) IN (\'VEVENT\', \'VTODO\', \'VJOURNAL\')
+             GROUP BY calendarid, UPPER(componenttype)'
+        );
+        $stmt->execute(array_values($calendarIds));
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $calendarId = (int) $row['calendarid'];
+            if (!isset($out[$calendarId])) {
+                continue;
+            }
+            $revisedAt = (int) ($row['revised'] ?? 0);
+            switch (strtoupper((string) ($row['componenttype'] ?? ''))) {
+                case 'VEVENT':
+                    $out[$calendarId]['VEVENT'] = $revisedAt;
+                    break;
+                case 'VTODO':
+                    $out[$calendarId]['VTODO'] = $revisedAt;
+                    break;
+                case 'VJOURNAL':
+                    $out[$calendarId]['VJOURNAL'] = $revisedAt;
+                    break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array{VEVENT: int, VTODO: int, VJOURNAL: int}
+     */
+    private static function emptyComponentRevision(): array {
+        return [
+            'VEVENT'   => 0,
+            'VTODO'    => 0,
+            'VJOURNAL' => 0,
+        ];
     }
 
     /**

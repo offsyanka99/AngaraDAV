@@ -567,6 +567,8 @@ export type SyncStatus = {
     calendarId: number;
     synctoken: number;
     components: string;
+    /** Newest calendarobjects.lastmodified per component. 0 when that component has no rows. */
+    lastModified?: { VEVENT: number; VTODO: number; VJOURNAL: number };
   }>;
   addressBooks: Array<{ id: number; synctoken: number }>;
   files: {

@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.7`
+**Version:** `2.5.8`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -13,7 +13,7 @@ calendar events and needs a due date. Completing a repeating task saves that
 occurrence and moves the series to the next due date. Create/edit for **Notes** and
 **Tasks** is a modal; lists are full width. Notes rich text matches jtx
 Board Markdown (H1–H3, blockquote, `- [ ]` checkboxes, `~~strike~~`, `` `code` ``, `---`).
-User settings validation errors stay in the settings modal. **Password** (current, new, confirm) changes the signed-in user's DAV password via `POST /api/me/password`. Leave those fields blank to keep the password. The rules are in the **(i)** next to Password. A wrong current password stays in the modal (HTTP 400) and does not sign the user out. Sign in and each of those fields have a **View password** eye; it only shows or hides that field in the browser.
+The portal can be installed as its own window. A service worker under `/portal/` makes that possible and does not cache pages or API calls. User settings validation errors stay in the settings modal. **Background changes** can also raise a browser notification when this window is open but not focused. That check still pauses while the tab is hidden. **Password** (current, new, confirm) changes the signed-in user's DAV password via `POST /api/me/password`. Leave those fields blank to keep the password. The rules are in the **(i)** next to Password. A wrong current password stays in the modal (HTTP 400) and does not sign the user out. Sign in and each of those fields have a **View password** eye; it only shows or hides that field in the browser.
 
 ## Module layout
 
@@ -60,16 +60,16 @@ hosts — they do not import `app.ts`.
 
 | Tab | Features |
 |-----|----------|
-| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), month / week / agenda, Today and Jump to date (week start follows System settings); agenda also lists open tasks on their due date and notes that have a date; create/edit/delete VEVENT (RRULE) with one display reminder (a notification when it is due; click opens the event); holidays/read-only; large `.ics` import progress modal |
+| **Calendar** | Owned list with Edit (details → share → import/export), Delete (confirm checkbox), one view menu: month / week / work week (Monday–Friday) / agenda, Today and Jump to date (week start follows System settings); agenda also lists open tasks on their due date and notes that have a date; create/edit/delete VEVENT (RRULE) with one display reminder (a notification when it is due; click opens the event); holidays/read-only; large `.ics` import progress modal |
 | **Contacts** | Address books (create/rename/delete with confirm), contact table/search, per-contact CRUD, multi email/phone, photos, birthday/special dates, Unicode custom fields, book + single-contact `.vcf` export; large `.vcf` import progress modal |
 | **Tasks** | CalDAV `VTODO` list (sortable, full width), subtasks via `RELATED-TO;RELTYPE=PARENT`, repeat (`RRULE`) on the series, multi-select bulk status/due/%, create/edit modal on writable calendars |
 | **Notes** | CalDAV `VJOURNAL` list (sortable, full width), create/edit modal, rich editor (H1–H3, blockquote, checkbox, strikethrough, inline code, horizontal line, lists/links) with jtx Board Markdown in `DESCRIPTION` |
-| **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete into **Trash** (restore, delete now, empty; “ (restored)” when the original name is taken); upload progress dialog; folder item count; quota bar (Trash counts); same-folder copies get ` (copy)`, cross-folder keeps original name; same data as `/dav.php/files/{username}/`. WebDAV clients do not see Trash. Retention is **Trash retention (days)** in System settings (`files_trash_days`, default 30; 0 deletes immediately) |
+| **Files** | Private WebDAV home (when `files_enabled`): browse, **View** (images, PDF, text, audio, video), **Upload ▾** (Files… / Folder…; File System Access API with classic-input fallback), drop files/folders/mix onto the list, download, new folder, copy/move (folder tree destination), rename, delete into **Trash** (restore, delete now, empty; “ (restored)” when the original name is taken); upload progress dialog; folder item count; quota bar (Trash counts); same-folder copies get ` (copy)`, cross-folder keeps original name; Refresh of the open folder compares an open preview's etag and asks before replacing that preview; same data as `/dav.php/files/{username}/`. WebDAV clients do not see Trash. Retention is **Trash retention (days)** in System settings (`files_trash_days`, default 30; 0 deletes immediately) |
 | **Administration** | Admin role only (user menu). Tabs: **Overview** · **System settings** · **Users** · **Database** · **Configuration**. Installer: `/portal/install/`. |
 
 Section help lives under **(i)** info modals. A button from `infoIconHtml()` carries its own title and paragraphs (`data-info-title`, `data-info-paragraphs`). A button with `data-info` still opens a `SECTION_INFO` entry. Time format and week start are instance-wide (**Administration → System settings**); `/api/ui` (and `/api/me` `ui`) still expose them plus log level.
 
-While a user tab is visible, the portal polls collection revisions (`GET /api/sync-status`) and shows a sticky toast when CalDAV/CardDAV/WebDAV clients (or another browser tab) change the open view. **Refresh** reloads that tab in-place. The poll interval is **Administration → System settings → Portal sync poll interval** (default 30s) and does not extend session idle.
+While a user tab is visible, the portal polls collection revisions (`GET /api/sync-status`) and shows a sticky toast when CalDAV/CardDAV/WebDAV clients (or another browser tab) change the open view. Notes and Tasks compare that component's last-modified time, so an event edit does not toast them. A Files folder with more than 500 direct children says only the first 500 are checked. **Refresh** reloads that tab in-place. **User settings → Background changes** can also raise a browser notification when this window is open but not focused. The poll interval is **Administration → System settings → Portal sync poll interval** (default 30s) and does not extend session idle. The poll pauses while the tab is hidden.
 
 ### Administration (Admin role)
 

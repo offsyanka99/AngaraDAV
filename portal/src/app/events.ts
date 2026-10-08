@@ -780,9 +780,14 @@ function onRootErrorCapture(_o: AppOrchestrator, ev: Event): void {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function topFocusModal(root: HTMLElement): HTMLElement | null {
+  const modals = root.querySelectorAll<HTMLElement>(".cal-modal[data-focus-trap]");
+  return modals.length > 0 ? modals[modals.length - 1] : null;
+}
+
 function trapTabInOpenModal(root: HTMLElement, ev: KeyboardEvent): void {
   if (ev.key !== "Tab") return;
-  const modal = root.querySelector<HTMLElement>(".cal-modal[data-focus-trap]");
+  const modal = topFocusModal(root);
   if (!modal) return;
   const nodes = [...modal.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
     (el) => el.offsetParent !== null || el === document.activeElement,
@@ -840,6 +845,11 @@ function onDocumentKeydown(o: AppOrchestrator, ev: KeyboardEvent): void {
   }
   if (state.filesUploadConflict !== null) {
     files.resolveFilesUploadConflict(o.filesHost, "cancel");
+    return;
+  }
+  if (state.filesPreviewConflict !== null) {
+    files.keepPreviewConflict(o.filesHost);
+    render();
     return;
   }
   if (state.filesPreview !== null) {

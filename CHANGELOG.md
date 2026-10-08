@@ -2,8 +2,16 @@
 
 ## Unreleased
 
+## 2.5.8 — 2026-10-08
+
 ### Portal
-- **Calendar** has a **Jump to date** button beside Today, on month, week, and agenda. It opens the same small date calendar used by event fields. The first weekday follows **Week starts on** in Administration → System settings (`auto`, Monday, or Sunday). Choosing a day, or Today inside that calendar, moves month, week, and agenda to that day.
+- The portal can be installed as its own window. The manifest and service worker live under `/portal/`. The worker does not cache the portal or the API, so a closed browser does not keep a copy. Icons are the existing favicon and home-screen icon.
+- **User settings → Background changes** can show a browser notification as well as the in-page banner when calendars, tasks, notes, contacts, or files change. It appears only while this window is open but not the focused window. The check still pauses while the tab is hidden. Saving the option on asks the browser for permission. This is not WebDAV-Push.
+- **Notes** and **Tasks** notice changes to notes and tasks. Changing an event no longer asks you to refresh Notes or Tasks. The Calendar tab still notices any change on that calendar.
+- When a Files folder has more than 500 items, the refresh banner says only the first 500 are checked.
+- While a file preview is open, Refresh compares its tag with the folder listing. If the file changed on the server, choose **Keep** or **Reload**. If it is no longer in the folder, choose **Keep** or **Close preview**. Looking at a preview does not ask you to discard unsaved changes.
+- **Calendar** view is one menu: Month, Week, Work week, and Agenda. Work week shows Monday through Friday. Saturday and Sunday stay hidden. Previous and next still move a whole week.
+- **Calendar** has a **Jump to date** button beside Today, on month, week, work week, and agenda. It opens the same small date calendar used by event fields. The first weekday follows **Week starts on** in Administration → System settings (`auto`, Monday, or Sunday). Choosing a day, or Today inside that calendar, moves month, week, and agenda to that day.
 - A successful **Administration → Configuration** data restore ends portal sessions. The counter is `system.portal_session_generation` in `configuration.yaml`, outside the data archive. Browsers that were signed in return to Sign in, including the administrator who ran the restore. That screen still says the database and file store were restored. Settings backup and restore leave the counter unchanged. A failed data restore leaves it unchanged. Replacing the database and file store by hand, with AngaraDAV stopped, also leaves it unchanged.
 
 ## 2.5.7 — 2026-10-06

@@ -14,6 +14,13 @@ if (str_starts_with($uri, '/api')) {
 }
 
 $path = $doc . $uri;
+if ($uri === '/portal/manifest.webmanifest' && is_file($path)) {
+    header('Content-Type: application/manifest+json; charset=utf-8');
+    header('Cache-Control: no-cache');
+    readfile($path);
+
+    return true;
+}
 if ($uri !== '/' && is_file($path)) {
     return false;
 }

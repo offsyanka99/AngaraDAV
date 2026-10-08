@@ -11,18 +11,20 @@ import { notify } from "./notify";
 import {
   clampPollSeconds,
   DEFAULT_POLL_SECONDS,
-  domainNoun,
   hasOpenEditor,
   isCompoundBusy,
   isDomainStale,
   shouldShowStaleToast,
+  staleToastMessage,
 } from "./backgroundSyncDiff";
+import { shouldShowStaleNotification, STALE_NOTIFICATION_TAG } from "./staleNotification";
 
 export {
   clampPollSeconds,
   DEFAULT_POLL_SECONDS,
   domainNoun,
   hasComponent,
+  staleToastMessage,
   hasOpenEditor,
   isCompoundBusy,
   isDomainStale,
@@ -89,16 +91,62 @@ function fetchStatus(state: AppState): Promise<SyncStatus> {
 }
 
 function dismissStaleToast(): void {
+  dismissStaleOsNotification();
   if (staleToastId === null) return;
   notify.dismiss(staleToastId);
   staleToastId = null;
 }
 
+let lastFilesCapped = false;
+let staleOsNotification: Notification | null = null;
+
+function dismissStaleOsNotification(): void {
+  if (!staleOsNotification) return;
+  try {
+    staleOsNotification.close();
+  } catch {
+    /* already closed */
+  }
+  staleOsNotification = null;
+}
+
+function showStaleOsNotification(host: BackgroundSyncHost, message: string): void {
+  dismissStaleOsNotification();
+  if (typeof Notification === "undefined" || typeof document === "undefined") return;
+  if (
+    !shouldShowStaleNotification({
+      enabled: host.state.userSettings.staleNotifications === true,
+      permission: Notification.permission,
+      visible: document.visibilityState === "visible",
+      focused: document.hasFocus(),
+    })
+  ) {
+    return;
+  }
+  try {
+    const notice = new Notification("AngaraDAV", {
+      body: message,
+      tag: STALE_NOTIFICATION_TAG,
+      lang: "en",
+    });
+    notice.onclick = () => {
+      try {
+        window.focus();
+      } catch {
+        /* ignore */
+      }
+      notice.close();
+    };
+    staleOsNotification = notice;
+  } catch {
+    /* the banner is already on screen */
+  }
+}
+
 function showStaleToast(host: BackgroundSyncHost): void {
   if (staleToastId !== null && notify.isVisible(staleToastId)) return;
   const tab = host.state.activeTab;
-  const noun = domainNoun(tab);
-  const message = `${noun.charAt(0).toUpperCase()}${noun.slice(1)} changed in the background. Refresh to pick up the latest.`;
+  const message = staleToastMessage(tab, tab === "files" && lastFilesCapped);
   // WCAG 2.2.1 exception: sticky until dismiss/Refresh — auto-dismiss would hide the only way to apply remote changes.
   staleToastId = notify.info(message, {
     duration: null,
@@ -109,6 +157,7 @@ function showStaleToast(host: BackgroundSyncHost): void {
       },
     },
   });
+  showStaleOsNotification(host, message);
   log.event("backgroundSync.stale", { tab });
 }
 
@@ -126,6 +175,7 @@ async function tick(): Promise<void> {
   try {
     const status = await fetchStatus(state);
     if (!poller || poller.stopped) return;
+    lastFilesCapped = status.files.capped === true;
     applyPollSeconds(status.pollSeconds);
     const changed = isDomainStale(state.activeTab, lastSnapshot, status, state.selectedIds);
     log.debug("backgroundSync", { tab: state.activeTab, changed });
@@ -158,6 +208,9 @@ async function tick(): Promise<void> {
 
 function onVisibilityOrFocus(): void {
   if (!poller || poller.stopped) return;
+  if (typeof document !== "undefined" && document.hasFocus()) {
+    dismissStaleOsNotification();
+  }
   if (typeof document !== "undefined" && document.hidden) {
     if (poller.timer !== null) {
       clearTimeout(poller.timer);

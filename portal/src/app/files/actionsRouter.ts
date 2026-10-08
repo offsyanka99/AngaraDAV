@@ -19,7 +19,7 @@ import {
 } from "./itemMenu";
 import { filesItemMenuModel } from "./itemMenuModel";
 import { filterAndSortEntries } from "./listing";
-import { closeFilesPreview, openFilesPreview } from "./preview";
+import { closeFilesPreview, keepPreviewConflict, openFilesPreview } from "./preview";
 import {
   closeFilesUploadProgress,
   resolveFilesUploadConflict,
@@ -514,6 +514,23 @@ export async function handleFilesAction(
   if (action === "files-preview-close") {
     closeFilesPreview(host);
     host.render();
+    return true;
+  }
+  if (action === "files-preview-conflict-keep") {
+    keepPreviewConflict(host);
+    host.render();
+    return true;
+  }
+  if (action === "files-preview-conflict-close") {
+    closeFilesPreview(host);
+    host.render();
+    return true;
+  }
+  if (action === "files-preview-conflict-reload") {
+    const path = state.filesPreviewConflict?.path ?? state.filesPreview?.path ?? "";
+    state.filesPreviewConflict = null;
+    if (path) void openFilesPreview(host, path);
+    else host.render();
     return true;
   }
   if (action === "files-preview-download") {

@@ -12,6 +12,7 @@ export function disposeFilesPreviewState(state: AppState): void {
   }
   state.filesPreviewSeq += 1;
   state.filesPreview = null;
+  state.filesPreviewConflict = null;
 }
 
 export function resetFilesTransferTreeState(state: AppState): void {

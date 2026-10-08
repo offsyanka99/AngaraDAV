@@ -41,6 +41,7 @@ export {
   classifyFilesPreview,
   closeFilesPreview,
   disposeFilesPreviewState,
+  keepPreviewConflict,
   openFilesPreview,
   renderFilesPreviewModal,
 } from "./preview";

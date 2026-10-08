@@ -113,9 +113,9 @@ services:
         max-file: "3"
 
   angaradav:
-    # See docs/truenas-scale.compose.yaml for tag naming (latest, 2.5.7, sha-…)
+    # See docs/truenas-scale.compose.yaml for tag naming (latest, 2.5.8, sha-…)
     image: ghcr.io/offsyanka99/angaradav:latest
-    # image: ghcr.io/offsyanka99/angaradav:2.5.7
+    # image: ghcr.io/offsyanka99/angaradav:2.5.8
     # image: ghcr.io/offsyanka99/angaradav:sha-<git-sha>
 
     container_name: angaradav
