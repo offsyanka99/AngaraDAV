@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.8`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.9`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 
@@ -120,6 +120,90 @@ The entrypoint also logs mount warnings at start (`25-check-baikal-persistence.s
 
 `degraded` is a config/mount problem, not an outage. `/info.php` returns public feature flags and version only.
 
+## Metrics
+
+`GET /metrics.php` is Prometheus text exposition (`text/plain; version=0.0.4`). Every series is a gauge computed on that request. There are no per-request counters. `/health.php` remains the liveness URL for load balancers and for anything that cannot send a bearer token.
+
+The URL stays **404** (`Not found`) until a token is set. Resolution order is `ANGARA_METRICS_TOKEN`, then `METRICS_TOKEN`, then `system.metrics_token` in `configuration.yaml`. Empty, `0`, and `false` are unset. A value shorter than 16 bytes, or one that contains a space or a control character, also leaves the URL off. The request must send `Authorization: Bearer <token>`. A missing or wrong token is **401**. The token is not read from the query string. Do not put it in a browser bookmark or a proxy access log.
+
+Set the token in the compose `environment` block, or as `system.metrics_token` in the live YAML. It is not an Administration field. A settings backup that contains it is rejected. The data archive does not include `configuration.yaml`.
+
+Nginx allows the URL only from `127.0.0.1` and `::1`, then `deny all`. The published host port, including local `31088` and the TrueNAS service port, reaches the container on the Docker bridge and returns **403** before PHP runs. That **403** has no metric names and no bearer challenge. Do not remove `deny all` and do not allow the Docker bridge. PHP does not check the client address: PHP-FPM sees `127.0.0.1` for every request nginx has already accepted.
+
+A one-off check from inside the container network namespace:
+
+```bash
+docker exec angaradav-local curl -fsS \
+  -H "Authorization: Bearer $ANGARA_METRICS_TOKEN" \
+  http://127.0.0.1/metrics.php
+```
+
+`HEAD` returns the same headers and an empty body. `POST` is **405**.
+
+### What the gauges mean
+
+| Series | Read it as |
+|---|---|
+| `angaradav_up` | `1` when this scrape finished. `0` only when PHP's autoload file is missing (**503**). |
+| `angaradav_build_info` | Always `1`. Labels `version` and `revision` identify the build. |
+| `angaradav_install_locked` | `1` when `Specific/INSTALL_DISABLED` exists or `ANGARA_LOCK_INSTALL=1`. |
+| `angaradav_config_writable` / `angaradav_specific_writable` | `1` when that directory can be written. |
+| `angaradav_files_enabled` | `1` when Files is on. |
+| `angaradav_files_storage_ready` | `1` only when Files is on and storage is active. |
+| `angaradav_database_up` | `1` when `SELECT 1` succeeds. A down database is still HTTP **200**. |
+| `angaradav_push_queue_jobs` | Label `state` is `ready` or `delayed`. |
+| `angaradav_push_queue_oldest_age_seconds` | Age of the oldest queued push job. `0` when the queue is empty or the database is down. |
+| `angaradav_push_queue_max_attempts` | Highest delivery attempt count on the queue. |
+| `angaradav_push_subscriptions` | Unexpired subscriptions. Label `kind` is `calendars`, `addressbooks`, `files`, `principals`, or `other`. `other` is a count. Names and paths are not labels. |
+
+Usernames, file paths, calendar names, and the database path are not in the text.
+
+### Tools
+
+Any scraper that understands Prometheus text can read this URL. AngaraDAV does not ship a dashboard.
+
+| Tool | Role |
+|---|---|
+| `curl` | One-off check from inside the container, as above. |
+| [Prometheus](https://prometheus.io/) | Scrapes on an interval, stores the series, and evaluates alerts. |
+| [Grafana](https://grafana.com/) | Graphs a Prometheus (or VictoriaMetrics) database. It does not scrape AngaraDAV itself. |
+| [VictoriaMetrics](https://docs.victoriametrics.com/) / `vmagent` | Prometheus-compatible scrape and storage. Same bearer header and same loopback rule. |
+
+A Prometheus process on the Docker host cannot use the published port. Run it in a sidecar that shares the AngaraDAV network namespace, or `docker exec` from a scheduled job. Example compose service next to AngaraDAV, not part of the shipped files:
+
+```yaml
+prometheus:
+  image: prom/prometheus:v2.55.1
+  network_mode: "service:angaradav"
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus-data:/prometheus
+```
+
+`prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: angaradav
+    metrics_path: /metrics.php
+    scheme: http
+    bearer_token_file: /etc/prometheus/angaradav-metrics-token
+    static_configs:
+      - targets: ["127.0.0.1:80"]
+```
+
+Put the token in that file, mode `0600`, not in the scrape URL. `network_mode: "service:angaradav"` uses the AngaraDAV service name from your compose file. The nginx config is baked into the image. Recreate the container after an image rebuild. A bind mount of the repo does not update `nginx.conf`.
+
+Useful alerts:
+
+- Scrape fails: the target is down, the token was rejected, or the scrape left the container namespace (**403** from outside, **401** from inside with a bad token).
+- Database down: `angaradav_database_up == 0` for 5 minutes.
+- Queue stuck: `angaradav_database_up == 1` and (`angaradav_push_queue_oldest_age_seconds > 900` or `angaradav_push_queue_max_attempts > 5`).
+- Files degraded: `angaradav_files_enabled == 1` and `angaradav_files_storage_ready == 0`.
+- Disk writability: `angaradav_config_writable == 0` or `angaradav_specific_writable == 0`.
+
+Do not alert on an empty push queue while `angaradav_database_up == 0`. Those push gauges are `0` during a database outage.
+
 ## Environment variables
 
 | Env | Default | Effect |
@@ -137,6 +221,7 @@ The entrypoint also logs mount warnings at start (`25-check-baikal-persistence.s
 | `ANGARA_FILES_QUOTA_MB` | `10240` | Per-user quota (MB); `0` = unlimited |
 | `ANGARA_FILES_MAINTENANCE_INTERVAL_SECONDS` | `3600` | Interval of the in-container file maintenance loop |
 | `ANGARA_DAV_MAX_BODY_SIZE` | `1G` | nginx `client_max_body_size` for `/dav.php` and `/api/` (nginx syntax: `512M`, `2G`; `256MB` is invalid) |
+| `ANGARA_METRICS_TOKEN` / `METRICS_TOKEN` | unset | Bearer secret for loopback `GET /metrics.php`. At least 16 bytes, no spaces. `ANGARA_METRICS_TOKEN` wins. Unset leaves the URL **404**. `system.metrics_token` in `configuration.yaml` is the third source |
 | `MSMTPRC` | unset | Contents of `/etc/msmtprc` for outgoing mail (iMIP invitations) |
 
 **Precedence:** `ANGARA_*` → unprefixed name → `configuration.yaml` → default.
@@ -433,6 +518,7 @@ After install, `Specific/INSTALL_DISABLED` exists and `/portal/install/` reports
 - **To 2.5.3:** the push queue gains three columns automatically on first use (SQLite and PostgreSQL); no manual SQL. If you plan to use Push for file storage, raise **Max push subscriptions per user** (see [WebDAV-Push](#webdav-push)).
 - **To 2.5.5:** no schema change. Push registration is returned as 204 with `Location` and `Expires`. Clients that recorded HTTP 302 should register again. Subscriptions stored during those failed registrations expire on their own.
 - **To 2.5.6:** no schema change. Administration → Subscriptions lists and removes WebDAV-Push subscriptions while WebDAV-Push is on. The endpoint URL and keys are not shown.
+- **To 2.5.9:** no schema change. `GET /metrics.php` is Prometheus gauges for the operator. It stays off until a bearer token is set, and nginx allows it only from container loopback. The published host port returns 403. `/health.php` stays the liveness URL. PHP classes under `Baikal\` load with PSR-4. File paths and names are unchanged.
 - **To 2.5.8:** no schema change. The portal can be installed as its own window. `/portal/manifest.webmanifest` and `/portal/sw.js` are static files. The worker does not cache the portal or `/api/`. **User settings → Background changes** can show a browser notification when the portal window is open but not focused. Polling still pauses while the tab is hidden. This is not WebDAV-Push. Notes and Tasks refresh banners follow notes and tasks, not event edits. A Files folder with more than 500 items says the banner checked the first 500. Refresh asks before it replaces an open file preview. Calendar view adds Work week (Monday–Friday). **Jump to date** and signing portal browsers out after a successful data restore are in this release.
 - **To 2.5.7:** `file_trash` is created automatically on first use (SQLite and PostgreSQL); no manual SQL. Portal and WebDAV delete of files and folders use Trash for `files_trash_days` (default 30; 0 deletes immediately). This release also adds repeating tasks, agenda rows for open tasks and dated notes, one event display reminder, a portal notification when that reminder is due, and Administration → Configuration data backup and restore of the database and WebDAV file store. `configuration.yaml` is not in that archive.
 - **Source installs:** `composer install` (requires the `patch` command; it applies [patches/](../patches/README.md)), rebuild the portal (`make portal`), then restart PHP-FPM and the Push worker.

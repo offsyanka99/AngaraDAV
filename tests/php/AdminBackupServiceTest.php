@@ -131,6 +131,28 @@ $doc5['settings']['admin_passwordhash'] = 'nope';
 unset($doc5['checksum']);
 assert_throws(fn () => $backup->preview($doc5), 'forbidden key in backup is rejected');
 
+$docToken = $doc;
+$docToken['settings']['metrics_token'] = '0123456789abcdef';
+unset($docToken['checksum']);
+try {
+    $backup->preview($docToken);
+    assert_true(false, 'metrics_token in a backup is rejected');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400, 'metrics_token backup is 400');
+    assert_true(str_contains($e->getMessage(), 'metrics_token'), 'metrics_token backup names the key');
+    assert_true(!str_contains($e->getMessage(), '0123456789abcdef'), 'metrics_token backup does not echo the secret');
+}
+$docTokenCamel = $doc;
+$docTokenCamel['settings']['metricsToken'] = '0123456789abcdef';
+unset($docTokenCamel['checksum']);
+try {
+    $backup->preview($docTokenCamel);
+    assert_true(false, 'metricsToken in a backup is rejected');
+} catch (ApiException $e) {
+    assert_true($e->getStatus() === 400, 'metricsToken backup is 400');
+    assert_true(!str_contains($e->getMessage(), '0123456789abcdef'), 'metricsToken backup does not echo the secret');
+}
+
 // Malformed documents rejected before any settings are touched
 assert_throws(fn () => $backup->preview(['kind' => 'something-else', 'formatVersion' => 1, 'settings' => ['timezone' => 'UTC']]), 'wrong kind rejected');
 assert_throws(fn () => $backup->preview(['kind' => 'angaradav.settings-backup', 'formatVersion' => 99, 'settings' => ['timezone' => 'UTC']]), 'future formatVersion rejected');

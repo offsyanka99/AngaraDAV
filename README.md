@@ -5,9 +5,9 @@
 
 Self-hosted **calendar, contacts, tasks, notes, and private files** — CalDAV, CardDAV, and WebDAV — with a browser portal.
 
-**Version:** 2.5.8 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
+**Version:** 2.5.9 · **License:** GPL-2.0-or-later (Baïkal lineage) · [Changelog](CHANGELOG.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](docs/SECURITY.md)
 
-Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.8`, `sha-…`) · linux/amd64 + linux/arm64
+Images: `ghcr.io/offsyanka99/angaradav` (`latest`, `2.5.9`, `sha-…`) · linux/amd64 + linux/arm64
 
 ---
 
@@ -98,6 +98,7 @@ Put **HTTPS** in front for anything beyond a laptop. Do not expose port 80 to th
 | `/cal.php/` · `/card.php/` | CalDAV / CardDAV only |
 | `/api/` | Portal JSON API (session cookie) |
 | `/health.php` · `/info.php` | Liveness / public status |
+| `/metrics.php` | Loopback Prometheus gauges. Bearer token required. Not a public probe. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 
 ---
 

@@ -108,6 +108,12 @@ jobs:
         run: php tests/php/NginxCspHeadersTest.php
       - name: Health endpoint unit test
         run: php tests/php/HealthEndpointTest.php
+      - name: Metrics exposition unit test
+        run: php tests/php/MetricsExpositionTest.php
+      - name: Metrics token unit test
+        run: php tests/php/MetricsEndpointTest.php
+      - name: PSR-4 autoload unit test
+        run: php tests/php/AutoloadPsr4Test.php
       - name: Local Docker DX unit test
         run: php tests/php/LocalDockerDxTest.php
       - name: Files maintenance scheduler unit test

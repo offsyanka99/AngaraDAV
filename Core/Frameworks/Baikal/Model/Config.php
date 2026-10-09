@@ -188,7 +188,7 @@ abstract class Config {
                 $existing = [];
             }
             // Keep keys this model does not own (portal log level, time format,
-            // week start, portal admin list, session generation, …).
+            // week start, portal admin list, session generation, metrics token, …).
             // Upgrade only rewrites configured_version.
             $config[$this->sConfigFileSection] = array_merge($existing, $this->aData);
             self::writeConfigFile($config);

@@ -48,9 +48,8 @@
         }
     },
     "autoload": {
-        "psr-0": {
-            "BaikalAdmin": "Core/Frameworks/",
-            "Baikal": "Core/Frameworks/"
+        "psr-4": {
+            "Baikal\\": "Core/Frameworks/Baikal/"
         }
     },
     "support": {

@@ -24,7 +24,7 @@ This repository does not currently use Nx. Its primary configuration surfaces ar
 - Protocol entry points are [html/dav.php](../../../html/dav.php), [html/cal.php](../../../html/cal.php), and [html/card.php](../../../html/card.php).
 - The portal JSON API begins at [html/api/index.php](../../../html/api/index.php); request routing is owned by [Core/Frameworks/Baikal/Portal/App.php](../../../Core/Frameworks/Baikal/Portal/App.php).
 - Active portal server code belongs under [Core/Frameworks/Baikal/Portal](../../../Core/Frameworks/Baikal/Portal). Treat [Core/Frameworks/BaikalAdmin](../../../Core/Frameworks/BaikalAdmin) as legacy compatibility code; see its [README](../../../Core/Frameworks/BaikalAdmin/README.md).
-- Composer uses PSR-0 autoloading, so namespace and directory alignment are a dependency boundary.
+- Composer uses PSR-4 autoloading (`Baikal\` → `Core/Frameworks/Baikal/`), so namespace and directory alignment are a dependency boundary. `BaikalAdmin\` is not an autoload prefix.
 
 ### Portal Frontend
 

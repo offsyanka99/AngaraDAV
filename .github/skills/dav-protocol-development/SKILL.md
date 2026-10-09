@@ -12,7 +12,7 @@ Use this workflow for client-facing DAV behavior. Begin with [AGENTS.md](../../.
 
 1. Start at [html/dav.php](../../../html/dav.php) for combined DAV, [html/cal.php](../../../html/cal.php) for CalDAV-only, or [html/card.php](../../../html/card.php) for CardDAV-only. Preserve their endpoint and base-URI behavior.
 2. Follow setup through [Bootstrap.php](../../../Core/Frameworks/Baikal/Core/Bootstrap.php) and [Server.php](../../../Core/Frameworks/Baikal/Core/Server.php). `Server::initServer()` owns SabreDAV nodes and plugin registration.
-3. Determine whether the behavior belongs in a SabreDAV backend, a DAV tree node, or a server plugin. Keep custom code in the matching PSR-0 `Baikal\Core` directory and namespace.
+3. Determine whether the behavior belongs in a SabreDAV backend, a DAV tree node, or a server plugin. Keep custom code in the matching PSR-4 `Baikal\Core` directory and namespace (`Core/Frameworks/Baikal/Core/`).
 4. Check feature flags and root composition before registering a plugin. Optional file storage must not prevent CalDAV or CardDAV from starting when storage is unavailable.
 
 ## Preserve Client Compatibility

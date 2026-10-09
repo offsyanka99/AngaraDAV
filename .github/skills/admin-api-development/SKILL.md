@@ -32,4 +32,4 @@ Use this workflow for changes that alter the portal administration API. Read [AG
 
 - The installer API is handled before `App::bootstrap()` in [html/api/index.php](../../../html/api/index.php); do not fold installer behavior into admin routing.
 - Preserve unknown configuration values and exclude secrets from read endpoints when editing settings behavior.
-- Keep PSR-0 namespace-to-directory alignment under `Baikal\Portal\Admin`.
+- Keep PSR-4 namespace-to-directory alignment under `Baikal\Portal\Admin` (`Core/Frameworks/Baikal/Portal/Admin/`).

@@ -68,7 +68,7 @@ Two independent HTTP surfaces sit on the same data:
 | Item | Value | Source |
 |---|---|---|
 | Runtime | `php: ^8.4` | [composer.json](../../composer.json) |
-| Autoload | **PSR-0** (not PSR-4): `Baikal` and `BaikalAdmin` → `Core/Frameworks/` | [composer.json](../../composer.json) |
+| Autoload | **PSR-4**: `Baikal\` → `Core/Frameworks/Baikal/`. `BaikalAdmin\` is not an autoload prefix; [Core/Frameworks/BaikalAdmin](../../Core/Frameworks/BaikalAdmin) is a redirect stub | [composer.json](../../composer.json) |
 | Core deps | `sabre/dav ~4.7.0`, `symfony/yaml ^8.1`, `minishlink/web-push ^11.0`, `symfony/http-client ^8.1`, `nyholm/psr7 ^1.8` | [composer.json](../../composer.json) |
 | Required ext | `curl`, `dom`, `mbstring`, `openssl`, `pdo`, `zlib` (`gmp` suggested for faster VAPID) | [composer.json](../../composer.json) |
 | Dev deps | `php-cs-fixer ^3.95`, `phpstan ^2.2` + deprecation rules | [composer.json](../../composer.json) |
@@ -415,7 +415,7 @@ These are **contracts**, not branding. Changing them breaks live installs, store
 
 | Contract | Where |
 |---|---|
-| PHP namespaces `Baikal\*`, `BaikalAdmin\*` | PSR-0 map in [composer.json](../../composer.json) — directory ↔ namespace must stay aligned |
+| PHP namespaces `Baikal\*` | PSR-4 map in [composer.json](../../composer.json): `Baikal\` → `Core/Frameworks/Baikal/`. Directory and namespace stay aligned. `BaikalAdmin\` is a stub directory, not a Composer prefix |
 | `config/configuration.yaml` filename and schema | Read by bootstrap, models, services |
 | Docker path `/var/www/baikal` | Image layout, volumes, all deployment templates |
 | Digest realm `BaikalDAV` | Stored `digesta1` hashes are `md5(user:realm:password)` — changing the realm invalidates every DAV password |

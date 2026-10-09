@@ -33,6 +33,17 @@ assert_true(str_contains((string) $incBody, "media-src 'self' blob:"), 'CSP incl
 assert_true(str_contains((string) $confBody, 'include /etc/nginx/security-headers.inc;'), 'server includes security headers');
 assert_true(substr_count((string) $confBody, 'include /etc/nginx/security-headers.inc;') >= 4, 'portal locations re-include security headers');
 
+$metricsStart = strpos((string) $confBody, 'location = /metrics.php {');
+$metricsEnd = $metricsStart === false ? false : strpos((string) $confBody, "\n  }", $metricsStart);
+$metricsBlock = ($metricsStart !== false && $metricsEnd !== false)
+    ? substr((string) $confBody, $metricsStart, $metricsEnd - $metricsStart)
+    : '';
+assert_true(str_contains($metricsBlock, 'allow 127.0.0.1;'), 'metrics location allows ipv4 loopback');
+assert_true(str_contains($metricsBlock, 'allow ::1;'), 'metrics location allows ipv6 loopback');
+assert_true(str_contains($metricsBlock, 'deny all;'), 'metrics location denies every other address');
+assert_true(!str_contains($metricsBlock, 'add_header'), 'metrics location does not set add_header');
+assert_true(!str_contains($metricsBlock, 'X-Forwarded-For') && !str_contains($metricsBlock, 'X-Real-IP'), 'metrics location does not trust forwarded addresses');
+
 $html = file_get_contents($root . '/portal/index.html');
 assert_true(is_string($html) && str_contains($html, "frame-src 'self' blob:"), 'portal HTML meta CSP has frame-src blob:');
 assert_true(is_string($html) && str_contains($html, 'theme-init.js'), 'theme init is an external script (CSP script-src self)');

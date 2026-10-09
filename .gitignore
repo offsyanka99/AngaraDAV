@@ -35,17 +35,9 @@ Core/BuildInfo.php
 *.local.md
 
 # Portal internal refactor plans/inventories (local only; not published)
-docs/portal-*-plan.md
-docs/portal-*-inventory.md
-docs/portal-*-verification.md
-docs/portal-app-refactor-plan.md
-docs/IMPROVEMENTS.md
-docs/admin-portal-refactor-plan.md
-docs/upgrade-plan.md
-docs/webdav-push-files-plan.md
-docs/admin-push-subscriptions-plan.md
+docs/plans/*.md
 docs/dav4jvm-calls.md
-docs/session-restore-plan.md
+
 
 # IDE
 nbproject

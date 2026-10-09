@@ -33,6 +33,8 @@ class AdminSettingsService {
         'encryption_key',
         'password_hash',
         'passwordhash',
+        'metrics_token',
+        'metricsToken',
     ];
 
     /** Keys exposed in GET (editable surface). */

@@ -52,6 +52,7 @@ $initial = [
         'auth_realm'          => 'BaikalDAV',
         'extra_unknown_key'   => 'preserve-me',
         'portal_session_generation' => 7,
+        'metrics_token'     => '0123456789abcdef',
     ],
     'database' => ['backend' => 'sqlite'],
 ];
@@ -64,6 +65,9 @@ try {
     assert_true(!array_key_exists('admin_passwordhash', $get), 'hash never in GET');
     assert_true(!array_key_exists('portal_session_generation', $get), 'generation is not in GET settings');
     assert_true(!in_array('portal_session_generation', $svc->editableKeys(), true), 'generation is not an editable key');
+    assert_true(!array_key_exists('metrics_token', $get), 'metrics token is not in GET settings');
+    assert_true(!array_key_exists('hasMetricsToken', $get), 'metrics token presence is not in GET settings');
+    assert_true(!in_array('metrics_token', $svc->editableKeys(), true), 'metrics token is not an editable key');
     assert_true($get['files_enabled'] === false, 'files off');
     assert_true($get['cal_enabled'] === true, 'cal on');
     assert_true($get['writable'] === true, 'writable');
@@ -107,6 +111,22 @@ try {
     $raw = Yaml::parseFile($path);
     assert_true(($raw['system']['extra_unknown_key'] ?? null) === 'preserve-me', 'unknown system key preserved');
     assert_true(($raw['system']['portal_session_generation'] ?? null) === 7, 'settings save keeps session generation');
+    assert_true(($raw['system']['metrics_token'] ?? null) === '0123456789abcdef', 'settings save keeps the metrics token');
+    try {
+        $svc->updateSystemSettings(['metrics_token' => 'fedcba9876543210']);
+        assert_true(false, 'settings body must refuse metrics_token');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'metrics_token in the settings body is 400');
+        assert_true(str_contains($e->getMessage(), 'metrics_token'), 'refusal names metrics_token');
+        assert_true(!str_contains($e->getMessage(), 'fedcba9876543210'), 'refusal does not echo the metrics token');
+    }
+    try {
+        $svc->updateSystemSettings(['metricsToken' => 'fedcba9876543210']);
+        assert_true(false, 'settings body must refuse metricsToken');
+    } catch (ApiException $e) {
+        assert_true($e->getStatus() === 400, 'metricsToken in the settings body is 400');
+        assert_true(!str_contains($e->getMessage(), 'fedcba9876543210'), 'metricsToken refusal does not echo the secret');
+    }
     assert_true(($raw['database']['backend'] ?? null) === 'sqlite', 'database section preserved');
     assert_true(!empty($raw['system']['admin_passwordhash']), 'password hash still present');
 
@@ -292,6 +312,7 @@ try {
         'backend'     => 'sqlite',
         'sqlite_file' => $sqlitePath,
     ];
+    $withDb['system']['metrics_token'] = '0123456789abcdef';
     file_put_contents($path, Yaml::dump($withDb, 4, 2));
     $svcReset = new AdminSettingsService($path, $specific);
     try {
@@ -308,6 +329,7 @@ try {
     assert_true($result['ok'] === true, 'reset ok');
     assert_true(($result['redirectUrl'] ?? '') === '/portal/install/', 'redirect to portal installer');
     assert_true(!is_file($path), 'configuration.yaml removed');
+    assert_true(!is_file($dir . '/config/configuration.yaml'), 'reset does not write a new metrics token');
     assert_true(!is_file($installDisabled), 'INSTALL_DISABLED removed');
     assert_true(!is_file($sqlitePath), 'sqlite db removed');
     assert_true(!is_file($specific . '/files/user1/note.txt'), 'webdav files removed');

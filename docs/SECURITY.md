@@ -1,6 +1,6 @@
 # Security Policy
 
-Reviewed against product **2.5.8** on 2026-10-08. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
+Reviewed against product **2.5.9** on 2026-10-09. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
 
 ## Reporting a Vulnerability
 
@@ -29,13 +29,14 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 - WebDAV-Push for file storage (`push_files_enabled`) is off by default. Only the owner can subscribe to their folders. File topics are an HMAC under a sub-key of `database.encryption_key`. Before each delivery the worker checks that the subscriber still owns the path: an active file home for files, the owner or a current calendar-proxy member for calendars, the owner for address books. Deleting a user removes that user's subscriptions and queued notifications, including other users' subscriptions on that user's collections.
 - Back up `config/` and `Specific/` in private, and back up the WebDAV file storage directory when `files_storage_path` or `ANGARA_FILES_STORAGE_PATH` points outside `Specific/files`. `config/configuration.yaml` holds the admin password hash, the database password, and `database.encryption_key`. `Specific/push_vapid.json` is the server Push identity. The Administration data archive is the database plus the file store, including Trash. It does not contain `configuration.yaml` or `push_vapid.json`. Restoring it does not change the admin password. A successful Administration restore increments `system.portal_session_generation` in `configuration.yaml`, which is outside the archive, and the next portal request signs that browser out. The administrator signs in again. Replacing the database and file store by hand, with AngaraDAV stopped, does not increment the counter; add 1 in `configuration.yaml` when those browsers should sign out. Settings restore leaves the generation unchanged. A failed data restore leaves it unchanged. Idle timeout still uses the timeout sentence. A backup from another install can leave Push subscriptions unreadable until devices register again. Do not publish the VAPID private key. Changing `database.encryption_key` invalidates stored Push secrets.
 - Optional `MSMTPRC` is written to `/etc/msmtprc` mode `0644` inside the container. Treat that file as container-local. Do not put it in an image layer or a shared volume.
+- `/metrics.php` is Prometheus gauges for the operator, not a public probe. Nginx allows it only from loopback (`$remote_addr` is `127.0.0.1` or `::1`, then `deny all`). PHP does not check the client address. The bearer token is `ANGARA_METRICS_TOKEN`, `METRICS_TOKEN`, or `system.metrics_token` in `configuration.yaml`. It is not an Administration field, it is not in the settings backup, and it is not in the data archive (that archive does not contain `configuration.yaml`). Do not put the token in a query string. The response does not include usernames, paths, or calendar names.
 - The portal service worker (`/portal/sw.js`) does not cache responses. **User settings → Background changes** uses the browser Notification API in that window. It is not Web Push, it does not subscribe to WebDAV-Push, and it does not run after the portal is closed. Permission stays in the browser.
 
 ## Review
 
 ### Still relevant, and already implemented
 
-These notes describe controls that are in 2.5.8. They stay as operator requirements. They are not open implementation tasks.
+These notes describe controls that are in 2.5.9. They stay as operator requirements. They are not open implementation tasks.
 
 | Note | Where it lives |
 |---|---|

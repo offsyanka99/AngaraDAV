@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.8` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.9` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
@@ -71,7 +71,7 @@ They do **not** share request handling. Portal writes that mutate CalDAV/CardDAV
 |---|---|---|
 | Runtime | `php: ^8.4` | [`composer.json`](../composer.json) |
 | License | SPDX `GPL-2.0-or-later`. Source headers say GPL version 2 or any later version. [`LICENSE`](../LICENSE) is the GPL version 3 text | [`composer.json`](../composer.json) `license` |
-| Autoload | **PSR-0** (not PSR-4): `Baikal` and `BaikalAdmin` → `Core/Frameworks/` | [`composer.json`](../composer.json) `autoload.psr-0` |
+| Autoload | **PSR-4**: `Baikal\` → `Core/Frameworks/Baikal/`. `BaikalAdmin\` is not an autoload prefix; [`Core/Frameworks/BaikalAdmin/`](../Core/Frameworks/BaikalAdmin) is a redirect stub | [`composer.json`](../composer.json) `autoload.psr-4` |
 | Core deps | `sabre/dav ~4.7.0`, `symfony/yaml ^8.1`, `minishlink/web-push ^11.0`, `symfony/http-client ^8.1`, `nyholm/psr7 ^1.8` | [`composer.json`](../composer.json) |
 | Required ext | `curl`, `dom`, `mbstring`, `openssl`, `pdo`, `zlib` (`gmp` suggested for faster VAPID) | [`composer.json`](../composer.json) |
 | Dev deps | `php-cs-fixer ^3.95`, `phpstan ^2.2` + `phpstan-deprecation-rules ^2.0` | [`composer.json`](../composer.json) |
@@ -151,7 +151,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.8`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.9`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -199,6 +199,7 @@ There is **no** Nx / `nx.json` / `project.json`.
 | [`html/admin/index.php`](../html/admin/index.php) | — | 302 `/portal/` (Formal admin removed). |
 | [`html/admin/install/index.php`](../html/admin/install/index.php) | — | 302 `/portal/install/`; query `upgradeConfirmed` → `#upgrade`; `database` → `#database`. |
 | [`html/health.php`](../html/health.php) | none (optional `Distrib.php`) | Liveness JSON; no DB required. **200** `ok`; **503** `incomplete` if `vendor/sabre` missing; **200** `degraded` if config/Specific unwritable or files enabled but not active. |
+| [`html/metrics.php`](../html/metrics.php) | `Baikal\Core\Metrics\Exporter` | Prometheus text gauges. Off (**404**) until `ANGARA_METRICS_TOKEN`, `METRICS_TOKEN`, or `system.metrics_token`. **401** without a matching `Authorization: Bearer` header. **200** on `GET`/`HEAD`. **405** otherwise. Nginx allows loopback only. The token is not an admin setting and is not in the settings backup. |
 | [`html/info.php`](../html/info.php) | none | Public service-info JSON (enabled flags, no secrets). |
 
 DAV controllers resolve `PROJECT_PATH_ROOT` as `getcwd()` (flat FTP) or `dirname(getcwd())` (dedicated server with `html/` as docroot).
@@ -736,7 +737,7 @@ Body `layout-*` classes pin chrome and confine scrolling:
 
 `Specific/` as a directory is **not** gitignored wholesale — only the named lock/secret/log files above. Portal logging never uses `error_log()` (php-fpm would tag `[error]`).
 
-**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `files_trash_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`, `portal_session_generation` (integer counter outside `EDITABLE_KEYS`; a missing key reads as 0; a successful data restore adds 1).
+**YAML `system` keys** (from dist + `AdminSettingsService` allow-list): `configured_version`, `timezone`, `card_enabled`, `cal_enabled`, `files_enabled`, `files_storage_path`, `files_max_upload_mb`, `files_quota_mb`, `files_quarantine_days`, `files_trash_days`, `tasks_enabled`, `notes_enabled`, `invite_from`, `dav_auth_type`, `admin_passwordhash`, `failed_access_message`, `auth_realm`, `base_uri`, `session_max_age_minutes`, `portal_sync_poll_seconds`, push block (`push_enabled`, `push_files_enabled`, `push_external_url`, `push_allowed_hosts`, subscription/worker caps, `push_log_level`), `portal_time_format`, `portal_week_start`, `portal_log_level`, `portal_admin_users`, optional `portal_admin_ui_enabled`, `portal_session_generation` (integer counter outside `EDITABLE_KEYS`; a missing key reads as 0; a successful data restore adds 1), `metrics_token` (optional bearer secret for `/metrics.php`, outside `EDITABLE_KEYS` and the settings backup; env `ANGARA_METRICS_TOKEN` / `METRICS_TOKEN` override it).
 
 **YAML `database` keys:** `encryption_key`, `backend` (`sqlite` \| `pgsql`), `sqlite_file`, `pgsql_host`, `pgsql_dbname`, `pgsql_username`, `pgsql_password`.
 
@@ -771,6 +772,7 @@ App path in the image: **`/var/www/baikal`**. Volumes: `/var/www/baikal/config`,
 |---|---|
 | `/.well-known/caldav` / `carddav` | Redirect `/dav.php` |
 | `/health.php`, `/info.php` | FastCGI. `health.php`: **200** `ok`, **503** `incomplete` (no vendor), **200** `degraded` (unwritable mounts / files not active) |
+| `/metrics.php` | Exact FastCGI location. `allow 127.0.0.1` and `allow ::1`, then `deny all`. No `add_header` in the location. The published host port is denied |
 | `/admin`, `/admin/` | 302 `/portal/` |
 | `/portal/assets/` | immutable cache 1y |
 | `/portal/index.html`, `/portal/` | `no-store`; SPA fallback `index.html` |
@@ -832,7 +834,7 @@ These are **contracts**. Changing them breaks live installs, stored hashes, or r
 
 | Contract | Where |
 |---|---|
-| PHP namespaces `Baikal\*`, `BaikalAdmin\*` | PSR-0 map in [`composer.json`](../composer.json) — directory ↔ namespace must stay aligned |
+| PHP namespaces `Baikal\*` | PSR-4 map in [`composer.json`](../composer.json): `Baikal\` → `Core/Frameworks/Baikal/`. Directory and namespace stay aligned. `BaikalAdmin\` is a stub directory, not a Composer prefix |
 | `config/configuration.yaml` filename and schema | Bootstrap, models, services |
 | Docker path `/var/www/baikal` | Image layout, volumes, all compose templates |
 | Digest realm `BaikalDAV` | Stored `digesta1` is `md5(user:realm:password)` — changing the realm invalidates every DAV password |
@@ -907,7 +909,7 @@ Playbooks also live as skills: [admin-api-development](../.github/skills/admin-a
 4. Explicit `confirm` for destructive actions.
 5. Typed client in [`portal/src/api/adminApi.ts`](../portal/src/api/adminApi.ts), exported from [`api.ts`](../portal/src/api.ts).
 6. Standalone PHP test following [`tests/php/AdminSettingsServiceTest.php`](../tests/php/AdminSettingsServiceTest.php).
-7. Keep PSR-0 alignment under `Core/Frameworks/Baikal/Portal/Admin/`.
+7. Keep PSR-4 alignment under `Core/Frameworks/Baikal/Portal/Admin/` (`Baikal\Portal\Admin\` maps to that directory).
 
 ### Adding a user API endpoint
 
@@ -929,7 +931,7 @@ Wire plugins in [`Server.php`](../Core/Frameworks/Baikal/Core/Server.php). Keep 
 
 ### Per-area coding style
 
-**PHP** — `@PSR2` + `@Symfony`, same-line braces; `composer cs-fixer`. `Core/` retains legacy Baïkal style in places (static classes, `#` comments, Hungarian `$aData`, `exit()` on fatal misconfiguration). `Portal/` is modern typed PHP with constructor promotion and `ApiException`. **Match the file you are editing.** Namespace directory must match PSR-0.
+**PHP** — `@PSR2` + `@Symfony`, same-line braces; `composer cs-fixer`. `Core/` retains legacy Baïkal style in places (static classes, `#` comments, Hungarian `$aData`, `exit()` on fatal misconfiguration). `Portal/` is modern typed PHP with constructor promotion and `ApiException`. **Match the file you are editing.** Namespace directory must match PSR-4 (`Baikal\` → `Core/Frameworks/Baikal/`).
 
 **TypeScript** — no classes for API clients (object literals of arrow functions); free functions taking a host first; explicit return types on exported functions; `strict` + no unused locals/params; 2-space indent; single quotes in TS; `const`/`let`; `async`/`await`. CamelCase functions, PascalCase types. Default to no comments except non-obvious constraints.
 
@@ -984,6 +986,7 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `AuthPasswordChangeTest.php` | Self-service `POST /me/password` |
 | `AuthSessionGenerationTest.php` | Session generation mismatch → 401; settings path does not own the key |
 | `AuthSessionIdleTest.php` | `peekUser` does not extend idle; expired idle → 401 |
+| `AutoloadPsr4Test.php` | Composer PSR-4 map loads `Baikal\` and has no `BaikalAdmin` prefix |
 | `CalendarItemServiceTest.php` | Tasks/notes |
 | `CalendarTimeZoneResolveTest.php` | Patched timezone helper |
 | `ConfigPersistUpgradeTest.php` | Upgrade keeps unmodelled `system` keys |
@@ -995,6 +998,8 @@ Do **not** introduce PHPUnit/Pest or a shared test base class.
 | `FileServiceTest.php` | Portal FileService |
 | `FilesMaintenanceSchedulerTest.php` | Entrypoint 46 + maintenance script |
 | `HealthEndpointTest.php` | `health.php` |
+| `MetricsExpositionTest.php` | Prometheus text from `Exporter` and `html/metrics.php` |
+| `MetricsEndpointTest.php` | `/metrics.php` bearer token, 404 when unset, backup refusal |
 | `InstallServiceTest.php` | Installer |
 | `LocalDockerDxTest.php` | `local-docker.sh` / compose DX |
 | `NginxCspHeadersTest.php` | CSP include |

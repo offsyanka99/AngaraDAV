@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2.5.9 — 2026-10-09
+
+### Added
+- `GET /metrics.php` returns Prometheus gauges (version, install lock, writability, files, database, and push queue). Nginx accepts that URL only from container loopback. The published host port returns 403. PHP does not check the client address, so the nginx `deny all` is what keeps the URL off the Docker bridge. The endpoint stays off until `ANGARA_METRICS_TOKEN`, `METRICS_TOKEN`, or `system.metrics_token` is set, and the request must send `Authorization: Bearer`. The token is not shown in Administration and is not part of a settings backup. `/health.php` stays the public liveness check.
+
+### Changed
+- PHP classes under `Baikal\` load with PSR-4 (`Baikal\` → `Core/Frameworks/Baikal/`). The unused `BaikalAdmin` Composer prefix is gone. File paths and the `Baikal\` names are unchanged. The `Core/Frameworks/BaikalAdmin/` redirect stub stays.
+
 ## 2.5.8 — 2026-10-08
 
 ### Portal

@@ -35,9 +35,11 @@ services:
     ports:
       - "31088:80"
     environment:
-      TZ: UTC
+      TZ: "America/Toronto"
       # Uncomment only after: sudo chown -R 101:101 .local-run
       # ANGARA_SKIP_CHOWN: "1"
+      # Scrape http://127.0.0.1/metrics.php from inside this container's network namespace.
+      # ANGARA_METRICS_TOKEN: "replace-with-a-long-random-secret"
     volumes:
       - ../.local-run/config:/var/www/baikal/config
       - ../.local-run/Specific:/var/www/baikal/Specific
