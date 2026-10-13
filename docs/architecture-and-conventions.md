@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.9` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.10` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
@@ -151,7 +151,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.9`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.10`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -420,7 +420,7 @@ Nine focused types (eight services + audit). Routed only from `dispatchAdminRout
 | `AdminAudit` | [`AdminAudit.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminAudit.php) | One-line records: `admin audit actor= action= target= result=`. Drops context keys matching `/pass\|digest\|secret\|token\|hash\|csrf/i`. Writes `Specific/portal_debug.log`. |
 | `AdminDashboardService` | [`AdminDashboardService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminDashboardService.php) | Read-only counts (allow-listed table names) + service flags + links |
 | `AdminPushSubscriptionService` | [`AdminPushSubscriptionService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminPushSubscriptionService.php) | List and remove `push_subscriptions` while `push_enabled` is on. Returns a host and a path hint, never the endpoint, token, or keys. Push off is 404 and does not create the tables |
-| `AdminCapabilitiesService` | [`AdminCapabilitiesService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminCapabilitiesService.php) | `uiEnabled` + admin page URLs. Order: Overview, System settings, Users, Subscriptions (only while `push_enabled` is on), Database, Configuration. API stays available when the UI is hidden |
+| `AdminCapabilitiesService` | [`AdminCapabilitiesService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminCapabilitiesService.php) | `uiEnabled` + admin page URLs. Order: Overview, System settings, Security, Users, Subscriptions (only while `push_enabled` is on), Database, Configuration. API stays available when the UI is hidden |
 | `AdminUserService` | [`AdminUserService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserService.php) | User CRUD in one transaction (principal + user + default calendar + default address book); never returns `digesta1`; refuses deleting last user or last admin; quarantines file home before cascade; password changes IP rate-limited |
 | `AdminUserResourceService` | [`AdminUserResourceService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminUserResourceService.php) | Per-user calendars / address books, scoped by the **target** principal |
 | `AdminSettingsService` | [`AdminSettingsService.php`](../Core/Frameworks/Baikal/Portal/Admin/AdminSettingsService.php) | Only portal writer of `configuration.yaml`. `FORBIDDEN_BODY_KEYS` + `EDITABLE_KEYS`; atomic write + verify; `push_enabled` requires `https://` external URL; factory reset honours install lock |
@@ -469,7 +469,7 @@ Admin routes:
 | Generation | `angara_portal_generation` (compared with `system.portal_session_generation`; a missing session key counts as 0) |
 | Idle default | `DEFAULT_SESSION_MAX_AGE` 900 s (`session_max_age_minutes`) |
 | Cookie | `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS; strict mode; `session_regenerate_id(true)` on login |
-| Login rate | 20 failures / 900 s per IP in `Specific/portal_login_rate.json`; Fail2Ban-friendly `error_log` line |
+| Login rate | Address limit for portal sign-in and WebDAV Basic, default 20 failures / 15 minutes, editable under Administration → Security (`auth_ip_max_failures`, `auth_ip_window_minutes`). Counter: `Specific/portal_login_rate.json` and `Specific/webdav_auth_rate.json`. Portal username cool-down is separate (`Specific/portal_login_user_rate.json`, mode 0600) and does not apply to Digest or Basic. Fail2Ban-friendly `error_log` line |
 | Password change | `POST /me/password` → `changePassword()`. Current password required (`verifyPassword`; wrong password is **400**, not 401). New password at least 8 characters, confirmed, and different. Writes `users.digesta1` only — not `system.admin_passwordhash`. Success limit 5 / 900 s per username in `Specific/portal_self_password_rate.json`. `session_regenerate_id(true)` after a successful change. Body fields `digesta1` / `password_hash` / `passwordhash` / `hash` are refused. |
 
 `username()` checks `angara_portal_generation` against `system.portal_session_generation` (a missing session key counts as 0), then `touchSession()`. Digest is `md5(user:realm:password)` with realm from YAML (`BaikalDAV`).
@@ -610,6 +610,7 @@ Source file counts (excluding `*.test.ts`): **calendars 22**, **files 18**, **ad
 | `page.ts` | Admin shell pages |
 | `overview.ts` | Dashboard |
 | `settings.ts` | System settings form |
+| `security.ts` | Security form: address failure limit, portal username cool-down, and the server admin password |
 | `users.ts` | User CRUD UI |
 | `subscriptions.ts` | Subscriptions page (list and remove) |
 | `subscriptionsListing.ts` | Kind labels, endpoint hint, empty state |

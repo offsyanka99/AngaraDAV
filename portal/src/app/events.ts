@@ -180,6 +180,9 @@ function onRootSubmit(o: AppOrchestrator, ev: Event): void {
     case "admin-settings":
       void admin.onAdminSettingsSave(o.adminHost, form);
       return;
+    case "admin-security":
+      void admin.onAdminSecuritySave(o.adminHost, form);
+      return;
     case "admin-database":
       admin.onAdminDatabaseFormSubmit(o.adminHost, form);
       return;

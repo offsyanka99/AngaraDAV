@@ -138,6 +138,11 @@ export type AdminSystemSettings = {
   invite_from: string;
   dav_auth_type: string;
   session_max_age_minutes: number;
+  auth_ip_max_failures?: number;
+  auth_ip_window_minutes?: number;
+  auth_user_max_failures?: number;
+  auth_user_window_minutes?: number;
+  auth_user_cooldown_minutes?: number;
   portal_sync_poll_seconds?: number;
   push_enabled: boolean;
   push_files_enabled?: boolean;

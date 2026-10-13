@@ -45,7 +45,7 @@ foreach ($cap['pages'] as $p) {
     $order[] = $p['id'];
 }
 
-assert_true($order === ['overview', 'settings', 'users', 'database', 'configuration'], 'tab order overview→settings→users→database→configuration');
+assert_true($order === ['overview', 'settings', 'security', 'users', 'database', 'configuration'], 'tab order overview→settings→security→users→database→configuration');
 assert_true(!in_array('subscriptions', $order, true), 'push off by default omits subscriptions');
 
 assert_true(isset($byId['overview']), 'overview page defined');
@@ -77,7 +77,7 @@ $pushOn = (new AdminCapabilitiesService([
 ]))->capabilities();
 $pushOrder = array_column($pushOn['pages'], 'id');
 assert_true(
-    $pushOrder === ['overview', 'settings', 'users', 'subscriptions', 'database', 'configuration'],
+    $pushOrder === ['overview', 'settings', 'security', 'users', 'subscriptions', 'database', 'configuration'],
     'subscriptions sits between users and database when push is on'
 );
 $subscriptionPage = null;

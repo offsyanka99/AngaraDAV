@@ -54,6 +54,9 @@ class Auth {
     /** @var callable(string): void|null */
     private $onGenerationRejected;
 
+    /** @var LoginRatePolicy */
+    private $ratePolicy;
+
     /**
      * @param callable(string): void|null $onGenerationRejected
      */
@@ -62,13 +65,15 @@ class Auth {
         string $authRealm,
         int $sessionMaxAge = self::DEFAULT_SESSION_MAX_AGE,
         int $sessionGeneration = 0,
-        ?callable $onGenerationRejected = null
+        ?callable $onGenerationRejected = null,
+        ?LoginRatePolicy $ratePolicy = null
     ) {
         $this->pdo = $pdo;
         $this->authRealm = $authRealm;
         $this->sessionMaxAge = $sessionMaxAge > 0 ? $sessionMaxAge : self::DEFAULT_SESSION_MAX_AGE;
         $this->sessionGeneration = $sessionGeneration >= 0 ? $sessionGeneration : 0;
         $this->onGenerationRejected = $onGenerationRejected;
+        $this->ratePolicy = $ratePolicy ?? new LoginRatePolicy();
     }
 
     /** Idle timeout in seconds (from session_max_age_minutes). */
@@ -209,12 +214,17 @@ class Auth {
             error_log('AngaraDAV portal login rate limit exceeded for ' . $this->clientIp());
             throw new ApiException('Too many login attempts. Please try again later.', 429);
         }
+        if ($this->isUserCoolingDown($username)) {
+            error_log('AngaraDAV portal login cool-down for user ' . $this->safeUsername($username));
+            throw new ApiException('Too many login attempts. Please try again later.', 429);
+        }
 
         $stmt = $this->pdo->prepare('SELECT username, digesta1 FROM users WHERE username = ?');
         $stmt->execute([$username]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
             $this->registerFailedAttempt();
+            $this->registerUserFailure($username);
             $this->logFailedLogin($username);
             throw new ApiException('Invalid username or password', 401);
         }
@@ -222,11 +232,13 @@ class Auth {
         $hash = md5($username . ':' . $this->authRealm . ':' . $password);
         if (!hash_equals((string) $row['digesta1'], $hash)) {
             $this->registerFailedAttempt();
+            $this->registerUserFailure($username);
             $this->logFailedLogin($username);
             throw new ApiException('Invalid username or password', 401);
         }
 
         $this->clearFailedAttempts();
+        $this->clearUserFailures($username);
         session_regenerate_id(true);
         $_SESSION[self::SESSION_KEY] = $row['username'];
         $_SESSION[self::LOGIN_AT_KEY] = time();
@@ -401,7 +413,13 @@ class Auth {
 
     private function logFailedLogin(string $username): void {
         // Same pattern as admin for Fail2Ban hooks
-        error_log('AngaraDAV portal authentication failure for user ' . preg_replace('/[^\w.@+-]/', '?', $username));
+        error_log('AngaraDAV portal authentication failure for user ' . $this->safeUsername($username));
+    }
+
+    private function safeUsername(string $username): string {
+        $safe = preg_replace('/[^\w.@+-]/', '?', $username);
+
+        return is_string($safe) && $safe !== '' ? $safe : '?';
     }
 
     private function clientIp(): string {
@@ -453,11 +471,11 @@ class Auth {
         }
         $start = (int) ($row['start'] ?? 0);
         $count = (int) ($row['count'] ?? 0);
-        if ($start <= 0 || ($now - $start) > self::RATE_LIMIT_WINDOW) {
+        if ($start <= 0 || ($now - $start) > $this->ratePolicy->ipWindowSeconds()) {
             return false;
         }
 
-        return $count >= self::RATE_LIMIT_MAX;
+        return $count >= $this->ratePolicy->ipMax();
     }
 
     private function registerFailedAttempt(): void {
@@ -465,14 +483,14 @@ class Auth {
         $data = $this->loadRateData();
         $now = time();
         $row = $data[$ip] ?? null;
-        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > self::RATE_LIMIT_WINDOW) {
+        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > $this->ratePolicy->ipWindowSeconds()) {
             $data[$ip] = ['start' => $now, 'count' => 1];
         } else {
             $data[$ip]['count'] = (int) ($row['count'] ?? 0) + 1;
         }
         // Prune stale IPs
         foreach ($data as $k => $v) {
-            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > self::RATE_LIMIT_WINDOW * 2) {
+            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > $this->ratePolicy->ipWindowSeconds() * 2) {
                 unset($data[$k]);
             }
         }
@@ -485,6 +503,99 @@ class Auth {
         if (isset($data[$ip])) {
             unset($data[$ip]);
             $this->saveRateData($data);
+        }
+    }
+
+    private function userRatePath(): string {
+        $dir = defined('PROJECT_PATH_SPECIFIC') ? PROJECT_PATH_SPECIFIC : (defined('PROJECT_PATH_ROOT') ? PROJECT_PATH_ROOT . 'Specific/' : sys_get_temp_dir() . '/');
+
+        return rtrim($dir, '/') . '/portal_login_user_rate.json';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadUserRateData(): array {
+        $path = $this->userRatePath();
+        if (!is_readable($path)) {
+            return [];
+        }
+        $raw = file_get_contents($path);
+        if ($raw === false || trim($raw) === '') {
+            return [];
+        }
+        $data = json_decode($raw, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function saveUserRateData(array $data): void {
+        $path = $this->userRatePath();
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0700, true);
+        }
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        @file_put_contents($path, $json . "\n", LOCK_EX);
+        @chmod($path, 0600);
+    }
+
+    private function isUserCoolingDown(string $username): bool {
+        $data = $this->loadUserRateData();
+        $row = $data[$username] ?? null;
+        if (!is_array($row)) {
+            return false;
+        }
+        $until = (int) ($row['cooldown_until'] ?? 0);
+
+        return $until > time();
+    }
+
+    private function registerUserFailure(string $username): void {
+        $data = $this->loadUserRateData();
+        $now = time();
+        $window = $this->ratePolicy->userWindowSeconds();
+        $row = $data[$username] ?? null;
+        $start = is_array($row) ? (int) ($row['start'] ?? 0) : 0;
+        $until = is_array($row) ? (int) ($row['cooldown_until'] ?? 0) : 0;
+        if (!is_array($row) || $start <= 0 || ($now - $start) > $window || ($until > 0 && $until <= $now)) {
+            $count = 1;
+            $start = $now;
+            $until = 0;
+        } else {
+            $count = (int) ($row['count'] ?? 0) + 1;
+        }
+        if ($count >= $this->ratePolicy->userMax()) {
+            $until = $now + $this->ratePolicy->userCooldownSeconds();
+        }
+        $data[$username] = ['start' => $start, 'count' => $count, 'cooldown_until' => $until];
+        foreach ($data as $k => $v) {
+            if (!is_array($v)) {
+                unset($data[$k]);
+                continue;
+            }
+            $rowUntil = (int) ($v['cooldown_until'] ?? 0);
+            $rowStart = (int) ($v['start'] ?? 0);
+            $staleCount = ($now - $rowStart) > $window * 2;
+            $staleCool = $rowUntil <= 0 || $rowUntil <= $now;
+            if ($staleCount && $staleCool) {
+                unset($data[$k]);
+            }
+        }
+        $this->saveUserRateData($data);
+    }
+
+    private function clearUserFailures(string $username): void {
+        $data = $this->loadUserRateData();
+        if (isset($data[$username])) {
+            unset($data[$username]);
+            $this->saveUserRateData($data);
         }
     }
 

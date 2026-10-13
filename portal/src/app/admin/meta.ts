@@ -11,6 +11,7 @@ function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
     raw === "overview" ||
     raw === "users" ||
     raw === "settings" ||
+    raw === "security" ||
     raw === "database" ||
     raw === "configuration" ||
     raw === "subscriptions"
@@ -48,10 +49,11 @@ export function adminStatusBadgeClass(_host: AdminHost, status: string): string 
 }
 
 export function adminSubnavButtons(host: AdminHost): string {
-  /** Fixed UI order: Overview → System settings → Users → Subscriptions → Database → Configuration */
+  /** Fixed UI order: Overview → System settings → Security → Users → Subscriptions → Database → Configuration */
   const order: AdminPageId[] = [
     "overview",
     "settings",
+    "security",
     "users",
     "subscriptions",
     "database",
@@ -60,6 +62,7 @@ export function adminSubnavButtons(host: AdminHost): string {
   const labels: Record<AdminPageId, string> = {
     overview: "Overview",
     settings: "System settings",
+    security: "Security",
     users: "Users",
     subscriptions: "Subscriptions",
     database: "Database",

@@ -51,6 +51,13 @@ class Standard extends \Baikal\Model\Config {
         "base_uri"                 => "",
         // Admin UI idle session lifetime (minutes); rolling while active
         "session_max_age_minutes"  => 15,
+        // Portal and WebDAV Basic failures from one address before a 429.
+        "auth_ip_max_failures"     => 20,
+        "auth_ip_window_minutes"   => 15,
+        // Portal sign-in only. Digest and Basic are not cooled down per username.
+        "auth_user_max_failures"   => 10,
+        "auth_user_window_minutes" => 15,
+        "auth_user_cooldown_minutes" => 15,
         // Portal background-sync poll interval (seconds); does not extend idle
         "portal_sync_poll_seconds" => 30,
         // WebDAV-Push (draft-bitfire-webdav-push): server-initiated change

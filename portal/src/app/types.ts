@@ -5,11 +5,12 @@ import type { FlashType } from "../ui";
 
 export type TabId = "calendars" | "contacts" | "tasks" | "notes" | "files" | "admin";
 
-/** Nested Administration views: #admin, #admin/users, #admin/settings, #admin/subscriptions, #admin/database, #admin/configuration */
+/** Nested Administration views: #admin, #admin/users, #admin/settings, #admin/security, #admin/subscriptions, #admin/database, #admin/configuration */
 export type AdminPageId =
   | "overview"
   | "users"
   | "settings"
+  | "security"
   | "subscriptions"
   | "database"
   | "configuration";

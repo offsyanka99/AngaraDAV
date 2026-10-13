@@ -31,6 +31,7 @@ function parseAdminPageId(raw: string | null | undefined): AdminPageId | null {
     raw === "overview" ||
     raw === "users" ||
     raw === "settings" ||
+    raw === "security" ||
     raw === "database" ||
     raw === "configuration" ||
     raw === "subscriptions"

@@ -39,6 +39,7 @@ export {
   renderAdminSettingsShell,
   onAdminSettingsSave,
 } from "./settings";
+export { renderAdminSecurityShell, onAdminSecuritySave } from "./security";
 export { syncFilesPushToggle } from "./filesPushToggle";
 export {
   renderAdminConfigurationShell,

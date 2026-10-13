@@ -141,7 +141,13 @@ class Server {
         }
 
         if ($this->authType === 'Basic') {
-            $authBackend = new \Baikal\Core\PDOBasicAuth($this->pdo, $this->authRealm);
+            $system = is_array($config['system'] ?? null) ? $config['system'] : [];
+            $authBackend = new \Baikal\Core\PDOBasicAuth(
+                $this->pdo,
+                $this->authRealm,
+                'users',
+                \Baikal\Portal\LoginRatePolicy::fromSystem($system)
+            );
         } elseif ($this->authType === 'Apache') {
             $authBackend = new \Sabre\DAV\Auth\Backend\Apache();
         } else {

@@ -44,6 +44,9 @@ class PDOBasicAuth extends \Sabre\DAV\Auth\Backend\AbstractBasic {
      */
     private $currentUser;
 
+    /** @var \Baikal\Portal\LoginRatePolicy */
+    private $ratePolicy;
+
     /**
      * Creates the backend object.
      *
@@ -52,10 +55,11 @@ class PDOBasicAuth extends \Sabre\DAV\Auth\Backend\AbstractBasic {
      * @param PDO $pdo
      * @param string $tableName The PDO table name to use
      */
-    function __construct(\PDO $pdo, $authRealm, $tableName = 'users') {
+    function __construct(\PDO $pdo, $authRealm, $tableName = 'users', ?\Baikal\Portal\LoginRatePolicy $ratePolicy = null) {
         $this->pdo = $pdo;
         $this->tableName = $tableName;
         $this->authRealm = $authRealm;
+        $this->ratePolicy = $ratePolicy ?? new \Baikal\Portal\LoginRatePolicy();
     }
 
     /**
@@ -148,11 +152,11 @@ class PDOBasicAuth extends \Sabre\DAV\Auth\Backend\AbstractBasic {
         }
         $start = (int) ($row['start'] ?? 0);
         $count = (int) ($row['count'] ?? 0);
-        if ($start <= 0 || ($now - $start) > self::RATE_LIMIT_WINDOW) {
+        if ($start <= 0 || ($now - $start) > $this->ratePolicy->ipWindowSeconds()) {
             return false;
         }
 
-        return $count >= self::RATE_LIMIT_MAX;
+        return $count >= $this->ratePolicy->ipMax();
     }
 
     private function registerFailedAttempt(): void {
@@ -160,14 +164,14 @@ class PDOBasicAuth extends \Sabre\DAV\Auth\Backend\AbstractBasic {
         $data = $this->loadRateData();
         $now = time();
         $row = $data[$ip] ?? null;
-        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > self::RATE_LIMIT_WINDOW) {
+        if (!is_array($row) || (int) ($row['start'] ?? 0) <= 0 || ($now - (int) $row['start']) > $this->ratePolicy->ipWindowSeconds()) {
             $data[$ip] = ['start' => $now, 'count' => 1];
         } else {
             $data[$ip]['count'] = (int) ($row['count'] ?? 0) + 1;
         }
         // Prune stale IPs
         foreach ($data as $k => $v) {
-            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > self::RATE_LIMIT_WINDOW * 2) {
+            if (!is_array($v) || ($now - (int) ($v['start'] ?? 0)) > $this->ratePolicy->ipWindowSeconds() * 2) {
                 unset($data[$k]);
             }
         }

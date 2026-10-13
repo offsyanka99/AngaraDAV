@@ -183,19 +183,6 @@ export function renderAdminSettingsShell(host: AdminHost): string {
           </select>
         </label>
 
-        <h3 class="admin-subsection-title">Server admin password</h3>
-        <p class="muted small">
-          Stored in <span class="mono">configuration.yaml</span> for install recovery.
-          Portal login uses each DAV user’s own password (e.g. user <span class="mono">admin</span> created at install).
-          ${s.hasAdminPassword ? "Leave blank to keep the current server admin password." : "No server admin password set yet."}
-        </p>
-        <label>New server admin password
-          <input type="password" name="admin_password" autocomplete="new-password" ${host.state.busy || s.writable === false ? "disabled" : ""} />
-        </label>
-        <label>Confirm server admin password
-          <input type="password" name="admin_password_confirm" autocomplete="new-password" ${host.state.busy || s.writable === false ? "disabled" : ""} />
-        </label>
-
         <div class="form-actions-row" style="margin-top:1rem">
           <button type="submit" class="btn btn-primary" ${host.state.busy || s.writable === false ? "disabled" : ""}>Save settings</button>
         </div>
@@ -233,16 +220,10 @@ export async function onAdminSettingsSave(host: AdminHost, form: HTMLFormElement
     push_log_level: String(fd.get("push_log_level") ?? "off"),
     push_max_subscriptions_per_principal: Number(fd.get("push_max_subscriptions_per_principal") ?? 50),
   };
-  const pw = String(fd.get("admin_password") ?? "");
-  const pwc = String(fd.get("admin_password_confirm") ?? "");
   // A disabled file-push checkbox is left out, so the server keeps the stored choice.
   const filesPush = form.querySelector<HTMLInputElement>('input[name="push_files_enabled"]');
   if (filesPush && !filesPush.disabled) {
     body.push_files_enabled = filesPush.checked;
-  }
-  if (pw !== "" || pwc !== "") {
-    body.admin_password = pw;
-    body.admin_password_confirm = pwc;
   }
   host.state.busy = true;
   host.clearFlash();

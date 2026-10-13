@@ -73,7 +73,8 @@ class App {
                     'portal session ended reason=data-restore user=' . (is_string($safe) && $safe !== '' ? $safe : '?'),
                     'info'
                 );
-            }
+            },
+            LoginRatePolicy::fromSystem($system)
         );
         $this->adminAuth = new AdminAuth($this->auth, $config);
         $this->adminAudit = new AdminAudit($this->portalSpecificDir(), $this->portalLogLevel());

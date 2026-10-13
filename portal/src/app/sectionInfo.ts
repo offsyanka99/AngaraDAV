@@ -151,8 +151,17 @@ export const SECTION_INFO: Record<string, SectionInfo> = {
   "admin-settings": {
     title: "System settings",
     paragraphs: [
-      "Edit DAV services, files, push, session timeout, time format, week start, portal admin role list, and admin password.",
+      "Edit DAV services, files, push, session timeout, time format, week start, and the portal admin role list.",
       "Saves write config/configuration.yaml atomically. Session timeout applies to portal idle cookies. Time format and week start apply to every portal user (not stored events or phone apps).",
+    ],
+  },
+  "admin-security": {
+    title: "Security",
+    paragraphs: [
+      "Failed portal sign-ins and WebDAV Basic sign-ins from one address share one limit. The default is 20 failures in 15 minutes. Digest, the usual phone setup, is not counted here.",
+      "A portal username that fails too often is refused for a cool-down. The default is 10 failures in 15 minutes, then 15 minutes of refusal. CalDAV and CardDAV keep working. The sign-in message stays the same.",
+      "File download and inline view stay at 20 requests per 15 minutes for each address and username.",
+      "The server admin password is stored in configuration.yaml for install recovery. Leave the fields blank to keep the current password. Portal sign-in still uses each DAV user’s own password.",
     ],
   },
   "admin-database": {

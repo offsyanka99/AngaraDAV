@@ -88,7 +88,9 @@ export function renderHome(o: AppOrchestrator): void {
                   ? "admin-users"
                   : state.adminPage === "settings"
                     ? "admin-settings"
-                    : "admin-database"
+                    : state.adminPage === "security"
+                      ? "admin-security"
+                      : "admin-database"
             }"
             aria-label="About this tab" title="About this tab"><span aria-hidden="true">i</span></button>
         </div>`

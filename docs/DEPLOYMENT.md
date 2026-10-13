@@ -9,7 +9,7 @@ Hardening and vulnerability reporting: [SECURITY.md](SECURITY.md). Release histo
 | Image | When |
 |-------|------|
 | `ghcr.io/offsyanka99/angaradav:latest` | Tracks the default branch |
-| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.9`) | Product release pin |
+| `ghcr.io/offsyanka99/angaradav:<version>` (e.g. `2.5.10`) | Product release pin |
 | `ghcr.io/offsyanka99/angaradav:sha-…` | Pin to a tested git commit |
 | Build from `Dockerfile` | Offline packaging |
 
@@ -263,7 +263,7 @@ Every `/api/admin/*` call requires a session **and** the Admin role (anonymous *
 ### Passwords
 
 - Portal sign-in always uses **DAV** credentials.
-- The **server admin password** (System settings) is a separate bcrypt hash in `configuration.yaml`, used by the installer/upgrade. The installer sets it and user `admin`'s DAV password to the same value.
+- The **server admin password** (Administration → Security) is a separate bcrypt hash in `configuration.yaml`, used by the installer/upgrade. The installer sets it and user `admin`'s DAV password to the same value.
 - Users change their own DAV password under **User settings** (5 successful changes per user per 15 minutes).
 
 ### Destructive actions
@@ -518,6 +518,7 @@ After install, `Specific/INSTALL_DISABLED` exists and `/portal/install/` reports
 - **To 2.5.3:** the push queue gains three columns automatically on first use (SQLite and PostgreSQL); no manual SQL. If you plan to use Push for file storage, raise **Max push subscriptions per user** (see [WebDAV-Push](#webdav-push)).
 - **To 2.5.5:** no schema change. Push registration is returned as 204 with `Location` and `Expires`. Clients that recorded HTTP 302 should register again. Subscriptions stored during those failed registrations expire on their own.
 - **To 2.5.6:** no schema change. Administration → Subscriptions lists and removes WebDAV-Push subscriptions while WebDAV-Push is on. The endpoint URL and keys are not shown.
+- **To 2.5.10:** no schema change. Administration → Security stores the shared address failure limit for portal sign-in and WebDAV Basic, and the portal username cool-down. Defaults stay 20 failures in 15 minutes per address, and 10 failures in 15 minutes then 15 minutes of refusal per portal username. The account is not disabled. CalDAV and CardDAV are not cooled down.
 - **To 2.5.9:** no schema change. `GET /metrics.php` is Prometheus gauges for the operator. It stays off until a bearer token is set, and nginx allows it only from container loopback. The published host port returns 403. `/health.php` stays the liveness URL. PHP classes under `Baikal\` load with PSR-4. File paths and names are unchanged.
 - **To 2.5.8:** no schema change. The portal can be installed as its own window. `/portal/manifest.webmanifest` and `/portal/sw.js` are static files. The worker does not cache the portal or `/api/`. **User settings → Background changes** can show a browser notification when the portal window is open but not focused. Polling still pauses while the tab is hidden. This is not WebDAV-Push. Notes and Tasks refresh banners follow notes and tasks, not event edits. A Files folder with more than 500 items says the banner checked the first 500. Refresh asks before it replaces an open file preview. Calendar view adds Work week (Monday–Friday). **Jump to date** and signing portal browsers out after a successful data restore are in this release.
 - **To 2.5.7:** `file_trash` is created automatically on first use (SQLite and PostgreSQL); no manual SQL. Portal and WebDAV delete of files and folders use Trash for `files_trash_days` (default 30; 0 deletes immediately). This release also adds repeating tasks, agenda rows for open tasks and dated notes, one event display reminder, a portal notification when that reminder is due, and Administration → Configuration data backup and restore of the database and WebDAV file store. `configuration.yaml` is not in that archive.

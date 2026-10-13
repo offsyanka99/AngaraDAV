@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.5.10 — 2026-10-13
+
+### Added
+- Administration → Security sets how many failed portal and WebDAV Basic sign-ins one address may make, and for how many minutes. The default stays 20 failures in 15 minutes.
+- Portal sign-in cools down one username after repeated failures. The default is 10 failures in 15 minutes, then 15 minutes of refusal, with the same message as the address limit. The account is not disabled. CalDAV and CardDAV are not cooled down.
+
 ## 2.5.9 — 2026-10-09
 
 ### Added

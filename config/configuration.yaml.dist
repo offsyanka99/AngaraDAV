@@ -24,6 +24,13 @@ system:
     auth_realm: BaikalDAV
     base_uri: ''
     session_max_age_minutes: 15
+    # Administration → Security. Portal sign-in and WebDAV Basic share the address limit.
+    # Digest is not counted. The username cool-down is portal sign-in only.
+    auth_ip_max_failures: 20
+    auth_ip_window_minutes: 15
+    auth_user_max_failures: 10
+    auth_user_window_minutes: 15
+    auth_user_cooldown_minutes: 15
     # portal_session_generation is an integer counter. A missing key means 0.
     # A successful Administration data restore adds 1. It is not an admin setting.
     # Portal background-sync poll interval (seconds). SPA checks collection

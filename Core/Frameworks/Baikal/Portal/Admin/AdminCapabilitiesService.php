@@ -46,8 +46,8 @@ class AdminCapabilitiesService {
         $sys = is_array($this->config['system'] ?? null) ? $this->config['system'] : [];
         $uiEnabled = self::boolFlag($sys, 'portal_admin_ui_enabled', true);
 
-        // UI tab order: Overview → System settings → Users → Subscriptions (only while
-        // WebDAV-Push is on) → Database → Configuration
+        // UI tab order: Overview → System settings → Security → Users → Subscriptions
+        // (only while WebDAV-Push is on) → Database → Configuration
         $pages = [
             [
                 'id'          => 'overview',
@@ -65,7 +65,16 @@ class AdminCapabilitiesService {
                 'available'   => true,
                 'portalUrl'   => '/portal/#admin/settings',
                 'portalLabel' => 'System settings',
-                'summary'     => 'Edit system flags and admin password; writes configuration.yaml atomically.',
+                'summary'     => 'Edit system flags; writes configuration.yaml atomically.',
+            ],
+            [
+                'id'          => 'security',
+                'label'       => 'Security',
+                'status'      => 'full',
+                'available'   => true,
+                'portalUrl'   => '/portal/#admin/security',
+                'portalLabel' => 'Security',
+                'summary'     => 'Sign-in limits and the server admin password stored in configuration.yaml.',
             ],
             [
                 'id'          => 'users',
@@ -106,7 +115,7 @@ class AdminCapabilitiesService {
                 'portalLabel' => 'Subscriptions',
                 'summary'     => 'List and remove WebDAV-Push subscriptions. The endpoint URL and keys are not shown.',
             ];
-            array_splice($pages, 3, 0, [$subscriptions]);
+            array_splice($pages, 4, 0, [$subscriptions]);
         }
 
         return [

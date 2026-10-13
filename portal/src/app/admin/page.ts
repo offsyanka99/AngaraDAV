@@ -21,6 +21,7 @@ import { renderAdminSettingsShell } from "./settings";
 import { renderAdminDatabaseShell } from "./database";
 import { renderAdminConfigurationShell } from "./configuration";
 import { renderAdminSubscriptionsShell } from "./subscriptions";
+import { renderAdminSecurityShell } from "./security";
 
 export async function activateAdminPage(
   host: AdminHost,
@@ -73,7 +74,7 @@ export async function activateAdminPage(
         await loadAdminUserDetail(host, host.state.adminSelectedUsername);
         await loadAdminUserResources(host, host.state.adminSelectedUsername);
       }
-    } else if (page === "settings" && meta?.available !== false) {
+    } else if ((page === "settings" || page === "security") && meta?.available !== false) {
       await loadAdminSystemSettings(host);
     } else if (page === "database" && meta?.available !== false) {
       await loadAdminDatabaseSettings(host);
@@ -116,6 +117,7 @@ export function renderAdminSection(host: AdminHost): string {
   if (host.state.adminPage === "users") return renderAdminUsersShell(host);
   if (host.state.adminPage === "subscriptions") return renderAdminSubscriptionsShell(host);
   if (host.state.adminPage === "settings") return renderAdminSettingsShell(host);
+  if (host.state.adminPage === "security") return renderAdminSecurityShell(host);
   if (host.state.adminPage === "database") return renderAdminDatabaseShell(host);
   if (host.state.adminPage === "configuration") return renderAdminConfigurationShell(host);
   return renderAdminOverview(host);

@@ -36,7 +36,7 @@ export async function loadAdminCapabilities(host: AdminHost): Promise<void> {
           available: true,
           portalUrl: "/portal/#admin/settings",
           portalLabel: "System settings",
-          summary: "Edit system flags and admin password in the portal.",
+          summary: "Edit system flags in the portal.",
         },
         {
           id: "users",

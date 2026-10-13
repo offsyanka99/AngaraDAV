@@ -1,6 +1,6 @@
 # Security Policy
 
-Reviewed against product **2.5.9** on 2026-10-09. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
+Reviewed against product **2.5.10** on 2026-10-13. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
 
 ## Reporting a Vulnerability
 
@@ -20,7 +20,8 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 - Keep `Specific/INSTALL_DISABLED` in place after install, or set `ANGARA_LOCK_INSTALL=1`. PHP reads that name. The old `BAIKAL_LOCK_INSTALL` variable is ignored.
 - Restrict who has the portal **Admin role** (`ANGARA_PORTAL_ADMIN_USERS` / `PORTAL_ADMIN_USERS` / `portal_admin_users`). Use a strong password for the DAV accounts that hold that role, and for the install password. Day-to-day administration is `/portal/` Administration. Install is `/portal/install/`.
 - Portal sessions use the cookie `ANGARAPORTAL` (`HttpOnly`, `SameSite=Lax`). Mutations require same-origin and CSRF. Idle timeout is `session_max_age_minutes`. On expiry the SPA clears calendars and contacts from memory and shows Sign in with a timeout message.
-- Failed portal logins are limited to 20 per IP per 15 minutes. Portal file download and inline view (`GET /api/files/download`) use the same numbers, counted per IP and username, and only after the file is opened. A wrong current password on `POST /api/me/password` counts toward the login limit and does not end the session.
+- Failed portal logins and WebDAV Basic logins from one address share a limit. The default is 20 failures per 15 minutes. Administration → Security stores the two numbers in `configuration.yaml`. Portal file download and inline view (`GET /api/files/download`) stay at 20 per 15 minutes, counted per IP and username, and only after the file is opened. A wrong current password on `POST /api/me/password` counts toward the address limit and does not end the session.
+- A portal username is cooled down after too many failures. The default is 10 failures in 15 minutes, then 15 minutes during which portal sign-in for that username returns the same “try again later” response. The account is not disabled. Digest and Basic are not cooled down, so a phone keeps syncing. Those three numbers are on Administration → Security.
 - Users change their own DAV password in **User settings** (`POST /api/me/password`). The request needs the current password, same-origin, and CSRF. Successful changes are limited to 5 per user per 15 minutes (`Specific/portal_self_password_rate.json`). This updates `users.digesta1` only. It does not change `system.admin_passwordhash`. The **View password** control only shows or hides the field in the browser.
 - Portal CSP allows `frame-src 'self' blob:` for PDF preview (`docker/nginx-security-headers.inc`). Recreate the container from a rebuilt image after an nginx CSP change.
 - Keep portal debug logging off in production (`PORTAL_LOG_LEVEL` / `portal_log_level`, default `off`). A product upgrade does not reset `system.portal_log_level`, `system.portal_time_format`, or `system.portal_week_start`.
@@ -36,7 +37,7 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 
 ### Still relevant, and already implemented
 
-These notes describe controls that are in 2.5.9. They stay as operator requirements. They are not open implementation tasks.
+These notes describe controls that are in 2.5.10. They stay as operator requirements. They are not open implementation tasks.
 
 | Note | Where it lives |
 |---|---|

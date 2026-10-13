@@ -53,6 +53,11 @@ class AdminSettingsService {
         'invite_from',
         'dav_auth_type',
         'session_max_age_minutes',
+        'auth_ip_max_failures',
+        'auth_ip_window_minutes',
+        'auth_user_max_failures',
+        'auth_user_window_minutes',
+        'auth_user_cooldown_minutes',
         'portal_sync_poll_seconds',
         'push_enabled',
         'push_files_enabled',
@@ -961,6 +966,15 @@ class AdminSettingsService {
             case 'session_max_age_minutes':
                 return max(1, min(10080, (int) $value));
 
+            case 'auth_ip_max_failures':
+            case 'auth_user_max_failures':
+                return max(1, min(1000, (int) $value));
+
+            case 'auth_ip_window_minutes':
+            case 'auth_user_window_minutes':
+            case 'auth_user_cooldown_minutes':
+                return max(1, min(1440, (int) $value));
+
             case 'portal_sync_poll_seconds':
                 return max(10, min(300, (int) $value));
 
@@ -1053,6 +1067,11 @@ class AdminSettingsService {
             'invite_from'             => '',
             'dav_auth_type'           => 'Digest',
             'session_max_age_minutes' => 15,
+            'auth_ip_max_failures' => 20,
+            'auth_ip_window_minutes' => 15,
+            'auth_user_max_failures' => 10,
+            'auth_user_window_minutes' => 15,
+            'auth_user_cooldown_minutes' => 15,
             'portal_sync_poll_seconds' => 30,
             'push_enabled'            => false,
             'push_files_enabled'      => false,

@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.9`
+**Version:** `2.5.10`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.
@@ -90,7 +90,8 @@ Env overrides YAML. Optional: `system.portal_admin_ui_enabled: false` hides the 
 - Opened from the **user menu → Administration** (hidden for non-admins).
 - Hash routes: `#admin` (Overview), `#admin/settings`, `#admin/users`, `#admin/users/{username}`, `#admin/database`, `#admin/configuration`.
 - **Overview:** stats + service On/Off (including Push for files) + WebDAV-Push subscriptions per kind and queue backlog when Push is on (`app/admin/pushStats.ts`) + version/releases links.
-- **System settings:** form writes `configuration.yaml` (services, files, push incl. Push for file storage and the per-user subscription limit, session, admin password); timezone select.
+- **System settings:** form writes `configuration.yaml` (services, files, push incl. Push for file storage and the per-user subscription limit, session); timezone select.
+- **Security:** address failure limit, portal username cool-down, and the server admin password.
 - **Users:** full CRUD; digests never returned; per-user calendars/address books under detail.
 - **Database:** connection form; password never returned; saves require typing **CONFIRM**.
 - **Configuration:** three sections. **Settings backup and restore** downloads or restores a JSON settings backup (no secrets, no user/DAV data; `GET/POST /api/admin/settings/backup|restore`); the preview shows a changed/unknown/invalid diff before applying. **Data backup and restore** downloads one archive (`POST /api/admin/data-export`) and can put it back (`POST /api/admin/data-restore`): a SQLite snapshot or a PostgreSQL `pg_dump`, plus a tarball of the WebDAV file store. Restore replaces the live database and file store. `configuration.yaml` stays on the config volume. A successful restore increments `system.portal_session_generation` and signs portal browsers out; sign in again. **Danger zone** is **Reset to Default** (full factory wipe + reopen installer).

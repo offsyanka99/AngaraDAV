@@ -74,6 +74,30 @@ try {
     assert_true($get['push_files_enabled'] === false, 'push_files_enabled defaults to false');
     assert_true($get['push_max_subscriptions_per_principal'] === 50, 'per-user push subscription default is 50');
     assert_true((int) $get['files_trash_days'] === 30, 'trash retention defaults to 30 when unset');
+    assert_true((int) $get['auth_ip_max_failures'] === 20, 'address failure limit defaults to 20');
+    assert_true((int) $get['auth_ip_window_minutes'] === 15, 'address window defaults to 15 minutes');
+    assert_true((int) $get['auth_user_max_failures'] === 10, 'username failure limit defaults to 10');
+    assert_true((int) $get['auth_user_cooldown_minutes'] === 15, 'username cool-down defaults to 15 minutes');
+
+    $security = $svc->updateSystemSettings([
+        'auth_ip_max_failures' => 0,
+        'auth_ip_window_minutes' => 5000,
+        'auth_user_max_failures' => 3,
+        'auth_user_window_minutes' => 30,
+        'auth_user_cooldown_minutes' => 45,
+    ]);
+    assert_true((int) $security['auth_ip_max_failures'] === 1, 'address failures clamp to at least 1');
+    assert_true((int) $security['auth_ip_window_minutes'] === 1440, 'address window clamps to 1440');
+    assert_true((int) $security['auth_user_max_failures'] === 3, 'username failures are stored');
+    assert_true((int) $security['auth_user_window_minutes'] === 30, 'username window is stored');
+    assert_true((int) $security['auth_user_cooldown_minutes'] === 45, 'username cool-down is stored');
+    $svc->updateSystemSettings([
+        'auth_ip_max_failures' => 20,
+        'auth_ip_window_minutes' => 15,
+        'auth_user_max_failures' => 10,
+        'auth_user_window_minutes' => 15,
+        'auth_user_cooldown_minutes' => 15,
+    ]);
 
     $trashDays = $svc->updateSystemSettings(['files_trash_days' => 10000]);
     assert_true((int) $trashDays['files_trash_days'] === 10000, 'trash retention stores 10000');
