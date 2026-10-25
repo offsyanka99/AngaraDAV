@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- The php2shell floor accepts PHP `8.6.0-dev`. CI's PHP 8.6 job installs that nightly, and the version string sorts before `8.6.0RC4` even when the build contains the RC4 fixes.
+
 ## 2.5.11 — 2026-10-25
 
 ### Security

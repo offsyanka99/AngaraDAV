@@ -89,7 +89,7 @@ Composer scripts:
 | `composer test` | cs-fixer, then phpstan, then `php-test` |
 | `composer apply-vendor-patches` | `sh scripts/apply-vendor-patches.sh` |
 
-Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`](../Dockerfile)). The image build runs [`scripts/check-php-security-floor.php`](../scripts/check-php-security-floor.php) and refuses anything older than **8.5.12** (php2shell, CVE-2026-109618 and CVE-2026-109619). CI matrices 8.4 / 8.5 / 8.6 and runs the same check (floors **8.4.27**, **8.5.12**, **8.6.0RC4**).
+Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`](../Dockerfile)). The image build runs [`scripts/check-php-security-floor.php`](../scripts/check-php-security-floor.php) and refuses anything older than **8.5.12** (php2shell, CVE-2026-109618 and CVE-2026-109619). CI matrices 8.4 / 8.5 / 8.6 and runs the same check (floors **8.4.27**, **8.5.12**, **8.6.0RC4**, and the **8.6.0-dev** nightly, which still reports that version after the RC4 fixes).
 
 ### Portal (TypeScript)
 

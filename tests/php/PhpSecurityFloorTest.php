@@ -24,7 +24,7 @@ function assert_true(bool $condition, string $message): void {
     ++$failures;
 }
 
-$accepted = ['8.4.27', '8.4.28', '8.5.12', '8.5.13', '8.6.0RC4', '8.6.0', '8.6.1', '8.7.0'];
+$accepted = ['8.4.27', '8.4.28', '8.5.12', '8.5.13', '8.6.0-dev', '8.6.0RC4', '8.6.0', '8.6.1', '8.7.0', '8.7.0-dev'];
 $rejected = ['8.4.26', '8.5.0', '8.5.11', '8.6.0RC3', '8.6.0beta3', '8.3.36', '8.2.35', '7.4.33'];
 
 foreach ($accepted as $version) {
