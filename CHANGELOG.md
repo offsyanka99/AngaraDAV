@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.5.11 — 2026-10-25
+
+### Security
+- The container image and CI require a PHP build that includes the 2026-10-21 php2shell fixes (CVE-2026-109618, CVE-2026-109619). The floors are PHP 8.4.27, 8.5.12, and 8.6.0RC4. The image installs Sury PHP 8.5 and the build fails if that package is older than 8.5.12. Recreate the container after pulling the new image. No schema change. Composer libraries are unchanged.
+
 ## 2.5.10 — 2026-10-13
 
 ### Added

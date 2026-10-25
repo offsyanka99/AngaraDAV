@@ -66,6 +66,11 @@ ARG BUILD_TIME=unknown
 ARG PHP_VERSION=8.5
 ENV PHP_VERSION=${PHP_VERSION}
 
+# php2shell (CVE-2026-109618, CVE-2026-109619): the check refuses PHP older
+# than 8.5.12 on this major. A change to the script invalidates the apt layer
+# below, so a cached rebuild cannot keep a pre-2026-10-21 package set.
+COPY scripts/check-php-security-floor.php /tmp/check-php-security-floor.php
+
 RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends lsb-release ca-certificates \
@@ -103,7 +108,9 @@ RUN curl -fsSL -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/a
          'max_file_uploads = 50' \
          > /etc/php/${PHP_VERSION}/fpm/conf.d/99-angaradav-uploads.ini \
     && cp /etc/php/${PHP_VERSION}/fpm/conf.d/99-angaradav-uploads.ini \
-         /etc/php/${PHP_VERSION}/cli/conf.d/99-angaradav-uploads.ini
+         /etc/php/${PHP_VERSION}/cli/conf.d/99-angaradav-uploads.ini \
+    && php${PHP_VERSION} /tmp/check-php-security-floor.php \
+    && rm -f /tmp/check-php-security-floor.php
 
 COPY --from=builder --chown=nginx:nginx /src /var/www/baikal
 COPY --from=portal --chown=nginx:nginx /build/html/portal /var/www/baikal/html/portal

@@ -118,6 +118,8 @@ jobs:
         run: php tests/php/AutoloadPsr4Test.php
       - name: Local Docker DX unit test
         run: php tests/php/LocalDockerDxTest.php
+      - name: PHP security floor unit test
+        run: php tests/php/PhpSecurityFloorTest.php
       - name: Files maintenance scheduler unit test
         run: php tests/php/FilesMaintenanceSchedulerTest.php
       - name: DAV exception logging unit test

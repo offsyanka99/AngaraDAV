@@ -1,6 +1,6 @@
 # Security Policy
 
-Reviewed against product **2.5.10** on 2026-10-13. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
+Reviewed against product **2.5.11** on 2026-10-25. The reporting section and the deployment notes are the operator policy. The review and the development plan below say what is already shipped, what changed in this revision, and what is left to build.
 
 ## Reporting a Vulnerability
 
@@ -16,6 +16,7 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 
 ## Deployment notes
 
+- Run a PHP build that includes the 2026-10-21 php2shell fixes (CVE-2026-109618, CVE-2026-109619): **8.4.27+** on the 8.4 line, **8.5.12+** on the 8.5 line, or **8.6.0RC4+**. The image installs Sury PHP 8.5 and the build fails if that package is older. Composer libraries do not patch this. Recreate the container from a newly built image so PHP-FPM is the new binary. `session.serialize_handler` stays `php`; the application does not switch it at runtime.
 - Terminate **TLS** in front of the container. Do not expose plain HTTP to the internet. The portal session cookie is marked `Secure` only when PHP sees HTTPS, or when `X-Forwarded-Proto` is `https`. A proxy that terminates TLS must send that header. An attacker-supplied `X-Forwarded-Proto` can only turn `Secure` on.
 - Keep `Specific/INSTALL_DISABLED` in place after install, or set `ANGARA_LOCK_INSTALL=1`. PHP reads that name. The old `BAIKAL_LOCK_INSTALL` variable is ignored.
 - Restrict who has the portal **Admin role** (`ANGARA_PORTAL_ADMIN_USERS` / `PORTAL_ADMIN_USERS` / `portal_admin_users`). Use a strong password for the DAV accounts that hold that role, and for the install password. Day-to-day administration is `/portal/` Administration. Install is `/portal/install/`.
@@ -37,11 +38,12 @@ For issues in the upstream code from which AngaraDAV was derived, see [sabre-io/
 
 ### Still relevant, and already implemented
 
-These notes describe controls that are in 2.5.10. They stay as operator requirements. They are not open implementation tasks.
+These notes describe controls that are in 2.5.11. They stay as operator requirements. They are not open implementation tasks.
 
 | Note | Where it lives |
 |---|---|
 | Install lock | `Specific/INSTALL_DISABLED`, `ANGARA_LOCK_INSTALL` |
+| PHP php2shell floor | Image build `scripts/check-php-security-floor.php`; PHP 8.5.12+ in the image |
 | Admin role | `portal_admin_users` and the `ANGARA_PORTAL_ADMIN_USERS` environment variable |
 | Idle session and Sign in timeout | `Auth` and `portal/src/app/session.ts` |
 | Login and download ceilings | `Auth::RATE_LIMIT_MAX` (20 / 15 minutes) and `FileDownloadRateLimiter` |

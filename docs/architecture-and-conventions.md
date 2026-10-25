@@ -1,6 +1,6 @@
 # AngaraDAV — Architecture, Compatibility Boundaries, and Conventions
 
-Inspected snapshot of the repository as it exists on disk (product version `2.5.10` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
+Inspected snapshot of the repository as it exists on disk (product version `2.5.11` in [`Core/Distrib.php`](../Core/Distrib.php)). Descriptive only: paths, roles, dependencies, and observed patterns. Not a proposal.
 
 Companion docs (not duplicated here): [README.md](../README.md) · [AGENTS.md](../AGENTS.md) · [portal/README.md](../portal/README.md) · [CHANGELOG.md](../CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [patches/README.md](../patches/README.md) · [DEPLOYMENT.md](DEPLOYMENT.md) (operator guide). This file is the path-level inventory.
 
@@ -89,7 +89,7 @@ Composer scripts:
 | `composer test` | cs-fixer, then phpstan, then `php-test` |
 | `composer apply-vendor-patches` | `sh scripts/apply-vendor-patches.sh` |
 
-Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`](../Dockerfile)); CI matrices 8.4 / 8.5 / 8.6.
+Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`](../Dockerfile)). The image build runs [`scripts/check-php-security-floor.php`](../scripts/check-php-security-floor.php) and refuses anything older than **8.5.12** (php2shell, CVE-2026-109618 and CVE-2026-109619). CI matrices 8.4 / 8.5 / 8.6 and runs the same check (floors **8.4.27**, **8.5.12**, **8.6.0RC4**).
 
 ### Portal (TypeScript)
 
@@ -124,7 +124,7 @@ Image runtime PHP is **8.5** by default (`ARG PHP_VERSION=8.5` in [`Dockerfile`]
 
 **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — PHP matrix `8.4` / `8.5` / `8.6`, plus a portal job:
 
-- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones (46), each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan` (level 0 on `Core`/`html`, level 2 on `Baikal\Portal`). There is no glob: a new script must be added to the list.
+- `code-analysis` runs **every** `php tests/php/*.php` script except the two PostgreSQL-backed ones, each as a named step, then `php-cs-fixer --dry-run --diff --allow-unsupported-php-version=yes` and `composer phpstan` (level 0 on `Core`/`html`, level 2 on `Baikal\Portal`). There is no glob: a new script must be added to the list. [`PhpSecurityFloorTest.php`](../tests/php/PhpSecurityFloorTest.php) is one of those steps.
 - `tests` runs [`FileSchemaDriverTest.php`](../tests/php/FileSchemaDriverTest.php) and [`PushSchemaPgsqlTest.php`](../tests/php/PushSchemaPgsqlTest.php) against a `postgres:18` service (`POSTGRES_DB=baikal_test`).
 - `portal` runs `npm ci && npm test && npm run build` in [`portal/`](../portal) on Node 24.
 
@@ -151,7 +151,7 @@ Build args: `GIT_SHA=${{ github.sha }}`, `BUILD_TIME=${{ github.event.head_commi
 
 | Path | Role |
 |---|---|
-| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.10`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
+| [`Core/Distrib.php`](../Core/Distrib.php) | Product constants: `ANGARA_VERSION_BASE` (`2.5.11`), `ANGARA_GIT_SHA`, `ANGARA_VERSION`, `ANGARA_HOMEPAGE`; helpers `baikal_version_base()`, `baikal_needs_upgrade()`, `baikal_resolve_git_sha()`, `baikal_short_git_sha()` |
 | `Core/BuildInfo.php` | **Generated at image build, gitignored**; defines `ANGARA_BUILD_GIT` and `ANGARA_BUILD_TIME` (version display reads the git SHA only) |
 | [`Core/Frameworks/Baikal/Core`](../Core/Frameworks/Baikal/Core) | Bootstrap, SabreDAV wiring, DAV auth, plugins, WebDAV file storage |
 | [`Core/Frameworks/Baikal/Portal`](../Core/Frameworks/Baikal/Portal) | **Active** portal JSON backend (routes, services, admin, install) |
@@ -754,7 +754,7 @@ Databases: **SQLite and PostgreSQL only** — MySQL support was removed.
 |---|---|---|
 | `builder` | `composer:2.10.2` | `apk add patch`; `composer install --no-dev`; `apply-vendor-patches.sh`; copies `scripts/push-worker.php` and `scripts/files-maintenance.php` |
 | `portal` | `node:24-alpine` | `npm install` + `npm run build` → `/build/html/portal` |
-| runtime | `nginx:1.31.3-trixie` | Sury PHP-FPM (`ARG PHP_VERSION=8.5`): cli, curl, fpm, gd, gmp, mbstring, pgsql, sqlite3, xml; msmtp; PHP-FPM as `nginx` on `/var/run/php-fpm.sock` |
+| runtime | `nginx:1.31.3-trixie` | Sury PHP-FPM (`ARG PHP_VERSION=8.5`, floor 8.5.12): cli, curl, fpm, gd, gmp, mbstring, pgsql, sqlite3, xml; msmtp; PHP-FPM as `nginx` on `/var/run/php-fpm.sock` |
 
 PHP uploads: `upload_max_filesize = 1G`, `post_max_size = 1G`, `max_file_uploads = 50` (`99-angaradav-uploads.ini`).
 

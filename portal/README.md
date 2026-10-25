@@ -1,6 +1,6 @@
 # AngaraDAV user portal
 
-**Version:** `2.5.10`
+**Version:** `2.5.11`
 
 TypeScript SPA for calendars, contacts, tasks, notes, private WebDAV files, and
 **Administration** for operators with the Admin role.

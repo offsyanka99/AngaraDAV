@@ -16,6 +16,10 @@ runs:
         extensions: mbstring, dom, fileinfo, pgsql, pdo_pgsql, pdo_sqlite, sqlite3, redis, opcache
         tools: composer
 
+    - name: Require a php2shell-patched PHP
+      shell: bash
+      run: php scripts/check-php-security-floor.php
+
     - name: Get composer cache directory
       id: composer-cache
       shell: bash
